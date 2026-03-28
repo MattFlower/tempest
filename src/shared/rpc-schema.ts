@@ -161,4 +161,5 @@ export interface WebviewMessages {
   workspacesChanged: { repoId: string; workspaces: TempestWorkspace[] };
   sidebarInfoUpdated: { workspacePath: string; info: WorkspaceSidebarInfo };
   configChanged: AppConfig;
+  menuAction: { action: string };
 }

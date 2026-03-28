@@ -91,6 +91,20 @@ const rpc = Electroview.defineRPC({
           useStore.getState().setConfig(config);
         });
       },
+      menuAction: (msg: WebviewMessages["menuAction"]) => {
+        import("./store").then(({ useStore }) => {
+          const store = useStore.getState();
+          switch (msg.action) {
+            case "toggle-sidebar":
+              store.toggleSidebar();
+              break;
+            case "command-palette":
+              store.toggleCommandPalette();
+              break;
+            // new-workspace and add-repo will be handled by Stream D
+          }
+        });
+      },
     },
   },
 });

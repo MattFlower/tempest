@@ -1,35 +1,31 @@
-# Tempest — Electrobun Rewrite
+# Tempest — Stream C: Browser Tabs (CEF)
 
-## Overview
-Tempest is a macOS developer tool being rewritten from Swift/SwiftUI to Electrobun/TypeScript.
-Two-process architecture: Bun backend + React webview frontend, communicating via typed RPC.
+## Your Scope
+- `src/views/main/components/browser/BrowserPane.tsx` — CEF webview wrapper
+- `src/views/main/components/browser/BrowserToolbar.tsx` — Nav toolbar + find bar
+- `src/bun/browser/bookmark-manager.ts` — Per-repo bookmark CRUD + JSON persistence
 
-## Tech Stack
-- **Framework:** Electrobun 1.16.0 (Bun runtime + native WebView + optional CEF)
-- **UI:** React 19 + Tailwind CSS 4 + Zustand
-- **Terminal:** xterm.js 6 with WebGL renderer + Bun.Terminal PTY
-- **Browser:** CEF via `<electrobun-webview renderer="cef">`
-- **Build:** `bun x electrobun dev` (dev), `bun x electrobun build` (prod)
-- **Use Bun at** `/Users/mflower/.bun/bin/bun` (version 1.3.11)
+## Do NOT modify (owned by other streams):
+- `src/views/main/components/layout/*` (Stream B)
+- `src/views/main/components/terminal/*` (Stream A)
+- `src/views/main/components/sidebar/*` (Stream E)
 
-## Project Structure
-- `src/shared/` — Types and RPC schema shared between processes
-- `src/bun/` — Bun process (PTY, workspaces, VCS, hooks, config)
-- `src/views/main/` — React webview (pane layout, terminals, browser, sidebar)
+## You MAY update:
+- `src/bun/index.ts` — Replace Bookmark RPC stubs with real implementations
 
-## Key Architectural Rules
-1. **Terminal lifecycle:** Never unmount terminal components on tab switch. Use opacity-0 + pointer-events-none to hide. Unmounting destroys the xterm.js instance and loses scrollback.
-2. **PaneNode is immutable:** All tree operations return new trees. Never mutate in place.
-3. **RPC hot path:** Terminal I/O uses fire-and-forget messages (not requests) to minimize latency. Base64 encode PTY data. Use sequence numbers for ordering.
-4. **Microtask coalescing:** PTY output batched via queueMicrotask, not setTimeout.
-5. **CSI u keyboard protocol:** Use for Ctrl+/ and other non-letter Ctrl combos. Let xterm.js handle Ctrl+letter natively (but send ASCII control codes manually since WebKit's native handling doesn't work).
+## CEF Webview Tag API
+```tsx
+<electrobun-webview id={id} src={url} renderer="cef" style="flex:1; width:100%; min-height:0;" />
+```
+Methods: `.loadURL()`, `.goBack()`, `.goForward()`, `.reload()`, `.canGoBack()`, `.canGoForward()`, `.findInPage(text, opts)`, `.stopFindInPage()`
+Events: `.on('did-navigate', handler)`, `.on('did-commit-navigation', handler)`
 
-## Bun API Preferences
-- Use `Bun.spawn` for process execution (with `terminal` option for PTY)
-- Use `Bun.file` / `Bun.write` over `node:fs` readFile/writeFile
-- Use `Bun.listen` for Unix socket servers
-- Use `bun:test` for testing
+## Browser Toolbar (port from Swift)
+Ref: `~/tempest/workspaces/code-Tempest/research-electron-rewrite/Tempest/Browser/BrowserTabView.swift`
+Back/Forward, Reload/Stop, URL bar (Enter to navigate, auto-prefix https://), bookmark star, find bar (Cmd+F, ESC close, prev/next).
 
-## Commands
-- `/Users/mflower/.bun/bin/bun x electrobun dev` — Dev build + run
-- `/Users/mflower/.bun/bin/bun test` — Run tests
+## BookmarkManager (port from Swift)
+Ref: `~/tempest/workspaces/code-Tempest/research-electron-rewrite/Tempest/Browser/BookmarkManager.swift`
+Storage: `~/.config/Tempest/bookmarks/{sha256(repoPath)}.json`. URL normalization. CRUD with version field.
+
+## Use Bun at /Users/mflower/.bun/bin/bun (version 1.3.11)

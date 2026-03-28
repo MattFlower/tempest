@@ -5,6 +5,18 @@
 // ============================================================
 
 import { BrowserWindow, BrowserView } from "electrobun/bun";
+import { BookmarkManager } from "./browser/bookmark-manager";
+
+// Cache BookmarkManagers per repoPath to avoid re-reading disk on every call
+const bookmarkManagers = new Map<string, BookmarkManager>();
+function getBookmarkManager(repoPath: string): BookmarkManager {
+  let mgr = bookmarkManagers.get(repoPath);
+  if (!mgr) {
+    mgr = new BookmarkManager(repoPath);
+    bookmarkManagers.set(repoPath, mgr);
+  }
+  return mgr;
+}
 
 // Define RPC with handler stubs — each stream fills in its section
 const rpc = BrowserView.defineRPC({
@@ -38,9 +50,14 @@ const rpc = BrowserView.defineRPC({
       saveConfig: (_params: any) => {},
 
       // --- Bookmarks (Stream C) ---
-      getBookmarks: (_params: any) => [],
-      addBookmark: (_params: any) => {},
-      removeBookmark: (_params: any) => {},
+      getBookmarks: async ({ repoPath }: { repoPath: string }) =>
+        getBookmarkManager(repoPath).getAll(),
+      addBookmark: async ({ repoPath, url, label }: { repoPath: string; url: string; label: string }) => {
+        await getBookmarkManager(repoPath).add(url, label);
+      },
+      removeBookmark: async ({ repoPath, bookmarkId }: { repoPath: string; bookmarkId: string }) => {
+        await getBookmarkManager(repoPath).remove(bookmarkId);
+      },
 
       // --- Session State (Stream D) ---
       loadSessionState: () => null,

@@ -64,8 +64,6 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused }: BrowserPanePro
       if (event?.detail?.url) return event.detail.url;
       if (typeof event?.detail === "string") return event.detail;
       if (event?.url) return event.url;
-      // Log to help debug if none of the above work
-      console.log("[BrowserPane] event shape:", JSON.stringify(event, null, 2));
       return "";
     };
 

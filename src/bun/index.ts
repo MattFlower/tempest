@@ -7,6 +7,7 @@
 import { BrowserWindow, BrowserView } from "electrobun/bun";
 import { PtyManager } from "./pty-manager";
 import { SessionManager } from "./session-manager";
+import { BookmarkManager } from "./browser/bookmark-manager";
 
 // --- Stream A: Terminal + Session ---
 const ptyManager = new PtyManager();
@@ -14,6 +15,17 @@ const sessionManager = new SessionManager({
   workspaceRoot: "~/tempest/workspaces",
   claudeArgs: ["--dangerously-skip-permissions"],
 });
+
+// --- Stream C: Bookmark Managers ---
+const bookmarkManagers = new Map<string, BookmarkManager>();
+function getBookmarkManager(repoPath: string): BookmarkManager {
+  let mgr = bookmarkManagers.get(repoPath);
+  if (!mgr) {
+    mgr = new BookmarkManager(repoPath);
+    bookmarkManagers.set(repoPath, mgr);
+  }
+  return mgr;
+}
 
 // Define RPC with handler stubs — each stream fills in its section
 const rpc = BrowserView.defineRPC({
@@ -51,9 +63,14 @@ const rpc = BrowserView.defineRPC({
       saveConfig: (_params: any) => {},
 
       // --- Bookmarks (Stream C) ---
-      getBookmarks: (_params: any) => [],
-      addBookmark: (_params: any) => {},
-      removeBookmark: (_params: any) => {},
+      getBookmarks: async ({ repoPath }: { repoPath: string }) =>
+        getBookmarkManager(repoPath).getAll(),
+      addBookmark: async ({ repoPath, url, label }: { repoPath: string; url: string; label: string }) => {
+        await getBookmarkManager(repoPath).add(url, label);
+      },
+      removeBookmark: async ({ repoPath, bookmarkId }: { repoPath: string; bookmarkId: string }) => {
+        await getBookmarkManager(repoPath).remove(bookmarkId);
+      },
 
       // --- Session State (Stream D) ---
       loadSessionState: () => null,

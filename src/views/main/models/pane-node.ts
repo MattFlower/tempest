@@ -12,7 +12,7 @@ export interface PaneTab {
   kind: PaneTabKind;
   label: string;
   terminalId?: string; // Links to PTY instance
-  browserUrl?: string;
+  browserURL?: string;
   sessionId?: string; // Claude session ID
   isAlive: boolean;
   processId?: number;

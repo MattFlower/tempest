@@ -58,13 +58,15 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused }: BrowserPanePro
       }
     };
 
-    el.on("did-navigate", (url: string) => {
+    el.on("did-navigate", (event: any) => {
+      const url = event?.detail?.url ?? event?.url ?? String(event);
       setCurrentUrl(url);
       setIsLoading(false);
       updateNavState();
     });
 
-    el.on("did-commit-navigation", (url: string) => {
+    el.on("did-commit-navigation", (event: any) => {
+      const url = event?.detail?.url ?? event?.url ?? String(event);
       setCurrentUrl(url);
       updateNavState();
     });

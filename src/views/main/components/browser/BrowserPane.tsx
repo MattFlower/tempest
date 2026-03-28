@@ -58,16 +58,27 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused }: BrowserPanePro
       }
     };
 
+    const extractUrl = (event: any): string => {
+      // Electrobun CustomEvent: URL might be in various places
+      if (typeof event === "string") return event;
+      if (event?.detail?.url) return event.detail.url;
+      if (typeof event?.detail === "string") return event.detail;
+      if (event?.url) return event.url;
+      // Log to help debug if none of the above work
+      console.log("[BrowserPane] event shape:", JSON.stringify(event, null, 2));
+      return "";
+    };
+
     el.on("did-navigate", (event: any) => {
-      const url = event?.detail?.url ?? event?.url ?? String(event);
-      setCurrentUrl(url);
+      const url = extractUrl(event);
+      if (url) setCurrentUrl(url);
       setIsLoading(false);
       updateNavState();
     });
 
     el.on("did-commit-navigation", (event: any) => {
-      const url = event?.detail?.url ?? event?.url ?? String(event);
-      setCurrentUrl(url);
+      const url = extractUrl(event);
+      if (url) setCurrentUrl(url);
       updateNavState();
     });
 

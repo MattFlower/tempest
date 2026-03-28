@@ -14,6 +14,13 @@ export function App() {
   const selectedWorkspacePath = useStore((s) => s.selectedWorkspacePath);
   const paneTrees = useStore((s) => s.paneTrees);
 
+  // All workspace paths to render: selected + any with existing trees
+  const allWorkspacePaths = useMemo(() => {
+    const paths = new Set(Object.keys(paneTrees));
+    if (selectedWorkspacePath) paths.add(selectedWorkspacePath);
+    return Array.from(paths);
+  }, [paneTrees, selectedWorkspacePath]);
+
   const [isDragging, setIsDragging] = useState(false);
   const startX = useRef(0);
   const startWidth = useRef(0);
@@ -70,8 +77,10 @@ export function App() {
         {/* Workspace Detail — all visited workspaces rendered simultaneously,
             hidden with opacity pattern to preserve terminal state. */}
         <div className="flex-1 min-w-0 flex flex-col relative">
-          {/* Workspace views — stacked, only selected is visible */}
-          {Object.keys(paneTrees).map((wsPath) => (
+          {/* Workspace views — stacked, only selected is visible.
+              Includes selected workspace (even if no tree yet) plus all
+              previously visited workspaces (to keep their terminals alive). */}
+          {allWorkspacePaths.map((wsPath) => (
             <div
               key={wsPath}
               className={`absolute inset-0 ${
@@ -84,8 +93,8 @@ export function App() {
             </div>
           ))}
 
-          {/* Empty state — shown when no workspace selected and none visited */}
-          {!selectedWorkspacePath && Object.keys(paneTrees).length === 0 && (
+          {/* Empty state — shown when no workspace selected */}
+          {!selectedWorkspacePath && (
             <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--ctp-overlay0)]">
               <svg className="w-10 h-10" viewBox="0 0 24 24" fill="currentColor" opacity={0.3}>
                 <path d="M4 17.27V4h16v13.27l-2-1.15-2 1.15-2-1.15-2 1.15-2-1.15-2 1.15-2-1.15-2 1.15ZM2 2v18l4-2.3 2 1.15 2-1.15 2 1.15 2-1.15 2 1.15 2-1.15L22 20V2H2Z" />

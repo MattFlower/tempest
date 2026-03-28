@@ -97,7 +97,7 @@ export function TabButton({ tab, paneId, isSelected }: TabButtonProps) {
         className="ml-1 opacity-0 group-hover:opacity-100 text-[var(--ctp-overlay0)] hover:text-[var(--ctp-red)] transition-opacity"
         onClick={handleClose}
       >
-        \u00D7
+        {"×"}
       </button>
 
       {/* Selected underline */}

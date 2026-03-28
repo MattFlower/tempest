@@ -1,35 +1,45 @@
-# Tempest — Electrobun Rewrite
+# Tempest — Stream A: Terminal System + PTY Manager
 
-## Overview
-Tempest is a macOS developer tool being rewritten from Swift/SwiftUI to Electrobun/TypeScript.
-Two-process architecture: Bun backend + React webview frontend, communicating via typed RPC.
+## Your Scope
+You own the terminal subsystem. Implement these files:
+- `src/bun/pty-manager.ts` — Multi-terminal PTY management via Bun.Terminal
+- `src/bun/session-manager.ts` — Build claude/shell/editor command strings with env, hooks
+- `src/bun/hooks/hook-settings-builder.ts` — Write temp JSON settings for Claude --settings
+- `src/views/main/components/terminal/terminal-instance.ts` — xterm.js lifecycle class
+- `src/views/main/components/terminal/TerminalPane.tsx` — React wrapper component
 
-## Tech Stack
-- **Framework:** Electrobun 1.16.0 (Bun runtime + native WebView + optional CEF)
-- **UI:** React 19 + Tailwind CSS 4 + Zustand
-- **Terminal:** xterm.js 6 with WebGL renderer + Bun.Terminal PTY
-- **Browser:** CEF via `<electrobun-webview renderer="cef">`
-- **Build:** `bun x electrobun dev` (dev), `bun x electrobun build` (prod)
-- **Use Bun at** `/Users/mflower/.bun/bin/bun` (version 1.3.11)
+## Do NOT modify (owned by other streams):
+- `src/views/main/App.tsx` (Stream E)
+- `src/views/main/components/layout/*` (Stream B)
+- `src/views/main/components/browser/*` (Stream C)
+- `src/views/main/components/sidebar/*` (Stream E)
+- `src/bun/workspace-manager.ts` (Stream D)
 
-## Project Structure
-- `src/shared/` — Types and RPC schema shared between processes
-- `src/bun/` — Bun process (PTY, workspaces, VCS, hooks, config)
-- `src/views/main/` — React webview (pane layout, terminals, browser, sidebar)
+## You MAY update:
+- `src/bun/index.ts` — Replace Terminal/Session RPC stubs with real implementations
+- `src/shared/rpc-schema.ts` — Only if you need terminal-specific fields
 
-## Key Architectural Rules
-1. **Terminal lifecycle:** Never unmount terminal components on tab switch. Use opacity-0 + pointer-events-none to hide. Unmounting destroys the xterm.js instance and loses scrollback.
-2. **PaneNode is immutable:** All tree operations return new trees. Never mutate in place.
-3. **RPC hot path:** Terminal I/O uses fire-and-forget messages (not requests) to minimize latency. Base64 encode PTY data. Use sequence numbers for ordering.
-4. **Microtask coalescing:** PTY output batched via queueMicrotask, not setTimeout.
-5. **CSI u keyboard protocol:** Use for Ctrl+/ and other non-letter Ctrl combos. Let xterm.js handle Ctrl+letter natively (but send ASCII control codes manually since WebKit's native handling doesn't work).
+## Prototype Reference
+Working prototype at `~/code/tempest-electrobun-prototype/`. Carry forward:
+- **Microtask coalescing** (`queueMicrotask`) for PTY output batching
+- **Base64 encoding** for PTY data over RPC
+- **Sequence numbers** for ordered delivery
+- **CSI u keyboard** for Ctrl+/ etc. Ctrl+letter: send ASCII control codes manually (WebKit bug)
+- **WebGL renderer** with canvas fallback on context loss
+- **ResizeObserver** with 16ms debounce, 50x50px min guard
 
-## Bun API Preferences
-- Use `Bun.spawn` for process execution (with `terminal` option for PTY)
-- Use `Bun.file` / `Bun.write` over `node:fs` readFile/writeFile
-- Use `Bun.listen` for Unix socket servers
-- Use `bun:test` for testing
+## Session Manager (port from Swift)
+Ref: `~/tempest/workspaces/code-Tempest/research-electron-rewrite/Tempest/Session/SessionManager.swift`
+- `buildClaudeCommand()`: resolve path, add --resume/--settings/--dangerously-skip-permissions, wrap in `/bin/zsh -lic 'exec ...'`
+- `buildShellCommand()`: login shell at workspace path
+- Hook settings: temp JSON at `~/.tempest/settings-*.json`
 
-## Commands
-- `/Users/mflower/.bun/bin/bun x electrobun dev` — Dev build + run
-- `/Users/mflower/.bun/bin/bun test` — Run tests
+## Terminal Env
+Set: `TERM=xterm-256color`, `COLORTERM=truecolor`, `TERM_PROGRAM=tempest`
+Clear: `GHOSTTY_RESOURCES_DIR`, `GHOSTTY_BIN_DIR`, `GHOSTTY_SHELL_INTEGRATION_NO_SUDO`
+
+## xterm.js Config
+`macOptionIsMeta: true`, `allowTransparency: false`, `smoothScrollDuration: 0`, `minimumContrastRatio: 1`
+Font: `"MesloLGS Nerd Font", "SF Mono", Menlo, monospace` 14px. Theme: Catppuccin Mocha.
+
+## Use Bun at /Users/mflower/.bun/bin/bun (version 1.3.11)

@@ -1,35 +1,45 @@
-# Tempest — Electrobun Rewrite
+# Tempest — Stream B: Pane Layout System
 
-## Overview
-Tempest is a macOS developer tool being rewritten from Swift/SwiftUI to Electrobun/TypeScript.
-Two-process architecture: Bun backend + React webview frontend, communicating via typed RPC.
+## Your Scope (MOST COMPLEX STREAM)
+- `src/views/main/models/pane-node.ts` — Complete immutable tree operations (stubs exist)
+- `src/views/main/components/layout/PaneTreeView.tsx` — Recursive pane renderer
+- `src/views/main/components/layout/PaneView.tsx` — Single pane: tab bar + content
+- `src/views/main/components/layout/PaneDivider.tsx` — Draggable divider
+- `src/views/main/components/layout/TabBar.tsx` — Scrollable tabs with drag/drop
+- `src/views/main/components/layout/TabButton.tsx` — Tab with activity indicator
+- `src/views/main/state/actions.ts` — splitPane, addTab, closeTab, moveTab, focusPane, etc.
 
-## Tech Stack
-- **Framework:** Electrobun 1.16.0 (Bun runtime + native WebView + optional CEF)
-- **UI:** React 19 + Tailwind CSS 4 + Zustand
-- **Terminal:** xterm.js 6 with WebGL renderer + Bun.Terminal PTY
-- **Browser:** CEF via `<electrobun-webview renderer="cef">`
-- **Build:** `bun x electrobun dev` (dev), `bun x electrobun build` (prod)
-- **Use Bun at** `/Users/mflower/.bun/bin/bun` (version 1.3.11)
+## Do NOT modify (owned by other streams):
+- `src/bun/*` (Streams A, D)
+- `src/views/main/components/terminal/*` (Stream A)
+- `src/views/main/components/browser/*` (Stream C)
+- `src/views/main/components/sidebar/*` (Stream E)
 
-## Project Structure
-- `src/shared/` — Types and RPC schema shared between processes
-- `src/bun/` — Bun process (PTY, workspaces, VCS, hooks, config)
-- `src/views/main/` — React webview (pane layout, terminals, browser, sidebar)
+## You MAY update:
+- `src/views/main/App.tsx` — Replace "Workspace Detail" placeholder with PaneTreeView
+- `src/views/main/state/store.ts` — Add pane state/actions
+- `src/views/main/models/*` — Complete stubs
 
-## Key Architectural Rules
-1. **Terminal lifecycle:** Never unmount terminal components on tab switch. Use opacity-0 + pointer-events-none to hide. Unmounting destroys the xterm.js instance and loses scrollback.
-2. **PaneNode is immutable:** All tree operations return new trees. Never mutate in place.
-3. **RPC hot path:** Terminal I/O uses fire-and-forget messages (not requests) to minimize latency. Base64 encode PTY data. Use sequence numbers for ordering.
-4. **Microtask coalescing:** PTY output batched via queueMicrotask, not setTimeout.
-5. **CSI u keyboard protocol:** Use for Ctrl+/ and other non-letter Ctrl combos. Let xterm.js handle Ctrl+letter natively (but send ASCII control codes manually since WebKit's native handling doesn't work).
+## PaneNode (port from Swift)
+Ref: `~/tempest/workspaces/code-Tempest/research-electron-rewrite/Tempest/Models/PaneNode.swift`
+```typescript
+type PaneNode = { type: 'leaf'; pane: Pane } | { type: 'split'; id: string; children: PaneNode[]; ratios: number[] };
+```
+All operations return NEW trees: addingPane, removingPane, updatingPane, movingTab, swappingPanes, withRatios.
 
-## Bun API Preferences
-- Use `Bun.spawn` for process execution (with `terminal` option for PTY)
-- Use `Bun.file` / `Bun.write` over `node:fs` readFile/writeFile
-- Use `Bun.listen` for Unix socket servers
-- Use `bun:test` for testing
+## CRITICAL: Opacity Pattern
+Ref: `~/tempest/workspaces/code-Tempest/research-electron-rewrite/Tempest/Views/PaneView.swift`
+ALL terminal/browser tabs rendered simultaneously. Hidden = `opacity-0 pointer-events-none`. NEVER conditional render. Unmounting destroys xterm.js.
 
-## Commands
-- `/Users/mflower/.bun/bin/bun x electrobun dev` — Dev build + run
-- `/Users/mflower/.bun/bin/bun test` — Run tests
+## Normalize Leaf/Split Boundary
+Always render via children array (wrap leaf in [node]). Prevents React destroy/recreate at 1↔2 transition.
+
+## Maximize: target full width, others width=0 opacity=0. Dividers hidden. Panes stay in tree.
+
+## Tab Drag/Drop: HTML DnD API with PaneTabDragData payload.
+
+## WorkspaceDetailView Logic
+Ref: `~/tempest/workspaces/code-Tempest/research-electron-rewrite/Tempest/Views/WorkspaceDetailView.swift` (1892 LOC)
+Port to `state/actions.ts`: split, focus next/prev, move, resize, maximize.
+
+## Use Bun at /Users/mflower/.bun/bin/bun (version 1.3.11)

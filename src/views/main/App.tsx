@@ -5,6 +5,7 @@
 // ============================================================
 
 import { useStore } from "./state/store";
+import { WorkspaceDetail } from "./components/layout";
 
 export function App() {
   const sidebarVisible = useStore((s) => s.sidebarVisible);
@@ -24,11 +25,9 @@ export function App() {
         </div>
       )}
 
-      {/* Workspace Detail — Stream B fills this in */}
+      {/* Workspace Detail */}
       <div className="flex-1 min-w-0">
-        <div className="flex h-full items-center justify-center text-[var(--ctp-overlay0)] text-xs">
-          Workspace Detail (Stream B)
-        </div>
+        <WorkspaceDetail />
       </div>
     </div>
   );

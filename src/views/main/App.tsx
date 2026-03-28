@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import { useStore } from "./state/store";
 import { Sidebar } from "./components/sidebar/Sidebar";
 import { CommandPalette } from "./components/palette/CommandPalette";
+import { WorkspaceDetail } from "./components/layout";
 
 const MIN_SIDEBAR_WIDTH = 180;
 const MAX_SIDEBAR_WIDTH = 400;
@@ -65,12 +66,10 @@ export function App() {
           </>
         )}
 
-        {/* Workspace Detail — Stream B fills this in */}
+        {/* Workspace Detail — pane tree with terminals, browser tabs, etc. */}
         <div className="flex-1 min-w-0 flex flex-col">
           {selectedWorkspacePath ? (
-            <div className="flex h-full items-center justify-center text-[var(--ctp-overlay0)] text-xs">
-              Workspace Detail (Stream B)
-            </div>
+            <WorkspaceDetail />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--ctp-overlay0)]">
               <svg className="w-10 h-10" viewBox="0 0 24 24" fill="currentColor" opacity={0.3}>

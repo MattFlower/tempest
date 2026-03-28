@@ -105,50 +105,202 @@ export function findPaneByTabId(
   return undefined;
 }
 
-// --- Tree mutation stubs (implemented in Stream B) ---
+// --- Tree mutations (immutable — all return new trees) ---
 
 export function addingPane(
-  _root: PaneNode,
-  _newPane: Pane,
-  _afterPaneId: string,
+  root: PaneNode,
+  newPane: Pane,
+  afterPaneId: string,
 ): PaneNode {
-  // Stream B implements this
-  throw new Error("Not implemented — Stream B");
+  if (root.type === "leaf") {
+    if (root.pane.id === afterPaneId) {
+      return {
+        type: "split",
+        id: crypto.randomUUID(),
+        children: [root, { type: "leaf", pane: newPane }],
+        ratios: [0.5, 0.5],
+      };
+    }
+    return root;
+  }
+
+  // Check direct children for a leaf matching afterPaneId
+  const directIndex = root.children.findIndex(
+    (child) => child.type === "leaf" && child.pane.id === afterPaneId,
+  );
+
+  if (directIndex !== -1) {
+    const newChildren = [...root.children];
+    newChildren.splice(directIndex + 1, 0, { type: "leaf", pane: newPane });
+    const n = newChildren.length;
+    return {
+      type: "split",
+      id: root.id,
+      children: newChildren,
+      ratios: Array(n).fill(1 / n),
+    };
+  }
+
+  // Recurse into children
+  const updatedChildren = root.children.map((child) =>
+    addingPane(child, newPane, afterPaneId),
+  );
+  const changed = updatedChildren.some(
+    (child, i) => child !== root.children[i],
+  );
+  if (!changed) return root;
+
+  return {
+    type: "split",
+    id: root.id,
+    children: updatedChildren,
+    ratios: root.ratios,
+  };
 }
 
 export function removingPane(
-  _root: PaneNode,
-  _paneId: string,
+  root: PaneNode,
+  paneId: string,
 ): PaneNode | null {
-  // Stream B implements this
-  throw new Error("Not implemented — Stream B");
+  if (root.type === "leaf") {
+    return root.pane.id === paneId ? null : root;
+  }
+
+  const filtered: PaneNode[] = [];
+  for (const child of root.children) {
+    const result = removingPane(child, paneId);
+    if (result !== null) filtered.push(result);
+  }
+
+  if (filtered.length === 0) return null;
+  if (filtered.length === 1) return filtered[0]!; // collapse single child
+
+  const n = filtered.length;
+  return {
+    type: "split",
+    id: root.id,
+    children: filtered,
+    ratios: Array(n).fill(1 / n),
+  };
 }
 
 export function updatingPane(
-  _root: PaneNode,
-  _paneId: string,
-  _transform: (pane: Pane) => Pane,
+  root: PaneNode,
+  paneId: string,
+  transform: (pane: Pane) => Pane,
 ): PaneNode {
-  // Stream B implements this
-  throw new Error("Not implemented — Stream B");
+  if (root.type === "leaf") {
+    if (root.pane.id === paneId) {
+      return { type: "leaf", pane: transform(root.pane) };
+    }
+    return root;
+  }
+
+  const updatedChildren = root.children.map((child) =>
+    updatingPane(child, paneId, transform),
+  );
+  const changed = updatedChildren.some(
+    (child, i) => child !== root.children[i],
+  );
+  if (!changed) return root;
+
+  return {
+    type: "split",
+    id: root.id,
+    children: updatedChildren,
+    ratios: root.ratios,
+  };
 }
 
 export function movingTab(
-  _root: PaneNode,
-  _tabId: string,
-  _fromPaneId: string,
-  _toPaneId: string,
-  _atIndex?: number,
+  root: PaneNode,
+  tabId: string,
+  fromPaneId: string,
+  toPaneId: string,
+  atIndex?: number,
 ): PaneNode {
-  // Stream B implements this
-  throw new Error("Not implemented — Stream B");
+  const sourcePane = findPane(root, fromPaneId);
+  if (!sourcePane) return root;
+
+  const tab = sourcePane.tabs.find((t) => t.id === tabId);
+  if (!tab) return root;
+
+  // Same-pane reorder
+  if (fromPaneId === toPaneId) {
+    return updatingPane(root, fromPaneId, (pane) => {
+      const currentIndex = pane.tabs.findIndex((t) => t.id === tabId);
+      if (currentIndex === -1) return pane;
+      const withoutTab = [
+        ...pane.tabs.slice(0, currentIndex),
+        ...pane.tabs.slice(currentIndex + 1),
+      ];
+      const insertIdx = Math.min(atIndex ?? withoutTab.length, withoutTab.length);
+      const newTabs = [
+        ...withoutTab.slice(0, insertIdx),
+        tab,
+        ...withoutTab.slice(insertIdx),
+      ];
+      return { ...pane, tabs: newTabs, selectedTabId: tabId };
+    });
+  }
+
+  // Cross-pane: add to destination first
+  let result = updatingPane(root, toPaneId, (pane) => {
+    const insertIdx = Math.min(atIndex ?? pane.tabs.length, pane.tabs.length);
+    const newTabs = [
+      ...pane.tabs.slice(0, insertIdx),
+      tab,
+      ...pane.tabs.slice(insertIdx),
+    ];
+    return { ...pane, tabs: newTabs, selectedTabId: tabId };
+  });
+
+  // Then remove from source
+  if (sourcePane.tabs.length <= 1) {
+    const removed = removingPane(result, fromPaneId);
+    result = removed ?? result;
+  } else {
+    result = updatingPane(result, fromPaneId, (pane) => {
+      const newTabs = pane.tabs.filter((t) => t.id !== tabId);
+      const newSelectedTabId =
+        pane.selectedTabId === tabId
+          ? newTabs[newTabs.length - 1]?.id
+          : pane.selectedTabId;
+      return { ...pane, tabs: newTabs, selectedTabId: newSelectedTabId };
+    });
+  }
+
+  return result;
 }
 
 export function withRatios(
-  _root: PaneNode,
-  _splitId: string,
-  _newRatios: number[],
+  root: PaneNode,
+  splitId: string,
+  newRatios: number[],
 ): PaneNode {
-  // Stream B implements this
-  throw new Error("Not implemented — Stream B");
+  if (root.type === "leaf") return root;
+
+  if (root.id === splitId) {
+    return {
+      type: "split",
+      id: root.id,
+      children: root.children,
+      ratios: newRatios,
+    };
+  }
+
+  const updatedChildren = root.children.map((child) =>
+    withRatios(child, splitId, newRatios),
+  );
+  const changed = updatedChildren.some(
+    (child, i) => child !== root.children[i],
+  );
+  if (!changed) return root;
+
+  return {
+    type: "split",
+    id: root.id,
+    children: updatedChildren,
+    ratios: root.ratios,
+  };
 }

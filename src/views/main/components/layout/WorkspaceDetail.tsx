@@ -16,42 +16,35 @@ function normalize(node: PaneNode): PaneNode {
   return node;
 }
 
-export function WorkspaceDetail() {
-  const selectedWorkspacePath = useStore((s) => s.selectedWorkspacePath);
+interface WorkspaceDetailProps {
+  workspacePath: string;
+}
+
+export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
   const paneTrees = useStore((s) => s.paneTrees);
   const setPaneTree = useStore((s) => s.setPaneTree);
   const setFocusedPaneId = useStore((s) => s.setFocusedPaneId);
 
-  const tree = selectedWorkspacePath
-    ? paneTrees[selectedWorkspacePath]
-    : undefined;
+  const tree = paneTrees[workspacePath];
 
   // Initialize terminal dispatch once
   useEffect(() => {
     initTerminalDispatch();
   }, []);
 
-  // Create a default pane tree if workspace is selected but has no tree
+  // Create a default pane tree if workspace has no tree yet
   useEffect(() => {
-    if (selectedWorkspacePath && !paneTrees[selectedWorkspacePath]) {
+    if (workspacePath && !paneTrees[workspacePath]) {
       const terminalId = crypto.randomUUID();
       const tab = createTab(PaneTabKind.Shell, "Shell", {
         terminalId,
       });
       const pane = createPane(tab);
       const leaf = createLeaf(pane);
-      setPaneTree(selectedWorkspacePath, leaf);
+      setPaneTree(workspacePath, leaf);
       setFocusedPaneId(pane.id);
     }
-  }, [selectedWorkspacePath, paneTrees, setPaneTree, setFocusedPaneId]);
-
-  if (!selectedWorkspacePath) {
-    return (
-      <div className="flex h-full items-center justify-center text-[var(--ctp-overlay0)] text-xs">
-        No workspace selected
-      </div>
-    );
-  }
+  }, [workspacePath, paneTrees, setPaneTree, setFocusedPaneId]);
 
   if (!tree) {
     return null; // Will be created by useEffect

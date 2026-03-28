@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import { useStore } from "./state/store";
 import { Sidebar } from "./components/sidebar/Sidebar";
 import { CommandPalette } from "./components/palette/CommandPalette";
@@ -12,6 +12,7 @@ export function App() {
   const sidebarWidth = useStore((s) => s.sidebarWidth);
   const setSidebarWidth = useStore((s) => s.setSidebarWidth);
   const selectedWorkspacePath = useStore((s) => s.selectedWorkspacePath);
+  const paneTrees = useStore((s) => s.paneTrees);
 
   const [isDragging, setIsDragging] = useState(false);
   const startX = useRef(0);
@@ -66,11 +67,25 @@ export function App() {
           </>
         )}
 
-        {/* Workspace Detail — pane tree with terminals, browser tabs, etc. */}
-        <div className="flex-1 min-w-0 flex flex-col">
-          {selectedWorkspacePath ? (
-            <WorkspaceDetail />
-          ) : (
+        {/* Workspace Detail — all visited workspaces rendered simultaneously,
+            hidden with opacity pattern to preserve terminal state. */}
+        <div className="flex-1 min-w-0 flex flex-col relative">
+          {/* Workspace views — stacked, only selected is visible */}
+          {Object.keys(paneTrees).map((wsPath) => (
+            <div
+              key={wsPath}
+              className={`absolute inset-0 ${
+                wsPath === selectedWorkspacePath
+                  ? "opacity-100"
+                  : "opacity-0 pointer-events-none"
+              }`}
+            >
+              <WorkspaceDetail workspacePath={wsPath} />
+            </div>
+          ))}
+
+          {/* Empty state — shown when no workspace selected and none visited */}
+          {!selectedWorkspacePath && Object.keys(paneTrees).length === 0 && (
             <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--ctp-overlay0)]">
               <svg className="w-10 h-10" viewBox="0 0 24 24" fill="currentColor" opacity={0.3}>
                 <path d="M4 17.27V4h16v13.27l-2-1.15-2 1.15-2-1.15-2 1.15-2-1.15-2 1.15-2-1.15-2 1.15ZM2 2v18l4-2.3 2 1.15 2-1.15 2 1.15 2-1.15 2 1.15 2-1.15L22 20V2H2Z" />

@@ -1,0 +1,123 @@
+import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
+import { rm } from "node:fs/promises";
+import type { DiffStats, TempestWorkspace } from "../../shared/ipc-types";
+import { VCSType, WorkspaceStatus } from "../../shared/ipc-types";
+import type { VCSProvider } from "./types";
+import { PathResolver } from "../config/path-resolver";
+
+export class JJProvider implements VCSProvider {
+  readonly vcsType = VCSType.JJ;
+  readonly repoPath: string;
+  private readonly pathResolver = new PathResolver();
+  private readonly configuredJJPath?: string;
+
+  constructor(repoPath: string, configuredJJPath?: string) {
+    this.repoPath = repoPath;
+    this.configuredJJPath = configuredJJPath;
+  }
+
+  async createWorkspace(
+    name: string,
+    atPath: string,
+    branch?: string,
+    useExistingBranch?: boolean,
+  ): Promise<TempestWorkspace> {
+    await this.runJJ(
+      ["workspace", "add", atPath, "--name", name],
+      this.repoPath,
+    );
+    if (useExistingBranch && branch) {
+      await this.runJJ(["git", "fetch", "-b", branch], atPath);
+      await this.runJJ(["new", `${branch}@origin`], atPath);
+    }
+    return {
+      id: createHash("sha256").update(atPath).digest("hex").slice(0, 16),
+      name,
+      path: atPath,
+      repoPath: this.repoPath,
+      status: WorkspaceStatus.Idle,
+    };
+  }
+
+  async listWorkspaceNames(): Promise<string[]> {
+    const output = await this.runJJ(["workspace", "list"], this.repoPath);
+    // jj workspace list output format: "name: <change-id> <description>"
+    return output
+      .split("\n")
+      .map((line) => {
+        const colonIdx = line.indexOf(":");
+        if (colonIdx === -1) return "";
+        return line.slice(0, colonIdx).trim();
+      })
+      .filter((name) => name.length > 0);
+  }
+
+  async archiveWorkspace(workspace: TempestWorkspace): Promise<void> {
+    await this.runJJ(["workspace", "forget", workspace.name], this.repoPath);
+    if (existsSync(workspace.path)) {
+      await rm(workspace.path, { recursive: true, force: true });
+    }
+  }
+
+  async bookmarkName(
+    workspace: TempestWorkspace,
+  ): Promise<string | undefined> {
+    const output = await this.runJJ(
+      ["log", "-r", "@", "--no-graph", "-T", "bookmarks"],
+      workspace.path,
+    );
+    const trimmed = output.trim();
+    if (!trimmed) return undefined;
+    // May contain multiple bookmarks separated by spaces; return the first
+    return trimmed.split(/\s+/)[0];
+  }
+
+  async diffStats(workspace: TempestWorkspace): Promise<DiffStats> {
+    const output = await this.runJJ(
+      ["diff", "--stat", "--from", "roots(trunk()..@)-"],
+      workspace.path,
+    );
+    return parseDiffStatSummary(output);
+  }
+
+  private async runJJ(args: string[], directory: string): Promise<string> {
+    const jjPath = this.pathResolver.resolve("jj", this.configuredJJPath);
+    const proc = Bun.spawn([jjPath, ...args], {
+      cwd: directory,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    await proc.exited;
+    if (proc.exitCode !== 0) {
+      throw new Error(
+        `jj ${args.join(" ")} failed (exit ${proc.exitCode}): ${stderr}`,
+      );
+    }
+    return stdout;
+  }
+}
+
+function parseDiffStatSummary(output: string): DiffStats {
+  const lines = output.trim().split("\n");
+  const lastLine = lines[lines.length - 1] ?? "";
+
+  let additions = 0;
+  let deletions = 0;
+  let filesChanged = 0;
+
+  const insertMatch = lastLine.match(/(\d+) insertion/);
+  if (insertMatch?.[1]) additions = parseInt(insertMatch[1], 10);
+
+  const deleteMatch = lastLine.match(/(\d+) deletion/);
+  if (deleteMatch?.[1]) deletions = parseInt(deleteMatch[1], 10);
+
+  const filesMatch = lastLine.match(/(\d+) file/);
+  if (filesMatch?.[1]) filesChanged = parseInt(filesMatch[1], 10);
+
+  return { additions, deletions, filesChanged };
+}

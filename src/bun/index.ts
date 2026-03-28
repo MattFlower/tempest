@@ -1,13 +1,17 @@
 // ============================================================
 // Bun process entry point.
 // Creates the main window, wires RPC handlers, sets up menus.
-// Each stream adds its handlers to the appropriate section.
+// All 5 streams integrated.
 // ============================================================
 
 import { BrowserWindow, BrowserView, ApplicationMenu } from "electrobun/bun";
 import { PtyManager } from "./pty-manager";
 import { SessionManager } from "./session-manager";
 import { BookmarkManager } from "./browser/bookmark-manager";
+import { WorkspaceManager } from "./workspace-manager";
+import { SessionStateManager } from "./session-state-manager";
+import { HookEventListener } from "./hooks/hook-event-listener";
+import { SessionActivityTracker } from "./hooks/session-activity-tracker";
 
 // --- Stream A: Terminal + Session ---
 const ptyManager = new PtyManager();
@@ -26,6 +30,12 @@ function getBookmarkManager(repoPath: string): BookmarkManager {
   }
   return mgr;
 }
+
+// --- Stream D: Backend Managers ---
+const workspaceManager = new WorkspaceManager();
+const sessionStateManager = new SessionStateManager();
+const hookListener = new HookEventListener();
+const activityTracker = new SessionActivityTracker();
 
 // --- Stream E: listFiles ---
 const IGNORE_DIRS = new Set([
@@ -55,7 +65,7 @@ async function listFilesInDir(dirPath: string): Promise<string[]> {
   return results;
 }
 
-// Define RPC with handler stubs — each stream fills in its section
+// Define RPC — all streams' handlers combined
 const rpc = BrowserView.defineRPC({
   handlers: {
     requests: {
@@ -71,24 +81,44 @@ const rpc = BrowserView.defineRPC({
       buildShellCommand: (params: any) => sessionManager.buildShellCommand(params),
 
       // --- Repos & Workspaces (Stream D) ---
-      getRepos: () => [],
-      addRepo: (_params: any) => ({ success: false, error: "Not implemented" }),
-      removeRepo: (_params: any) => {},
-      getWorkspaces: (_params: any) => [],
-      createWorkspace: (_params: any) => ({ success: false, error: "Not implemented" }),
-      archiveWorkspace: (_params: any) => ({ success: false, error: "Not implemented" }),
-      refreshWorkspaces: (_params: any) => [],
+      getRepos: () => workspaceManager.getRepos(),
+      addRepo: async (_params: any) => {
+        return await workspaceManager.addRepo(_params.path);
+      },
+      removeRepo: (_params: any) => {
+        workspaceManager.removeRepo(_params.repoId);
+      },
+      getWorkspaces: (_params: any) => {
+        return workspaceManager.getWorkspaces(_params.repoId);
+      },
+      createWorkspace: async (_params: any) => {
+        return await workspaceManager.createWorkspace(
+          _params.repoId,
+          _params.name,
+          _params.branch,
+          _params.useExistingBranch,
+        );
+      },
+      archiveWorkspace: async (_params: any) => {
+        return await workspaceManager.archiveWorkspace(_params.workspaceId);
+      },
+      refreshWorkspaces: async (_params: any) => {
+        return await workspaceManager.refreshWorkspaces(_params.repoId);
+      },
 
       // --- Sidebar (Stream D) ---
-      getSidebarInfo: (_params: any) => ({}),
-      getVCSType: (_params: any) => "git",
+      getSidebarInfo: async (_params: any) => {
+        return await workspaceManager.getSidebarInfo(_params.workspacePath);
+      },
+      getVCSType: (_params: any) => {
+        return workspaceManager.getVCSType(_params.repoPath);
+      },
 
       // --- Config (Stream D) ---
-      getConfig: () => ({
-        workspaceRoot: "~/tempest/workspaces",
-        claudeArgs: ["--dangerously-skip-permissions"],
-      }),
-      saveConfig: (_params: any) => {},
+      getConfig: () => workspaceManager.getConfig(),
+      saveConfig: async (_params: any) => {
+        await workspaceManager.saveConfig(_params);
+      },
 
       // --- Bookmarks (Stream C) ---
       getBookmarks: async ({ repoPath }: { repoPath: string }) =>
@@ -101,8 +131,13 @@ const rpc = BrowserView.defineRPC({
       },
 
       // --- Session State (Stream D) ---
-      loadSessionState: () => null,
-      savePaneState: (_params: any) => {},
+      loadSessionState: async () => {
+        return await sessionStateManager.load();
+      },
+      savePaneState: (_params: any) => {
+        sessionStateManager.savePaneState(_params.workspacePath, _params.paneTree);
+        sessionStateManager.setSelectedWorkspacePath(_params.workspacePath);
+      },
 
       // --- Files (Stream E) ---
       listFiles: async (params: any) => {
@@ -115,10 +150,13 @@ const rpc = BrowserView.defineRPC({
         ptyManager.write(msg.id, msg.data);
       },
 
-      // --- Pane state sync (Stream B) ---
-      paneTreeChanged: (_msg: any) => {},
+      // --- Pane state sync (Stream B + D) ---
+      paneTreeChanged: (_msg: any) => {
+        sessionStateManager.savePaneState(_msg.workspacePath, _msg.tree);
+        sessionStateManager.setSelectedWorkspacePath(_msg.workspacePath);
+      },
 
-      // --- Stats (optional, from prototype) ---
+      // --- Stats (optional) ---
       saveLatencyStats: (_msg: any) => {},
     },
   },
@@ -133,7 +171,7 @@ const win = new BrowserWindow({
   rpc,
 });
 
-// Wire PTY output/exit to webview
+// --- Stream A: Wire PTY output/exit to webview ---
 ptyManager.onOutput((id, data, seq) => {
   win.webview.rpc.send.terminalOutput({ id, data, seq });
 });
@@ -142,12 +180,24 @@ ptyManager.onExit((id, exitCode) => {
   win.webview.rpc.send.terminalExit({ id, exitCode });
 });
 
-// Clean up PTY processes on exit
-process.on("exit", () => {
-  ptyManager.killAll();
-});
+// --- Stream D: Wire push notifications ---
+workspaceManager.onWorkspacesChanged = (repoId, workspaces) => {
+  try {
+    (rpc as any).send?.workspacesChanged?.({ repoId, workspaces });
+  } catch { /* webview not ready yet */ }
+};
+workspaceManager.onSidebarInfoUpdated = (workspacePath, info) => {
+  try {
+    (rpc as any).send?.sidebarInfoUpdated?.({ workspacePath, info });
+  } catch { /* webview not ready yet */ }
+};
+workspaceManager.onConfigChanged = (config) => {
+  try {
+    (rpc as any).send?.configChanged?.(config);
+  } catch { /* webview not ready yet */ }
+};
 
-// --- Application Menu (Stream E) ---
+// --- Stream E: Application Menu ---
 ApplicationMenu.setApplicationMenu([
   {
     label: "Tempest",
@@ -200,12 +250,50 @@ ApplicationMenu.setApplicationMenu([
   },
 ]);
 
-// Forward menu actions to the webview
 ApplicationMenu.on("application-menu-clicked", (event: any) => {
   const action = event?.action ?? event?.data?.action;
   if (action && typeof action === "string") {
     (rpc.send as any).menuAction({ action });
   }
 });
+
+// --- Stream D: Async initialization ---
+(async () => {
+  try {
+    await workspaceManager.initialize();
+    console.log("[main] WorkspaceManager initialized");
+  } catch (err) {
+    console.error("[main] WorkspaceManager init failed:", err);
+  }
+
+  try {
+    hookListener.start((event) => {
+      activityTracker.handleEvent(event);
+      try {
+        (rpc as any).send?.hookEvent?.(event);
+      } catch { /* webview not ready yet */ }
+    });
+  } catch (err) {
+    console.error("[main] HookEventListener start failed:", err);
+  }
+
+  activityTracker.startCleanupTimer();
+  sessionStateManager.startAutoSave();
+})();
+
+// --- Shutdown cleanup (Stream A + D) ---
+async function shutdown() {
+  console.log("[main] Shutting down...");
+  ptyManager.killAll();
+  await sessionStateManager.flush();
+  sessionStateManager.stopAutoSave();
+  hookListener.stop();
+  activityTracker.stopCleanupTimer();
+  workspaceManager.stopSidebarRefresh();
+}
+
+process.on("SIGINT", () => { shutdown().then(() => process.exit(0)); });
+process.on("SIGTERM", () => { shutdown().then(() => process.exit(0)); });
+process.on("beforeExit", () => { shutdown(); });
 
 console.log("[main] Tempest started");

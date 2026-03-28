@@ -5,17 +5,30 @@
 // ============================================================
 
 import { BrowserWindow, BrowserView } from "electrobun/bun";
+import { PtyManager } from "./pty-manager";
+import { SessionManager } from "./session-manager";
+
+// --- Stream A: Terminal + Session ---
+const ptyManager = new PtyManager();
+const sessionManager = new SessionManager({
+  workspaceRoot: "~/tempest/workspaces",
+  claudeArgs: ["--dangerously-skip-permissions"],
+});
 
 // Define RPC with handler stubs — each stream fills in its section
 const rpc = BrowserView.defineRPC({
   handlers: {
     requests: {
       // --- Terminal (Stream A) ---
-      createTerminal: (_params: any) => ({ success: false, error: "Not implemented" }),
-      resizeTerminal: (_params: any) => {},
-      killTerminal: (_params: any) => {},
-      buildClaudeCommand: (_params: any) => ({ command: [], settingsPath: undefined }),
-      buildShellCommand: (_params: any) => ({ command: [] }),
+      createTerminal: (params: any) => ptyManager.create(params),
+      resizeTerminal: (params: any) => {
+        ptyManager.resize(params.id, params.cols, params.rows);
+      },
+      killTerminal: (params: any) => {
+        ptyManager.kill(params.id);
+      },
+      buildClaudeCommand: (params: any) => sessionManager.buildClaudeCommand(params),
+      buildShellCommand: (params: any) => sessionManager.buildShellCommand(params),
 
       // --- Repos & Workspaces (Stream D) ---
       getRepos: () => [],
@@ -51,7 +64,9 @@ const rpc = BrowserView.defineRPC({
     },
     messages: {
       // --- Terminal I/O (Stream A) ---
-      writeToTerminal: (_msg: any) => {},
+      writeToTerminal: (msg: any) => {
+        ptyManager.write(msg.id, msg.data);
+      },
 
       // --- Pane state sync (Stream B) ---
       paneTreeChanged: (_msg: any) => {},
@@ -69,6 +84,20 @@ const win = new BrowserWindow({
   frame: { width: 1400, height: 900, x: 100, y: 100 },
   titleBarStyle: "hiddenInset",
   rpc,
+});
+
+// Wire PTY output/exit to webview
+ptyManager.onOutput((id, data, seq) => {
+  win.webview.rpc.send.terminalOutput({ id, data, seq });
+});
+
+ptyManager.onExit((id, exitCode) => {
+  win.webview.rpc.send.terminalExit({ id, exitCode });
+});
+
+// Clean up PTY processes on exit
+process.on("exit", () => {
+  ptyManager.killAll();
 });
 
 console.log("[main] Tempest started");

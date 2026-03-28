@@ -4,6 +4,9 @@ import { App } from "./App";
 
 // Initialize RPC client (side-effect: sets up Electroview + message handlers)
 import "./state/rpc-client";
+import { initTerminalDispatch } from "./state/terminal-dispatch";
+
+initTerminalDispatch();
 
 const root = document.getElementById("root")!;
 createRoot(root).render(<App />);

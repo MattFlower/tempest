@@ -5,6 +5,7 @@ import { createPane, createTab, createLeaf, createSplit } from "../../models/pan
 import { useStore } from "../../state/store";
 import { PaneTreeView } from "./PaneTreeView";
 import { initTerminalDispatch } from "../../state/terminal-dispatch";
+import { splitPane, focusNextPane, focusPreviousPane, toggleMaximize } from "../../state/actions";
 
 // Normalize: if root is a leaf, wrap it in a single-child split.
 // This prevents React from tearing down & recreating the component
@@ -31,6 +32,33 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
   useEffect(() => {
     initTerminalDispatch();
   }, []);
+
+  // Keyboard shortcuts for pane operations
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Only handle if this workspace is selected
+      if (useStore.getState().selectedWorkspacePath !== workspacePath) return;
+
+      if (e.metaKey && e.key === "d") {
+        e.preventDefault();
+        splitPane("right");
+      }
+      if (e.metaKey && e.key === "]") {
+        e.preventDefault();
+        focusNextPane();
+      }
+      if (e.metaKey && e.key === "[") {
+        e.preventDefault();
+        focusPreviousPane();
+      }
+      if (e.metaKey && e.shiftKey && e.key === "Enter") {
+        e.preventDefault();
+        toggleMaximize();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [workspacePath]);
 
   // Create a default pane tree if workspace has no tree yet
   useEffect(() => {

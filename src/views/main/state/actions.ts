@@ -85,7 +85,9 @@ export function closeTab(paneId: string, tabId: string) {
         useStore.getState();
       if (selectedWorkspacePath) {
         // Create a fresh default pane
-        const tab = createTab(PaneTabKind.Shell, "Shell");
+        const tab = createTab(PaneTabKind.Shell, "Shell", {
+          terminalId: crypto.randomUUID(),
+        });
         const newPane = createPane(tab);
         const tree = createLeaf(newPane);
         setPaneTree(selectedWorkspacePath, tree);
@@ -146,7 +148,9 @@ export function splitPane(direction: "right" | "left" = "right") {
   const { focusedPaneId } = useStore.getState();
   if (!focusedPaneId) return;
 
-  const tab = createTab(PaneTabKind.Shell, "Shell");
+  const tab = createTab(PaneTabKind.Shell, "Shell", {
+    terminalId: crypto.randomUUID(),
+  });
   const newPane = createPane(tab);
 
   let newTree: PaneNode;

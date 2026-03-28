@@ -4,6 +4,7 @@ import type { PaneNode } from "../../models/pane-node";
 import { createPane, createTab, createLeaf, createSplit } from "../../models/pane-node";
 import { useStore } from "../../state/store";
 import { PaneTreeView } from "./PaneTreeView";
+import { initTerminalDispatch } from "../../state/terminal-dispatch";
 
 // Normalize: if root is a leaf, wrap it in a single-child split.
 // This prevents React from tearing down & recreating the component
@@ -25,10 +26,18 @@ export function WorkspaceDetail() {
     ? paneTrees[selectedWorkspacePath]
     : undefined;
 
+  // Initialize terminal dispatch once
+  useEffect(() => {
+    initTerminalDispatch();
+  }, []);
+
   // Create a default pane tree if workspace is selected but has no tree
   useEffect(() => {
     if (selectedWorkspacePath && !paneTrees[selectedWorkspacePath]) {
-      const tab = createTab(PaneTabKind.Shell, "Shell");
+      const terminalId = crypto.randomUUID();
+      const tab = createTab(PaneTabKind.Shell, "Shell", {
+        terminalId,
+      });
       const pane = createPane(tab);
       const leaf = createLeaf(pane);
       setPaneTree(selectedWorkspacePath, leaf);

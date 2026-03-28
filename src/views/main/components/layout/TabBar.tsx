@@ -53,8 +53,24 @@ export function TabBar({ pane }: TabBarProps) {
     [pane.id],
   );
 
-  const handleAddTab = useCallback(() => {
-    const tab = createTab(PaneTabKind.Shell, "Shell");
+  const handleAddShell = useCallback(() => {
+    const tab = createTab(PaneTabKind.Shell, "Shell", {
+      terminalId: crypto.randomUUID(),
+    });
+    addTab(pane.id, tab);
+  }, [pane.id]);
+
+  const handleAddClaude = useCallback(() => {
+    const tab = createTab(PaneTabKind.Claude, "Claude", {
+      terminalId: crypto.randomUUID(),
+    });
+    addTab(pane.id, tab);
+  }, [pane.id]);
+
+  const handleAddBrowser = useCallback(() => {
+    const tab = createTab(PaneTabKind.Browser, "Browser", {
+      browserUrl: "https://google.com",
+    });
     addTab(pane.id, tab);
   }, [pane.id]);
 
@@ -79,13 +95,29 @@ export function TabBar({ pane }: TabBarProps) {
           isSelected={tab.id === pane.selectedTabId}
         />
       ))}
-      <button
-        className="flex-shrink-0 px-2 text-[var(--ctp-overlay0)] hover:text-[var(--ctp-text)] text-sm"
-        onClick={handleAddTab}
-        title="New tab"
-      >
-        +
-      </button>
+      <div className="flex-shrink-0 flex items-center gap-0.5 px-1">
+        <button
+          className="px-1.5 text-[var(--ctp-overlay0)] hover:text-[var(--ctp-text)] text-xs"
+          onClick={handleAddShell}
+          title="New shell"
+        >
+          +sh
+        </button>
+        <button
+          className="px-1.5 text-[var(--ctp-overlay0)] hover:text-[var(--ctp-text)] text-xs"
+          onClick={handleAddClaude}
+          title="New Claude"
+        >
+          +cc
+        </button>
+        <button
+          className="px-1.5 text-[var(--ctp-overlay0)] hover:text-[var(--ctp-text)] text-xs"
+          onClick={handleAddBrowser}
+          title="New browser"
+        >
+          +www
+        </button>
+      </div>
     </div>
   );
 }

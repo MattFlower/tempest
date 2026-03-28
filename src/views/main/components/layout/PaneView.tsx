@@ -3,56 +3,58 @@ import { PaneTabKind } from "../../../../shared/ipc-types";
 import type { Pane, PaneTab } from "../../models/pane-node";
 import { useStore } from "../../state/store";
 import { TabBar } from "./TabBar";
+import { TerminalPane } from "../terminal/TerminalPane";
+import { BrowserPane } from "../browser/BrowserPane";
 
 interface PaneViewProps {
   pane: Pane;
 }
 
-function TabContent({ tab, paneId }: { tab: PaneTab; paneId: string }) {
+function TabContent({ tab, paneId, isFocused }: { tab: PaneTab; paneId: string; isFocused: boolean }) {
+  const selectedWorkspacePath = useStore((s) => s.selectedWorkspacePath);
+
   switch (tab.kind) {
     case PaneTabKind.Claude:
     case PaneTabKind.Shell:
-      return (
-        <div
-          className="h-full w-full bg-[var(--ctp-base)]"
-          data-terminal-id={tab.terminalId}
-          data-pane-id={paneId}
-          data-tab-id={tab.id}
-        >
+      if (!tab.terminalId) {
+        return (
           <div className="flex h-full items-center justify-center text-[var(--ctp-overlay0)] text-xs">
-            {tab.kind === PaneTabKind.Claude ? "Claude" : "Shell"} &mdash;{" "}
-            {tab.label}
+            No terminal ID — tab not initialized
           </div>
-        </div>
+        );
+      }
+      return (
+        <TerminalPane
+          terminalId={tab.terminalId}
+          command={[process.env.SHELL || "/bin/zsh"]}
+          cwd={selectedWorkspacePath || "/tmp"}
+          isFocused={isFocused}
+        />
       );
     case PaneTabKind.Browser:
       return (
-        <div
-          className="h-full w-full bg-[var(--ctp-base)]"
-          data-browser-url={tab.browserUrl}
-          data-pane-id={paneId}
-          data-tab-id={tab.id}
-        >
-          <div className="flex h-full items-center justify-center text-[var(--ctp-overlay0)] text-xs">
-            Browser &mdash; {tab.browserUrl ?? "about:blank"}
-          </div>
-        </div>
+        <BrowserPane
+          paneId={paneId}
+          tab={tab}
+          repoPath={selectedWorkspacePath || ""}
+          isFocused={isFocused}
+        />
       );
     case PaneTabKind.HistoryViewer:
       return (
-        <div className="h-full w-full p-4 text-[var(--ctp-subtext0)] text-xs">
-          History Viewer
+        <div className="flex h-full items-center justify-center text-[var(--ctp-subtext0)] text-xs">
+          History Viewer (Phase 2)
         </div>
       );
     case PaneTabKind.MarkdownViewer:
       return (
-        <div className="h-full w-full p-4 text-[var(--ctp-subtext0)] text-xs">
+        <div className="flex h-full items-center justify-center text-[var(--ctp-subtext0)] text-xs">
           Markdown: {tab.markdownFilePath}
         </div>
       );
     case PaneTabKind.Editor:
       return (
-        <div className="h-full w-full p-4 text-[var(--ctp-subtext0)] text-xs">
+        <div className="flex h-full items-center justify-center text-[var(--ctp-subtext0)] text-xs">
           Editor: {tab.editorFilePath}
         </div>
       );
@@ -95,7 +97,11 @@ export const PaneView = memo(function PaneView({ pane }: PaneViewProps) {
                 : "opacity-0 pointer-events-none"
             }`}
           >
-            <TabContent tab={tab} paneId={pane.id} />
+            <TabContent
+              tab={tab}
+              paneId={pane.id}
+              isFocused={isFocused && tab.id === pane.selectedTabId}
+            />
           </div>
         ))}
       </div>

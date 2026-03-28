@@ -28,6 +28,10 @@ export function TerminalPane({
   const instanceRef = useRef<TerminalInstance | null>(null);
   const onExitRef = useRef(onExit);
   onExitRef.current = onExit;
+  // Capture initial values in refs so useEffect doesn't re-fire on re-renders
+  const commandRef = useRef(command);
+  const cwdRef = useRef(cwd);
+  const envRef = useRef(env);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -49,9 +53,9 @@ export function TerminalPane({
 
     api.createTerminal({
       id: terminalId,
-      command,
-      cwd,
-      env,
+      command: commandRef.current,
+      cwd: cwdRef.current,
+      env: envRef.current,
       cols: dims?.cols ?? 80,
       rows: dims?.rows ?? 24,
     }).then((result: any) => {
@@ -85,7 +89,10 @@ export function TerminalPane({
       instance.dispose();
       api.killTerminal({ id: terminalId });
     };
-  }, [terminalId, command, cwd, env]);
+    // Only re-create the terminal if the terminalId changes.
+    // command/cwd/env are captured at creation time via refs below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [terminalId]);
 
   useEffect(() => {
     if (isFocused) {

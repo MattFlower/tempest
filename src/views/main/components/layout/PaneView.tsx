@@ -26,7 +26,7 @@ function TabContent({ tab, paneId, isFocused }: { tab: PaneTab; paneId: string; 
       return (
         <TerminalPane
           terminalId={tab.terminalId}
-          command={[process.env.SHELL || "/bin/zsh"]}
+          command={["/bin/zsh"]}
           cwd={selectedWorkspacePath || "/tmp"}
           isFocused={isFocused}
         />

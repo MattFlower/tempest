@@ -1,7 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { PaneTabKind } from "../../../../shared/ipc-types";
+import { createTab } from "../../models/pane-node";
 import { useStore } from "../../state/store";
 import { api } from "../../state/rpc-client";
 import { fuzzyMatch } from "./fuzzy-match";
+import {
+  addTab,
+  splitPane,
+  focusNextPane,
+  focusPreviousPane,
+  toggleMaximize,
+  resetRatios,
+} from "../../state/actions";
 
 type PaletteMode = "commands" | "files";
 
@@ -13,15 +23,31 @@ interface PaletteCommand {
   action: () => void;
 }
 
+function addTabToFocusedPane(kind: PaneTabKind, label: string, overrides?: Record<string, any>) {
+  const { focusedPaneId } = useStore.getState();
+  if (!focusedPaneId) return;
+  const tab = createTab(kind, label, {
+    ...(kind === PaneTabKind.Claude || kind === PaneTabKind.Shell
+      ? { terminalId: crypto.randomUUID() }
+      : {}),
+    ...(kind === PaneTabKind.Browser ? { browserUrl: "https://google.com" } : {}),
+    ...overrides,
+  });
+  addTab(focusedPaneId, tab);
+}
+
 function useCommands(): PaletteCommand[] {
   const toggleSidebar = useStore((s) => s.toggleSidebar);
   return [
     { id: "toggle-sidebar", label: "Toggle Sidebar", shortcutHint: "⌘\\", canOpenAsPane: false, action: toggleSidebar },
-    { id: "new-workspace", label: "New Workspace", canOpenAsPane: false, action: () => {} },
-    { id: "new-terminal", label: "New Terminal Tab", shortcutHint: "⌘T", canOpenAsPane: true, action: () => {} },
-    { id: "new-shell", label: "New Shell Tab", canOpenAsPane: true, action: () => {} },
-    { id: "new-browser", label: "New Browser Tab", canOpenAsPane: true, action: () => {} },
-    { id: "split-pane", label: "Split Pane Right", shortcutHint: "⌘D", canOpenAsPane: false, action: () => {} },
+    { id: "new-claude", label: "New Claude Tab", shortcutHint: "⌘T", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.Claude, "Claude") },
+    { id: "new-shell", label: "New Shell Tab", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.Shell, "Shell") },
+    { id: "new-browser", label: "New Browser Tab", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.Browser, "Browser") },
+    { id: "split-pane", label: "Split Pane Right", shortcutHint: "⌘D", canOpenAsPane: false, action: () => splitPane("right") },
+    { id: "focus-next", label: "Focus Next Pane", shortcutHint: "⌘]", canOpenAsPane: false, action: focusNextPane },
+    { id: "focus-prev", label: "Focus Previous Pane", shortcutHint: "⌘[", canOpenAsPane: false, action: focusPreviousPane },
+    { id: "toggle-maximize", label: "Toggle Maximize", shortcutHint: "⌘⇧⏎", canOpenAsPane: false, action: toggleMaximize },
+    { id: "reset-ratios", label: "Reset Pane Sizes", canOpenAsPane: false, action: resetRatios },
   ];
 }
 

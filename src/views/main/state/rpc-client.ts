@@ -98,8 +98,11 @@ const rpc = Electroview.defineRPC({
           useStore.getState().setConfig(config);
         });
       },
-      menuAction: (msg: WebviewMessages["menuAction"]) => {
-        import("./store").then(({ useStore }) => {
+      menuAction: (msg: any) => {
+        Promise.all([
+          import("./store"),
+          import("./actions"),
+        ]).then(([{ useStore }, actions]) => {
           const store = useStore.getState();
           switch (msg.action) {
             case "toggle-sidebar":
@@ -108,7 +111,14 @@ const rpc = Electroview.defineRPC({
             case "command-palette":
               store.toggleCommandPalette();
               break;
-            // new-workspace and add-repo will be handled by Stream D
+            case "new-workspace":
+              // Open command palette as a starting point
+              if (!store.commandPaletteVisible) store.toggleCommandPalette();
+              break;
+            case "add-repo":
+              // Ensure sidebar is visible so user can use the Add Repository button
+              if (!store.sidebarVisible) store.toggleSidebar();
+              break;
           }
         });
       },

@@ -5,7 +5,7 @@
 // ============================================================
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { api, onMarkdownFileChanged, offMarkdownFileChanged } from "../../state/rpc-client";
+import { api, onMarkdownFileChanged } from "../../state/rpc-client";
 
 interface MarkdownViewerProps {
   filePath?: string;
@@ -20,6 +20,16 @@ export function MarkdownViewer({ filePath }: MarkdownViewerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const currentPathRef = useRef<string | undefined>(filePath);
   const savedScrollRef = useRef<number>(0);
+
+  // Annotation bridge: stores text selected in the markdown iframe.
+  // Will be consumed by a future "ask Claude about this" feature.
+  const [annotation, setAnnotation] = useState<{
+    text: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
 
   /** Save the current scroll position from the iframe */
   const saveScrollPosition = useCallback(() => {
@@ -82,22 +92,43 @@ export function MarkdownViewer({ filePath }: MarkdownViewerProps) {
     api.watchMarkdownFile(filePath);
 
     // Listen for push notifications
-    onMarkdownFileChanged((changedPath, newContent) => {
+    const unsubscribe = onMarkdownFileChanged((changedPath, newContent, deleted) => {
       if (changedPath === currentPathRef.current) {
-        saveScrollPosition();
-        setContent(newContent);
-        setFileChanged(false); // Auto-update since we get the content directly
+        if (deleted) {
+          setFileDeleted(true);
+          setFileChanged(false);
+        } else {
+          saveScrollPosition();
+          setContent(newContent);
+          setFileChanged(false);
+        }
       }
     });
 
     return () => {
-      // Cleanup: stop watching and unsubscribe
       if (currentPathRef.current) {
         api.unwatchMarkdownFile(currentPathRef.current);
       }
-      offMarkdownFileChanged();
+      unsubscribe();
     };
   }, [filePath, loadFile]);
+
+  // Listen for annotation (text selection) messages from the iframe
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === "annotation" && typeof event.data.text === "string") {
+        setAnnotation({
+          text: event.data.text,
+          x: event.data.x,
+          y: event.data.y,
+          width: event.data.width,
+          height: event.data.height,
+        });
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []);
 
   // content is pre-rendered HTML from the backend
   const srcdoc = content;

@@ -131,6 +131,23 @@ li { margin-bottom: 0.3em; }
 <body>
 ${renderedHTML}
 ${mermaidBlock}
+<script>
+document.addEventListener('mouseup', function() {
+  var sel = window.getSelection();
+  var text = sel ? sel.toString().trim() : '';
+  if (text && sel.rangeCount > 0) {
+    var rect = sel.getRangeAt(0).getBoundingClientRect();
+    window.parent.postMessage({
+      type: 'annotation',
+      text: text,
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height
+    }, '*');
+  }
+});
+</script>
 </body>
 </html>`;
 }

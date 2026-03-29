@@ -276,6 +276,6 @@ export interface WebviewMessages {
   sidebarInfoUpdated: { workspacePath: string; info: WorkspaceSidebarInfo };
   configChanged: AppConfig;
   menuAction: { action: string };
-  markdownFileChanged: { filePath: string; content: string };
+  markdownFileChanged: { filePath: string; content: string; deleted?: boolean };
   prDraftsChanged: { workspacePath: string; drafts: PRDraftSummary[] };
 }

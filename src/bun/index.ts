@@ -206,9 +206,9 @@ const rpc = BrowserView.defineRPC({
         return readMarkdownFile(params.filePath);
       },
       watchMarkdownFile: (params: any) => {
-        watchMarkdownFile(params.filePath, (filePath, content) => {
+        watchMarkdownFile(params.filePath, (filePath, content, deleted) => {
           try {
-            win.webview.rpc.send.markdownFileChanged({ filePath, content });
+            win.webview.rpc.send.markdownFileChanged({ filePath, content, deleted });
           } catch { /* webview not ready yet */ }
         });
       },

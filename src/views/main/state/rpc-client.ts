@@ -45,12 +45,12 @@ function processTerminalOutput(id: string, data: string, seq: number) {
 // Message handlers for messages FROM Bun
 type TerminalExitHandler = (id: string, exitCode: number) => void;
 type HookEventHandler = (event: WebviewMessages["hookEvent"]) => void;
-type MarkdownFileChangedHandler = (filePath: string, content: string) => void;
+type MarkdownFileChangedHandler = (filePath: string, content: string, deleted?: boolean) => void;
 type PRDraftsChangedHandler = (workspacePath: string, drafts: any[]) => void;
 
 let terminalExitHandler: TerminalExitHandler | null = null;
 let hookEventHandler: HookEventHandler | null = null;
-let markdownFileChangedHandler: MarkdownFileChangedHandler | null = null;
+const markdownFileChangedHandlers = new Set<MarkdownFileChangedHandler>();
 let prDraftsChangedHandler: PRDraftsChangedHandler | null = null;
 
 export function onTerminalExit(handler: TerminalExitHandler) {
@@ -61,12 +61,9 @@ export function onHookEvent(handler: HookEventHandler) {
   hookEventHandler = handler;
 }
 
-export function onMarkdownFileChanged(handler: MarkdownFileChangedHandler) {
-  markdownFileChangedHandler = handler;
-}
-
-export function offMarkdownFileChanged() {
-  markdownFileChangedHandler = null;
+export function onMarkdownFileChanged(handler: MarkdownFileChangedHandler): () => void {
+  markdownFileChangedHandlers.add(handler);
+  return () => { markdownFileChangedHandlers.delete(handler); };
 }
 
 export function onPRDraftsChanged(handler: PRDraftsChangedHandler) {
@@ -119,8 +116,8 @@ const rpc = Electroview.defineRPC({
         });
       },
       markdownFileChanged: (msg: any) => {
-        if (markdownFileChangedHandler) {
-          markdownFileChangedHandler(msg.filePath, msg.content);
+        for (const handler of markdownFileChangedHandlers) {
+          handler(msg.filePath, msg.content, msg.deleted);
         }
       },
       prDraftsChanged: (msg: any) => {

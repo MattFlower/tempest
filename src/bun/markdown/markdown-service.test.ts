@@ -40,7 +40,9 @@ describe("readMarkdownFile", () => {
     await Bun.write(filePath, "# Hello\n\nThis is a test.");
 
     const result = await readMarkdownFile(filePath);
-    expect(result.content).toBe("# Hello\n\nThis is a test.");
+    expect(result.content).toContain("<!DOCTYPE html>");
+    expect(result.content).toContain("<h1>Hello</h1>");
+    expect(result.content).toContain("This is a test.");
     expect(result.fileName).toBe("test.md");
   });
 
@@ -64,7 +66,10 @@ describe("readMarkdownFile", () => {
     await Bun.write(filePath, complexContent);
 
     const result = await readMarkdownFile(filePath);
-    expect(result.content).toBe(complexContent);
+    expect(result.content).toContain("<!DOCTYPE html>");
+    expect(result.content).toContain("<h1>Title</h1>");
+    expect(result.content).toContain("item 1");
+    expect(result.content).toContain("language-typescript");
     expect(result.fileName).toBe("complex.md");
   });
 
@@ -74,7 +79,7 @@ describe("readMarkdownFile", () => {
     await Bun.write(filePath, "");
 
     const result = await readMarkdownFile(filePath);
-    expect(result.content).toBe("");
+    expect(result.content).toContain("<!DOCTYPE html>");
     expect(result.fileName).toBe("empty.md");
   });
 
@@ -99,7 +104,8 @@ describe("readMarkdownFile", () => {
 
     const result = await readMarkdownFile(join(nestedDir, "nested.md"));
     expect(result.fileName).toBe("nested.md");
-    expect(result.content).toBe("# Nested");
+    expect(result.content).toContain("<!DOCTYPE html>");
+    expect(result.content).toContain("<h1>Nested</h1>");
   });
 
   it("reads a file with unicode content", async () => {
@@ -108,6 +114,7 @@ describe("readMarkdownFile", () => {
     await Bun.write(filePath, "# Emoji test\n\nHello world!");
 
     const result = await readMarkdownFile(filePath);
+    expect(result.content).toContain("<!DOCTYPE html>");
     expect(result.content).toContain("Hello world!");
     expect(result.fileName).toBe("unicode.md");
   });
@@ -138,7 +145,8 @@ describe("watchMarkdownFile", () => {
     await new Promise((resolve) => setTimeout(resolve, 200));
 
     expect(changedPath).toBe(filePath);
-    expect(changedContent).toBe("# Modified");
+    expect(changedContent).toContain("<!DOCTYPE html>");
+    expect(changedContent).toContain("<h1>Modified</h1>");
   });
 
   it("replaces existing watcher when called twice for same path", async () => {

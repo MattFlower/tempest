@@ -30,7 +30,7 @@ export async function readMarkdownFile(
 
 // --- File Watching ---
 
-type FileChangedCallback = (filePath: string, content: string) => void;
+type FileChangedCallback = (filePath: string, content: string, deleted: boolean) => void;
 
 const activeWatchers = new Map<string, FSWatcher>();
 
@@ -52,9 +52,24 @@ export function watchMarkdownFile(
         try {
           const file = Bun.file(filePath);
           const markdown = await file.text();
-          onChanged(filePath, buildMarkdownHTML(markdown));
+          onChanged(filePath, buildMarkdownHTML(markdown), false);
         } catch {
-          // File may have been deleted; ignore
+          // File may have been deleted during read
+          onChanged(filePath, "", true);
+        }
+      } else if (eventType === "rename") {
+        // "rename" fires for deletions and editor save-and-replace.
+        // Check if the file still exists at the original path.
+        try {
+          const file = Bun.file(filePath);
+          if (await file.exists()) {
+            const markdown = await file.text();
+            onChanged(filePath, buildMarkdownHTML(markdown), false);
+          } else {
+            onChanged(filePath, "", true);
+          }
+        } catch {
+          onChanged(filePath, "", true);
         }
       }
     });

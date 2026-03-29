@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import type { TempestWorkspace } from "../../../../shared/ipc-types";
 import { useStore } from "../../state/store";
 import { api } from "../../state/rpc-client";
@@ -16,6 +16,11 @@ export function Sidebar() {
   const toggleCommandPalette = useStore((s) => s.toggleCommandPalette);
 
   const setSidebarInfo = useStore((s) => s.setSidebarInfo);
+
+  const [addingRepo, setAddingRepo] = useState(false);
+  const [repoPath, setRepoPath] = useState("");
+  const [addRepoError, setAddRepoError] = useState<string | null>(null);
+  const addRepoInputRef = useRef<HTMLInputElement>(null);
 
   // Load repos and their workspaces on mount
   useEffect(() => {
@@ -37,9 +42,37 @@ export function Sidebar() {
     });
   }, [selectedWorkspacePath, setSidebarInfo]);
 
-  const handleAddRepo = async () => {
-    // TODO: open native file picker dialog via RPC when available
-    // For now this is a stub — Stream D will provide the dialog
+  const handleAddRepo = () => {
+    setAddingRepo(true);
+    setRepoPath("");
+    setAddRepoError(null);
+    setTimeout(() => addRepoInputRef.current?.focus(), 0);
+  };
+
+  const handleAddRepoSubmit = async () => {
+    const trimmed = repoPath.trim();
+    if (!trimmed) return;
+    setAddRepoError(null);
+    const result = await api.addRepo(trimmed);
+    if (result.success) {
+      setAddingRepo(false);
+      setRepoPath("");
+      // Refresh repos list
+      const loadedRepos = await api.getRepos();
+      setRepos(loadedRepos);
+      for (const repo of loadedRepos) {
+        const ws = await api.getWorkspaces(repo.id);
+        setWorkspaces(repo.id, ws);
+      }
+    } else {
+      setAddRepoError(result.error ?? "Failed to add repository");
+    }
+  };
+
+  const handleAddRepoCancel = () => {
+    setAddingRepo(false);
+    setRepoPath("");
+    setAddRepoError(null);
   };
 
   const handleToggleExpanded = (repoIndex: number) => {
@@ -53,7 +86,48 @@ export function Sidebar() {
     <div className="flex flex-col h-full bg-[var(--ctp-mantle)]">
       {/* Scrollable repo list */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden py-1">
-        {repos.length === 0 ? (
+        {addingRepo && (
+          <div className="px-3 py-2 border-b border-[var(--ctp-surface0)]">
+            <label className="block text-[11px] text-[var(--ctp-overlay1)] mb-1">
+              Repository path
+            </label>
+            <input
+              ref={addRepoInputRef}
+              type="text"
+              value={repoPath}
+              onChange={(e) => setRepoPath(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAddRepoSubmit();
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  handleAddRepoCancel();
+                }
+              }}
+              placeholder="/path/to/repository"
+              className="w-full px-2 py-1 text-[12px] rounded bg-[var(--ctp-surface0)] text-[var(--ctp-text)] placeholder:text-[var(--ctp-overlay0)] border border-[var(--ctp-surface1)] outline-none focus:border-[var(--ctp-blue)]"
+            />
+            {addRepoError && (
+              <p className="mt-1 text-[11px] text-[var(--ctp-red)]">{addRepoError}</p>
+            )}
+            <div className="flex gap-2 mt-1.5">
+              <button
+                onClick={handleAddRepoSubmit}
+                className="px-2 py-0.5 text-[11px] rounded bg-[var(--ctp-blue)] text-[var(--ctp-base)] hover:opacity-90 transition-opacity"
+              >
+                Add
+              </button>
+              <button
+                onClick={handleAddRepoCancel}
+                className="px-2 py-0.5 text-[11px] rounded text-[var(--ctp-overlay1)] hover:text-[var(--ctp-text)] transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+        {repos.length === 0 && !addingRepo ? (
           <div className="flex h-full items-center justify-center text-[12px] text-[var(--ctp-overlay0)]">
             No repositories added
           </div>

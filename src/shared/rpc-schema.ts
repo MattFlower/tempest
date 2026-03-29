@@ -5,16 +5,23 @@
 
 import type {
   AppConfig,
+  BinaryStatus,
   Bookmark,
+  DiffFile,
   HookEvent,
   LatencyStats,
   PaneNodeState,
+  SessionMessage,
   SessionState,
+  SessionSummary,
   SourceRepo,
   TempestWorkspace,
+  UsageResponse,
   VCSType,
   WorkspaceSidebarInfo,
 } from "./ipc-types";
+
+import type { DiffScope, PRDraftSummary } from "./ipc-types";
 
 // --- Bun-side handlers (Webview calls these) ---
 
@@ -142,6 +149,78 @@ export interface BunRequests {
     params: { workspacePath: string };
     response: string[];
   };
+
+  // Onboarding
+  checkBinaries: {
+    params: void;
+    response: BinaryStatus;
+  };
+  setWorkspaceRoot: {
+    params: { path: string };
+    response: void;
+  };
+
+  // Usage tracking
+  getUsageData: {
+    params: { since?: string };
+    response: UsageResponse;
+  };
+
+  // History
+  getHistorySessions: {
+    params: { scope: "all" | "project"; projectPath?: string };
+    response: SessionSummary[];
+  };
+  searchHistory: {
+    params: { query: string; scope: "all" | "project"; projectPath?: string };
+    response: SessionSummary[];
+  };
+  getSessionMessages: {
+    params: { sessionFilePath: string };
+    response: SessionMessage[];
+  };
+
+  // Markdown
+  readMarkdownFile: {
+    params: { filePath: string };
+    response: { content: string; fileName: string };
+  };
+  watchMarkdownFile: {
+    params: { filePath: string };
+    response: void;
+  };
+  unwatchMarkdownFile: {
+    params: { filePath: string };
+    response: void;
+  };
+
+  // Diff viewer
+  getDiff: {
+    params: { workspacePath: string; scope: DiffScope; contextLines?: number };
+    response: { raw: string; files: DiffFile[] };
+  };
+
+  // PR Feedback
+  startPRMonitor: {
+    params: { workspacePath: string; prNumber: number; prURL: string; owner: string; repo: string };
+    response: void;
+  };
+  stopPRMonitor: {
+    params: { workspacePath: string };
+    response: void;
+  };
+  getPRDrafts: {
+    params: { workspacePath: string };
+    response: PRDraftSummary[];
+  };
+  approveDraft: {
+    params: { draftId: string };
+    response: { success: boolean; error?: string };
+  };
+  dismissDraft: {
+    params: { draftId: string; abandon: boolean };
+    response: void;
+  };
 }
 
 // --- Bun-side messages (Webview fires these, no response) ---
@@ -163,4 +242,6 @@ export interface WebviewMessages {
   sidebarInfoUpdated: { workspacePath: string; info: WorkspaceSidebarInfo };
   configChanged: AppConfig;
   menuAction: { action: string };
+  markdownFileChanged: { filePath: string; content: string };
+  prDraftsChanged: { workspacePath: string; drafts: PRDraftSummary[] };
 }

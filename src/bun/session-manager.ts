@@ -40,9 +40,13 @@ export class SessionManager {
     let settingsPath: string | undefined;
 
     if (params.withHooks) {
+      const channelPath = params.withChannel
+        ? HookSettingsBuilder.channelScriptPath
+        : undefined;
       settingsPath = await HookSettingsBuilder.writeSettingsFile(
         HookSettingsBuilder.hookBinaryPath,
         HookSettingsBuilder.socketPath,
+        channelPath,
       );
       parts.push("--settings", settingsPath);
     }

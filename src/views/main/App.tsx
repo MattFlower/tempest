@@ -3,6 +3,8 @@ import { useStore } from "./state/store";
 import { Sidebar } from "./components/sidebar/Sidebar";
 import { CommandPalette } from "./components/palette/CommandPalette";
 import { WorkspaceDetail } from "./components/layout";
+import { OnboardingDialog } from "./components/onboarding/OnboardingDialog";
+import { UsageFooter } from "./components/usage/UsageFooter";
 import { api } from "./state/rpc-client";
 import { fromNodeState } from "./models/pane-node";
 
@@ -15,6 +17,26 @@ export function App() {
   const setSidebarWidth = useStore((s) => s.setSidebarWidth);
   const selectedWorkspacePath = useStore((s) => s.selectedWorkspacePath);
   const paneTrees = useStore((s) => s.paneTrees);
+  const config = useStore((s) => s.config);
+
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [configLoaded, setConfigLoaded] = useState(false);
+
+  // Load config on startup and decide if onboarding is needed
+  useEffect(() => {
+    api.getConfig().then((cfg: any) => {
+      useStore.getState().setConfig(cfg);
+      // Show onboarding if workspaceRoot is empty or matches the default uninitialized path
+      // and no config file has been explicitly saved yet
+      if (!cfg.workspaceRoot || cfg.workspaceRoot.trim() === "") {
+        setShowOnboarding(true);
+      }
+      setConfigLoaded(true);
+    }).catch(() => {
+      setShowOnboarding(true);
+      setConfigLoaded(true);
+    });
+  }, []);
 
   // All workspace paths to render: selected + any with existing trees
   const allWorkspacePaths = useMemo(() => {
@@ -81,6 +103,14 @@ export function App() {
 
   return (
     <div className="flex flex-col h-full w-full">
+      {/* Onboarding dialog — shown on first launch */}
+      {showOnboarding && configLoaded && (
+        <OnboardingDialog
+          defaultRoot={config?.workspaceRoot ?? ""}
+          onComplete={() => setShowOnboarding(false)}
+        />
+      )}
+
       {/* Titlebar drag region — spans full window width */}
       <div className="titlebar-drag h-10 flex-shrink-0" />
 
@@ -137,6 +167,9 @@ export function App() {
           )}
         </div>
       </div>
+
+      {/* Usage footer — token counts and costs */}
+      <UsageFooter />
 
       {/* Command Palette overlay */}
       <CommandPalette />

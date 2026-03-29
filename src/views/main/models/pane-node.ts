@@ -5,7 +5,7 @@
 // Full implementation in Stream B.
 // ============================================================
 
-import { PaneTabKind, type ActivityState } from "../../../shared/ipc-types";
+import { PaneTabKind, type ActivityState, type DiffScope } from "../../../shared/ipc-types";
 
 export interface PaneTab {
   id: string;
@@ -19,6 +19,7 @@ export interface PaneTab {
   activityState?: ActivityState;
   markdownFilePath?: string;
   editorFilePath?: string;
+  diffScope?: DiffScope;
 }
 
 export interface Pane {
@@ -79,6 +80,7 @@ export function toNodeState(node: PaneNode): PaneNodeState {
           browserURL: tab.browserUrl,
           markdownFilePath: tab.markdownFilePath,
           editorFilePath: tab.editorFilePath,
+          diffScope: tab.diffScope,
         })),
         selectedTabIndex: Math.max(
           0,
@@ -108,6 +110,7 @@ export function fromNodeState(state: PaneNodeState): PaneNode {
       browserUrl: ts.browserURL ?? ts.browserUrl,
       markdownFilePath: ts.markdownFilePath,
       editorFilePath: ts.editorFilePath,
+      diffScope: ts.diffScope,
       // Terminal/Claude tabs get fresh terminalIds so new PTYs are created
       terminalId:
         ts.kind === PaneTabKind.Claude || ts.kind === PaneTabKind.Shell

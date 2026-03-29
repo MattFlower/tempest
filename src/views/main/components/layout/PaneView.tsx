@@ -5,6 +5,10 @@ import { useStore } from "../../state/store";
 import { TabBar } from "./TabBar";
 import { TerminalPane } from "../terminal/TerminalPane";
 import { BrowserPane } from "../browser/BrowserPane";
+import { HistoryViewer } from "../history/HistoryViewer";
+import { MarkdownViewer } from "../markdown/MarkdownViewer";
+import { DiffView } from "../diff/DiffView";
+import { PRDashboard } from "../pr/PRDashboard";
 import { closeTab } from "../../state/actions";
 
 interface PaneViewProps {
@@ -47,17 +51,13 @@ function TabContent({ tab, paneId, isFocused }: { tab: PaneTab; paneId: string; 
         />
       );
     case PaneTabKind.HistoryViewer:
-      return (
-        <div className="flex h-full items-center justify-center text-[var(--ctp-subtext0)] text-xs">
-          History Viewer (Phase 2)
-        </div>
-      );
+      return <HistoryViewer />;
     case PaneTabKind.MarkdownViewer:
-      return (
-        <div className="flex h-full items-center justify-center text-[var(--ctp-subtext0)] text-xs">
-          Markdown: {tab.markdownFilePath}
-        </div>
-      );
+      return <MarkdownViewer filePath={tab.markdownFilePath} />;
+    case PaneTabKind.DiffViewer:
+      return <DiffView />;
+    case PaneTabKind.PRDashboard:
+      return <PRDashboard />;
     case PaneTabKind.Editor:
       return (
         <div className="flex h-full items-center justify-center text-[var(--ctp-subtext0)] text-xs">

@@ -45,9 +45,13 @@ function processTerminalOutput(id: string, data: string, seq: number) {
 // Message handlers for messages FROM Bun
 type TerminalExitHandler = (id: string, exitCode: number) => void;
 type HookEventHandler = (event: WebviewMessages["hookEvent"]) => void;
+type MarkdownFileChangedHandler = (filePath: string, content: string) => void;
+type PRDraftsChangedHandler = (workspacePath: string, drafts: any[]) => void;
 
 let terminalExitHandler: TerminalExitHandler | null = null;
 let hookEventHandler: HookEventHandler | null = null;
+let markdownFileChangedHandler: MarkdownFileChangedHandler | null = null;
+let prDraftsChangedHandler: PRDraftsChangedHandler | null = null;
 
 export function onTerminalExit(handler: TerminalExitHandler) {
   terminalExitHandler = handler;
@@ -55,6 +59,22 @@ export function onTerminalExit(handler: TerminalExitHandler) {
 
 export function onHookEvent(handler: HookEventHandler) {
   hookEventHandler = handler;
+}
+
+export function onMarkdownFileChanged(handler: MarkdownFileChangedHandler) {
+  markdownFileChangedHandler = handler;
+}
+
+export function offMarkdownFileChanged() {
+  markdownFileChangedHandler = null;
+}
+
+export function onPRDraftsChanged(handler: PRDraftsChangedHandler) {
+  prDraftsChangedHandler = handler;
+}
+
+export function offPRDraftsChanged() {
+  prDraftsChangedHandler = null;
 }
 
 // Initialize RPC and Electroview
@@ -98,11 +118,22 @@ const rpc = Electroview.defineRPC({
           useStore.getState().setConfig(config);
         });
       },
+      markdownFileChanged: (msg: any) => {
+        if (markdownFileChangedHandler) {
+          markdownFileChangedHandler(msg.filePath, msg.content);
+        }
+      },
+      prDraftsChanged: (msg: any) => {
+        if (prDraftsChangedHandler) {
+          prDraftsChangedHandler(msg.workspacePath, msg.drafts);
+        }
+      },
       menuAction: (msg: any) => {
         Promise.all([
           import("./store"),
           import("./actions"),
-        ]).then(([{ useStore }, actions]) => {
+          import("../../../shared/ipc-types"),
+        ]).then(([{ useStore }, actions, { ViewMode }]) => {
           const store = useStore.getState();
           switch (msg.action) {
             case "toggle-sidebar":
@@ -118,6 +149,21 @@ const rpc = Electroview.defineRPC({
             case "add-repo":
               // Ensure sidebar is visible so user can use the Add Repository button
               if (!store.sidebarVisible) store.toggleSidebar();
+              break;
+            case "view-terminal":
+              if (store.selectedWorkspacePath) {
+                store.setViewMode(store.selectedWorkspacePath, ViewMode.Terminal);
+              }
+              break;
+            case "view-diff":
+              if (store.selectedWorkspacePath) {
+                store.setViewMode(store.selectedWorkspacePath, ViewMode.Diff);
+              }
+              break;
+            case "view-dashboard":
+              if (store.selectedWorkspacePath) {
+                store.setViewMode(store.selectedWorkspacePath, ViewMode.Dashboard);
+              }
               break;
           }
         });
@@ -205,4 +251,48 @@ export const api = {
   // Pane tree sync
   notifyPaneTreeChanged: (workspacePath: string, tree: any) =>
     rpcSend.paneTreeChanged({ workspacePath, tree }),
+
+  // Onboarding
+  checkBinaries: () => rpcRequest.checkBinaries(),
+  setWorkspaceRoot: (path: string) => rpcRequest.setWorkspaceRoot({ path }),
+
+  // Usage tracking
+  getUsageData: (since?: string) => rpcRequest.getUsageData({ since }),
+
+  // History
+  getHistorySessions: (scope: "all" | "project", projectPath?: string) =>
+    rpcRequest.getHistorySessions({ scope, projectPath }),
+  searchHistory: (query: string, scope: "all" | "project", projectPath?: string) =>
+    rpcRequest.searchHistory({ query, scope, projectPath }),
+  getSessionMessages: (sessionFilePath: string) =>
+    rpcRequest.getSessionMessages({ sessionFilePath }),
+
+  // Markdown
+  readMarkdownFile: (filePath: string) =>
+    rpcRequest.readMarkdownFile({ filePath }),
+  watchMarkdownFile: (filePath: string) =>
+    rpcRequest.watchMarkdownFile({ filePath }),
+  unwatchMarkdownFile: (filePath: string) =>
+    rpcRequest.unwatchMarkdownFile({ filePath }),
+
+  // Diff viewer
+  getDiff: (workspacePath: string, scope: string, contextLines?: number) =>
+    rpcRequest.getDiff({ workspacePath, scope, contextLines }),
+
+  // PR Feedback
+  startPRMonitor: (params: {
+    workspacePath: string;
+    prNumber: number;
+    prURL: string;
+    owner: string;
+    repo: string;
+  }) => rpcRequest.startPRMonitor(params),
+  stopPRMonitor: (workspacePath: string) =>
+    rpcRequest.stopPRMonitor({ workspacePath }),
+  getPRDrafts: (workspacePath: string) =>
+    rpcRequest.getPRDrafts({ workspacePath }),
+  approveDraft: (draftId: string) =>
+    rpcRequest.approveDraft({ draftId }),
+  dismissDraft: (draftId: string, abandon: boolean) =>
+    rpcRequest.dismissDraft({ draftId, abandon }),
 };

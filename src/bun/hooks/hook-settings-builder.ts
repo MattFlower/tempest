@@ -6,6 +6,7 @@ export class HookSettingsBuilder {
   static buildSettingsJSON(
     hookBinaryPath: string,
     socketPath: string,
+    channelScriptPath?: string,
   ): string {
     const cmd = (eventType: string) =>
       `${hookBinaryPath} ${eventType} ${socketPath}`;
@@ -15,7 +16,7 @@ export class HookSettingsBuilder {
       hooks: [{ type: "command", command: cmd(eventType) }],
     });
 
-    const settings = {
+    const settings: Record<string, unknown> = {
       hooks: {
         SessionStart: [entry("session_start")],
         SessionEnd: [entry("session_end")],
@@ -30,14 +31,32 @@ export class HookSettingsBuilder {
       },
     };
 
+    // Add channel MCP server config when requested
+    if (channelScriptPath) {
+      settings.mcpServers = {
+        "tempest-pr": {
+          command: "bun",
+          args: [channelScriptPath],
+          env: {
+            TEMPEST_SOCKET_PATH: socketPath,
+          },
+        },
+      };
+    }
+
     return JSON.stringify(settings, null, 2);
   }
 
   static async writeSettingsFile(
     hookBinaryPath: string,
     socketPath: string,
+    channelScriptPath?: string,
   ): Promise<string> {
-    const json = this.buildSettingsJSON(hookBinaryPath, socketPath);
+    const json = this.buildSettingsJSON(
+      hookBinaryPath,
+      socketPath,
+      channelScriptPath,
+    );
     const dir = join(homedir(), ".tempest");
     await mkdir(dir, { recursive: true });
     const path = join(dir, `settings-${crypto.randomUUID()}.json`);
@@ -53,10 +72,14 @@ export class HookSettingsBuilder {
     }
   }
 
-  // TODO: Update when tempest-hook binary build is configured.
-  // For now, resolve relative to the bun entry point.
+  // Resolve the tempest-hook script path relative to this file.
+  // In production, this will be bundled in the app's Resources directory.
   static get hookBinaryPath(): string {
-    return join(import.meta.dir, "../../bin/tempest-hook");
+    return `bun ${join(import.meta.dir, "tempest-hook.ts")}`;
+  }
+
+  static get channelScriptPath(): string {
+    return join(import.meta.dir, "tempest-channel.ts");
   }
 
   static get socketPath(): string {

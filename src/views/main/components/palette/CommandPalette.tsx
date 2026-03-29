@@ -48,6 +48,7 @@ function useCommands(): PaletteCommand[] {
     { id: "focus-prev", label: "Focus Previous Pane", shortcutHint: "⌘[", canOpenAsPane: false, action: focusPreviousPane },
     { id: "toggle-maximize", label: "Toggle Maximize", shortcutHint: "⌘⇧⏎", canOpenAsPane: false, action: toggleMaximize },
     { id: "reset-ratios", label: "Reset Pane Sizes", canOpenAsPane: false, action: resetRatios },
+    { id: "pr-dashboard", label: "PR Review Dashboard", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.PRDashboard, "PR Reviews") },
   ];
 }
 
@@ -130,8 +131,14 @@ export function CommandPalette() {
         dismiss();
         item.cmd.action();
       }
+    } else if (mode === "files") {
+      const filePath = filteredFiles[selectedIndex];
+      if (filePath) {
+        dismiss();
+        addTabToFocusedPane(PaneTabKind.Editor, filePath.split("/").pop() ?? "Editor", { editorFilePath: filePath });
+      }
     }
-  }, [mode, filteredCommands, selectedIndex, dismiss]);
+  }, [mode, filteredCommands, filteredFiles, selectedIndex, dismiss]);
 
   const executeInPane = useCallback((direction: "left" | "right") => {
     if (mode === "commands") {
@@ -142,8 +149,15 @@ export function CommandPalette() {
         splitPane(direction, true);
         setTimeout(() => item.cmd.action(), 0);
       }
+    } else if (mode === "files") {
+      const filePath = filteredFiles[selectedIndex];
+      if (filePath) {
+        dismiss();
+        splitPane(direction, true);
+        setTimeout(() => addTabToFocusedPane(PaneTabKind.Editor, filePath.split("/").pop() ?? "Editor", { editorFilePath: filePath }), 0);
+      }
     }
-  }, [mode, filteredCommands, selectedIndex, dismiss]);
+  }, [mode, filteredCommands, filteredFiles, selectedIndex, dismiss]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -269,7 +283,7 @@ export function CommandPalette() {
                 filePath={filePath}
                 workspacePath={selectedWorkspacePath ?? ""}
                 isSelected={index === selectedIndex}
-                onClick={() => { dismiss(); /* TODO: needs Stream B's tab creation to open files */ }}
+                onClick={() => { dismiss(); addTabToFocusedPane(PaneTabKind.Editor, filePath.split("/").pop() ?? "Editor", { editorFilePath: filePath }); }}
                 onHover={() => setSelectedIndex(index)}
               />
             ))

@@ -27,6 +27,16 @@ export enum PaneTabKind {
   HistoryViewer = "historyViewer",
   MarkdownViewer = "markdownViewer",
   Editor = "editor",
+  DiffViewer = "diffViewer",
+  PRDashboard = "prDashboard",
+}
+
+// --- View Mode ---
+
+export enum ViewMode {
+  Terminal = "terminal",
+  Diff = "diff",
+  Dashboard = "dashboard",
 }
 
 // --- VCS ---
@@ -128,6 +138,78 @@ export interface PaneTabState {
   browserURL?: string;
   markdownFilePath?: string;
   editorFilePath?: string;
+  diffScope?: DiffScope;
+}
+
+// --- Diff Viewer ---
+
+export interface DiffFile {
+  oldPath: string;
+  newPath: string;
+  status: "modified" | "added" | "deleted" | "renamed";
+}
+
+// --- Usage Tracking ---
+
+export interface UsageTokens {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  totalCost: number;
+}
+
+export interface UsageResponse {
+  dailyTotals: UsageTokens | null;
+  projectBreakdowns: Record<string, UsageTokens>;
+}
+
+// --- Binary Check ---
+
+export interface BinaryStatus {
+  git: boolean;
+  jj: boolean;
+  claude: boolean;
+  gh: boolean;
+}
+
+// --- History ---
+
+export interface SessionSummary {
+  filePath: string;
+  firstPrompt: string;
+  createdAt?: string; // ISO date
+  modifiedAt?: string; // ISO date
+  gitBranch?: string;
+}
+
+export interface SessionMessage {
+  type: "user" | "assistant" | "system";
+  text: string;
+  toolCalls?: ToolCallInfo[];
+  timestamp?: string;
+}
+
+export interface ToolCallInfo {
+  tool: string;
+  summary: string; // e.g. "Read src/index.ts" or "Bash: npm test"
+  input?: string; // raw input JSON for expandable view
+  inputParamCount?: number;
+}
+
+// --- PR Feedback ---
+
+export interface PRDraftSummary {
+  id: string;
+  nodeId: string;
+  replyText: string;
+  hasCodeChange: boolean;
+  commitDescription?: string;
+  createdAt: string;
+  status: "pending" | "approved" | "dismissed";
+  // Original comment context
+  originalAuthor?: string;
+  originalBody?: string;
+  originalPath?: string;
 }
 
 // --- Latency Stats (from prototype) ---

@@ -14,6 +14,16 @@ import { HookEventListener } from "./hooks/hook-event-listener";
 import { SessionActivityTracker } from "./hooks/session-activity-tracker";
 
 import { loadConfig, saveConfig as saveConfigFile, defaultConfig } from "./config/app-config";
+import { getUsageData } from "./usage/usage-service";
+import { HistoryStore } from "./history/history-store";
+import {
+  readMarkdownFile,
+  watchMarkdownFile,
+  unwatchMarkdownFile,
+  unwatchAll as unwatchAllMarkdown,
+} from "./markdown/markdown-service";
+import { getDiff } from "./diff/diff-provider";
+import { PRMonitor } from "./pr/pr-monitor";
 
 // --- Stream A: Terminal + Session ---
 const ptyManager = new PtyManager();
@@ -36,6 +46,12 @@ const workspaceManager = new WorkspaceManager();
 const sessionStateManager = new SessionStateManager();
 const hookListener = new HookEventListener();
 const activityTracker = new SessionActivityTracker();
+
+// --- Stream G: History ---
+const historyStore = new HistoryStore();
+
+// --- Stream H: PR Feedback ---
+const prMonitor = new PRMonitor();
 
 // --- Stream E: listFiles ---
 const IGNORE_DIRS = new Set([
@@ -143,6 +159,80 @@ const rpc = BrowserView.defineRPC({
       listFiles: async (params: any) => {
         return listFilesInDir((params as { workspacePath: string }).workspacePath);
       },
+
+      // --- Onboarding (Stream F) ---
+      checkBinaries: () => {
+        return {
+          git: Bun.which("git") !== null,
+          jj: Bun.which("jj") !== null,
+          claude: Bun.which("claude") !== null,
+          gh: Bun.which("gh") !== null,
+        };
+      },
+      setWorkspaceRoot: async (_params: any) => {
+        const config = workspaceManager.getConfig();
+        const updated = { ...config, workspaceRoot: _params.path };
+        await workspaceManager.saveConfig(updated);
+      },
+
+      // --- Usage Tracking (Stream F) ---
+      getUsageData: async (_params: any) => {
+        return await getUsageData(_params?.since);
+      },
+
+      // --- History (Stream G) ---
+      getHistorySessions: async (params: any) => {
+        return historyStore.getSessions(params.scope, params.projectPath);
+      },
+      searchHistory: async (params: any) => {
+        return historyStore.searchSessions(params.query, params.scope, params.projectPath);
+      },
+      getSessionMessages: async (params: any) => {
+        return historyStore.getMessages(params.sessionFilePath);
+      },
+
+      // --- Markdown (Feature 4) ---
+      readMarkdownFile: async (params: any) => {
+        return readMarkdownFile(params.filePath);
+      },
+      watchMarkdownFile: (params: any) => {
+        watchMarkdownFile(params.filePath, (filePath, content) => {
+          try {
+            win.webview.rpc.send.markdownFileChanged({ filePath, content });
+          } catch { /* webview not ready yet */ }
+        });
+      },
+      unwatchMarkdownFile: (params: any) => {
+        unwatchMarkdownFile(params.filePath);
+      },
+
+      // --- Diff Viewer (Feature 1) ---
+      getDiff: async (params: any) => {
+        return await getDiff(params.workspacePath, params.scope, params.contextLines);
+      },
+
+      // --- PR Feedback (Feature 3) ---
+      startPRMonitor: async (params: any) => {
+        await prMonitor.startMonitor({
+          workspacePath: params.workspacePath,
+          prNumber: params.prNumber,
+          prURL: params.prURL,
+          owner: params.owner,
+          repo: params.repo,
+        });
+      },
+      stopPRMonitor: (params: any) => {
+        prMonitor.stopMonitor(params.workspacePath);
+      },
+      getPRDrafts: (params: any) => {
+        return prMonitor.getDrafts(params.workspacePath);
+      },
+      approveDraft: async (params: any) => {
+        return await prMonitor.approveDraft(params.draftId);
+      },
+      dismissDraft: (params: any) => {
+        prMonitor.dismissDraft(params.draftId, params.abandon);
+      },
     },
     messages: {
       // --- Terminal I/O (Stream A) ---
@@ -183,17 +273,25 @@ ptyManager.onExit((id, exitCode) => {
 // --- Stream D: Wire push notifications ---
 workspaceManager.onWorkspacesChanged = (repoId, workspaces) => {
   try {
-    (rpc as any).send?.workspacesChanged?.({ repoId, workspaces });
+    win.webview.rpc.send.workspacesChanged({ repoId, workspaces });
   } catch { /* webview not ready yet */ }
 };
 workspaceManager.onSidebarInfoUpdated = (workspacePath, info) => {
   try {
-    (rpc as any).send?.sidebarInfoUpdated?.({ workspacePath, info });
+    win.webview.rpc.send.sidebarInfoUpdated({ workspacePath, info });
   } catch { /* webview not ready yet */ }
 };
 workspaceManager.onConfigChanged = (config) => {
   try {
-    (rpc as any).send?.configChanged?.(config);
+    win.webview.rpc.send.configChanged(config);
+  } catch { /* webview not ready yet */ }
+};
+
+// --- Stream H: Wire PR feedback push notifications ---
+prMonitor.onDraftsChanged = (workspacePath) => {
+  try {
+    const drafts = prMonitor.getDrafts(workspacePath);
+    win.webview.rpc.send.prDraftsChanged({ workspacePath, drafts });
   } catch { /* webview not ready yet */ }
 };
 
@@ -237,6 +335,10 @@ ApplicationMenu.setApplicationMenu([
     submenu: [
       { label: "Toggle Sidebar", action: "toggle-sidebar", accelerator: "Cmd+\\" },
       { label: "Command Palette", action: "command-palette", accelerator: "Cmd+Shift+P" },
+      { type: "separator" },
+      { label: "Terminal", action: "view-terminal", accelerator: "Cmd+1" },
+      { label: "Diff", action: "view-diff", accelerator: "Cmd+2" },
+      { label: "Dashboard", action: "view-dashboard", accelerator: "Cmd+3" },
     ],
   },
   {
@@ -279,7 +381,7 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
     hookListener.start((event) => {
       activityTracker.handleEvent(event);
       try {
-        (rpc as any).send?.hookEvent?.(event);
+        win.webview.rpc.send.hookEvent(event);
       } catch { /* webview not ready yet */ }
 
       // Push aggregated activity state for the workspace this event belongs to
@@ -287,7 +389,7 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
         const pids = activityTracker.pidsForCWD(event.cwd);
         const state = activityTracker.aggregateState(pids);
         try {
-          (rpc as any).send?.workspaceActivityChanged?.({
+          win.webview.rpc.send.workspaceActivityChanged({
             workspacePath: event.cwd,
             activityState: state ?? null,
             pid: event.pid,
@@ -301,6 +403,14 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
 
   activityTracker.startCleanupTimer();
   sessionStateManager.startAutoSave();
+
+  try {
+    await historyStore.initialize();
+    historyStore.startRefreshTimer();
+    console.log("[main] HistoryStore initialized");
+  } catch (err) {
+    console.error("[main] HistoryStore init failed:", err);
+  }
 })();
 
 // --- Shutdown cleanup (Stream A + D) ---
@@ -312,6 +422,9 @@ async function shutdown() {
   hookListener.stop();
   activityTracker.stopCleanupTimer();
   workspaceManager.stopSidebarRefresh();
+  historyStore.stopRefreshTimer();
+  unwatchAllMarkdown();
+  prMonitor.shutdown();
 }
 
 process.on("SIGINT", () => { shutdown().then(() => process.exit(0)); });

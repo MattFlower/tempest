@@ -9,6 +9,7 @@ import { HistoryViewer } from "../history/HistoryViewer";
 import { MarkdownViewer } from "../markdown/MarkdownViewer";
 import { DiffView } from "../diff/DiffView";
 import { PRDashboard } from "../pr/PRDashboard";
+import { EditorPane } from "../editor/EditorPane";
 import { closeTab } from "../../state/actions";
 
 interface PaneViewProps {
@@ -60,10 +61,22 @@ function TabContent({ tab, paneId, isFocused, isVisible }: { tab: PaneTab; paneI
     case PaneTabKind.PRDashboard:
       return <PRDashboard />;
     case PaneTabKind.Editor:
+      if (!tab.terminalId || !tab.editorFilePath) {
+        return (
+          <div className="flex h-full items-center justify-center text-[var(--ctp-overlay0)] text-xs">
+            Editor tab not initialized
+          </div>
+        );
+      }
       return (
-        <div className="flex h-full items-center justify-center text-[var(--ctp-subtext0)] text-xs">
-          Editor: {tab.editorFilePath}
-        </div>
+        <EditorPane
+          terminalId={tab.terminalId}
+          filePath={tab.editorFilePath}
+          lineNumber={tab.editorLineNumber}
+          cwd={selectedWorkspacePath || "/tmp"}
+          isFocused={isFocused}
+          onCloseRequest={handleCloseRequest}
+        />
       );
     default:
       return null;

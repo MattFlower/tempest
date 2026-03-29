@@ -22,6 +22,7 @@ export async function getDiff(
   workspacePath: string,
   scope: DiffScope,
   contextLines?: number,
+  commitRef?: string,
 ): Promise<DiffResult> {
   const config = await loadConfig();
   const vcsType = detectVCSType(workspacePath);
@@ -29,9 +30,9 @@ export async function getDiff(
 
   let raw: string;
   if (vcsType === VCSType.JJ) {
-    raw = await getJJDiff(workspacePath, scope, ctx, config.jjPath);
+    raw = await getJJDiff(workspacePath, scope, ctx, config.jjPath, commitRef);
   } else {
-    raw = await getGitDiff(workspacePath, scope, ctx, config.gitPath);
+    raw = await getGitDiff(workspacePath, scope, ctx, config.gitPath, commitRef);
   }
 
   // Parse file list from raw diff for the sidebar
@@ -45,8 +46,16 @@ async function getGitDiff(
   scope: DiffScope,
   contextLines: number,
   configuredPath?: string,
+  commitRef?: string,
 ): Promise<string> {
   const gitPath = pathResolver.resolve("git", configuredPath);
+
+  if (scope === DiffScope.SingleCommit && commitRef) {
+    return runCommand(
+      [gitPath, "show", `--format=`, `-U${contextLines}`, commitRef],
+      workspacePath,
+    );
+  }
 
   if (scope === DiffScope.SinceTrunk) {
     // Get merge-base first
@@ -73,8 +82,16 @@ async function getJJDiff(
   scope: DiffScope,
   contextLines: number,
   configuredPath?: string,
+  commitRef?: string,
 ): Promise<string> {
   const jjPath = pathResolver.resolve("jj", configuredPath);
+
+  if (scope === DiffScope.SingleCommit && commitRef) {
+    return runCommand(
+      [jjPath, "diff", "--git", `--context=${contextLines}`, "-r", commitRef],
+      workspacePath,
+    );
+  }
 
   if (scope === DiffScope.SinceTrunk) {
     return runCommand(

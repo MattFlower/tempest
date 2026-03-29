@@ -29,7 +29,7 @@ function addTabToFocusedPane(kind: PaneTabKind, label: string, overrides?: Recor
   const { focusedPaneId } = useStore.getState();
   if (!focusedPaneId) return;
   const tab = createTab(kind, label, {
-    ...(kind === PaneTabKind.Claude || kind === PaneTabKind.Shell
+    ...(kind === PaneTabKind.Claude || kind === PaneTabKind.Shell || kind === PaneTabKind.Editor
       ? { terminalId: crypto.randomUUID() }
       : {}),
     ...(kind === PaneTabKind.Browser ? { browserUrl: "https://google.com" } : {}),

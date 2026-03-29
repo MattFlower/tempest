@@ -21,7 +21,12 @@ import type {
   WorkspaceSidebarInfo,
 } from "./ipc-types";
 
-import type { DiffScope, PRDraftSummary } from "./ipc-types";
+import type {
+  DiffScope,
+  FileAIContext,
+  FileChangeTimeline,
+  PRDraftSummary,
+} from "./ipc-types";
 
 // --- Bun-side handlers (Webview calls these) ---
 
@@ -60,6 +65,10 @@ export interface BunRequests {
   };
   buildShellCommand: {
     params: { workspacePath: string };
+    response: { command: string[] };
+  };
+  buildEditorCommand: {
+    params: { filePath: string; lineNumber?: number };
     response: { command: string[] };
   };
 
@@ -196,8 +205,16 @@ export interface BunRequests {
 
   // Diff viewer
   getDiff: {
-    params: { workspacePath: string; scope: DiffScope; contextLines?: number };
+    params: { workspacePath: string; scope: DiffScope; contextLines?: number; commitRef?: string };
     response: { raw: string; files: DiffFile[] };
+  };
+  getAIContextForFile: {
+    params: { filePath: string; projectPath?: string };
+    response: FileAIContext | null;
+  };
+  getAITimelineForFile: {
+    params: { filePath: string; projectPath?: string };
+    response: FileChangeTimeline | null;
   };
 
   // PR Feedback

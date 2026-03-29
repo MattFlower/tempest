@@ -19,6 +19,7 @@ export interface PaneTab {
   activityState?: ActivityState;
   markdownFilePath?: string;
   editorFilePath?: string;
+  editorLineNumber?: number;
   diffScope?: DiffScope;
 }
 
@@ -80,6 +81,7 @@ export function toNodeState(node: PaneNode): PaneNodeState {
           browserURL: tab.browserUrl,
           markdownFilePath: tab.markdownFilePath,
           editorFilePath: tab.editorFilePath,
+          editorLineNumber: tab.editorLineNumber,
           diffScope: tab.diffScope,
         })),
         selectedTabIndex: Math.max(
@@ -110,10 +112,11 @@ export function fromNodeState(state: PaneNodeState): PaneNode {
       browserUrl: ts.browserURL ?? ts.browserUrl,
       markdownFilePath: ts.markdownFilePath,
       editorFilePath: ts.editorFilePath,
+      editorLineNumber: ts.editorLineNumber,
       diffScope: ts.diffScope,
-      // Terminal/Claude tabs get fresh terminalIds so new PTYs are created
+      // Terminal/Claude/Editor tabs get fresh terminalIds so new PTYs are created
       terminalId:
-        ts.kind === PaneTabKind.Claude || ts.kind === PaneTabKind.Shell
+        ts.kind === PaneTabKind.Claude || ts.kind === PaneTabKind.Shell || ts.kind === PaneTabKind.Editor
           ? crypto.randomUUID()
           : undefined,
     }));

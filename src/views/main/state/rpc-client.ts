@@ -208,6 +208,8 @@ export const api = {
 
   buildShellCommand: (params: { workspacePath: string }) =>
     rpcRequest.buildShellCommand(params),
+  buildEditorCommand: (filePath: string, lineNumber?: number) =>
+    rpcRequest.buildEditorCommand({ filePath, lineNumber }),
 
   // Repos
   getRepos: () => rpcRequest.getRepos(),
@@ -276,8 +278,12 @@ export const api = {
     rpcRequest.unwatchMarkdownFile({ filePath }),
 
   // Diff viewer
-  getDiff: (workspacePath: string, scope: string, contextLines?: number) =>
-    rpcRequest.getDiff({ workspacePath, scope, contextLines }),
+  getDiff: (workspacePath: string, scope: string, contextLines?: number, commitRef?: string) =>
+    rpcRequest.getDiff({ workspacePath, scope, contextLines, commitRef }),
+  getAIContextForFile: (filePath: string, projectPath?: string) =>
+    rpcRequest.getAIContextForFile({ filePath, projectPath }),
+  getAITimelineForFile: (filePath: string, projectPath?: string) =>
+    rpcRequest.getAITimelineForFile({ filePath, projectPath }),
 
   // PR Feedback
   startPRMonitor: (params: {

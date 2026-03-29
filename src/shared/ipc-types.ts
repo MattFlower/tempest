@@ -49,6 +49,7 @@ export enum VCSType {
 export enum DiffScope {
   CurrentChange = "currentChange",
   SinceTrunk = "sinceTrunk",
+  SingleCommit = "singleCommit",
 }
 
 // --- Data Structures ---
@@ -94,6 +95,7 @@ export interface AppConfig {
   claudePath?: string;
   ghPath?: string;
   claudeArgs: string[];
+  editor?: string; // e.g. "nvim", "hx", "vim", "code". Defaults to "nvim".
 }
 
 // --- Hook Events ---
@@ -138,6 +140,7 @@ export interface PaneTabState {
   browserURL?: string;
   markdownFilePath?: string;
   editorFilePath?: string;
+  editorLineNumber?: number;
   diffScope?: DiffScope;
 }
 
@@ -195,6 +198,49 @@ export interface ToolCallInfo {
   input?: string; // raw input JSON for expandable view
   inputParamCount?: number;
 }
+
+// --- AI Context (for Diff Viewer) ---
+
+export interface FileAIContext {
+  filePath: string;
+  sessions: AISessionContext[];
+  totalChanges: number;
+}
+
+export interface AISessionContext {
+  id: string;
+  sessionSummary: string;
+  messages: SessionMessage[];
+  fileChanges: FileChangeEvent[];
+}
+
+export interface FileChangeEvent {
+  id: string;
+  messageIndex: number;
+  toolName: string;
+  inputSummary: string;
+  timestamp?: string; // ISO date
+}
+
+export interface FileChangeTimeline {
+  filePath: string;
+  changes: FileVersionChange[];
+}
+
+export interface FileVersionChange {
+  id: string;
+  index: number;
+  timestamp?: string; // ISO date
+  sessionId: string;
+  toolName: string;
+  detail: ToolChangeDetail;
+  conversationContext: string;
+}
+
+export type ToolChangeDetail =
+  | { type: "edit"; oldString: string; newString: string }
+  | { type: "write"; fullContent: string }
+  | { type: "unknown"; summary: string };
 
 // --- PR Feedback ---
 

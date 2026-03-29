@@ -12,6 +12,7 @@ interface FileTreeViewProps {
   onSelectFile: (path: string) => void;
   scope: DiffScope;
   onScopeChange: (scope: DiffScope) => void;
+  aiContextPaths?: Set<string>;
 }
 
 const STATUS_CONFIG = {
@@ -37,6 +38,7 @@ export function FileTreeView({
   onSelectFile,
   scope,
   onScopeChange,
+  aiContextPaths,
 }: FileTreeViewProps) {
   const modifiedCount = files.filter((f) => f.status === "modified").length;
   const addedCount = files.filter((f) => f.status === "added").length;
@@ -138,6 +140,19 @@ export function FileTreeView({
               >
                 {fileName(path)}
               </span>
+
+              {/* AI badge */}
+              {aiContextPaths?.has(path) && (
+                <span
+                  className="text-[9px] font-bold px-1 py-px rounded-full flex-shrink-0"
+                  style={{
+                    background: isSelected ? "var(--ctp-base)" : "var(--ctp-mauve)",
+                    color: isSelected ? "var(--ctp-mauve)" : "var(--ctp-base)",
+                  }}
+                >
+                  AI
+                </span>
+              )}
 
               {/* Directory hint */}
               <span

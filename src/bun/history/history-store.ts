@@ -91,6 +91,48 @@ export class HistoryStore {
     }
   }
 
+  // --- File-specific search (for AI Context) ---
+
+  async sessionsWithToolCallsForFile(
+    filePath: string,
+    scope: "all" | "project",
+    projectPath?: string,
+  ): Promise<SessionSummary[]> {
+    if (!this.initialized) await this.initialize();
+
+    const fileName = filePath.split("/").pop() ?? filePath;
+    const allSessions = this.cache.sessions(scope, projectPath);
+    const matching: SessionSummary[] = [];
+
+    for (const session of allSessions) {
+      try {
+        const messages = await parseFile(session.filePath);
+        const hasEdit = messages.some(
+          (msg) =>
+            msg.type === "assistant" &&
+            msg.toolCalls.some((tc) => {
+              const isEditTool = tc.name === "Edit" || tc.name === "Write";
+              const matchesPath =
+                tc.inputSummary.includes(filePath) ||
+                tc.inputSummary.includes(fileName) ||
+                (tc.fullInput != null && tc.fullInput.includes(filePath));
+              return isEditTool && matchesPath;
+            }),
+        );
+
+        if (hasEdit) {
+          matching.push(toSessionSummary(session));
+        }
+      } catch {
+        // Skip unreadable sessions
+      }
+    }
+
+    return matching.sort((a, b) =>
+      (b.modifiedAt ?? "").localeCompare(a.modifiedAt ?? ""),
+    );
+  }
+
   // --- Refresh ---
 
   async refresh(): Promise<void> {

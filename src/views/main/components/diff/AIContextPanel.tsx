@@ -1,0 +1,272 @@
+// ============================================================
+// AIContextPanel — Port of AIContextPanelView.swift
+// Shows Claude's edit history for the selected file: message
+// bubbles, tool call waypoints with timeline navigation.
+// ============================================================
+
+import { useRef, useEffect, useMemo, useCallback } from "react";
+import type {
+  FileAIContext,
+  FileChangeTimeline,
+  FileChangeEvent,
+  SessionMessage,
+} from "../../../../shared/ipc-types";
+
+interface AIContextPanelProps {
+  context: FileAIContext | null;
+  timeline: FileChangeTimeline | null;
+  currentChangeIndex: number;
+  onChangeIndex: (index: number) => void;
+}
+
+export function AIContextPanel({
+  context,
+  timeline,
+  currentChangeIndex,
+  onChangeIndex,
+}: AIContextPanelProps) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const allFileChangeEvents = useMemo(() => {
+    if (!context) return [];
+    return context.sessions.flatMap((s) => s.fileChanges);
+  }, [context]);
+
+  const isCurrentWaypoint = useCallback(
+    (event: FileChangeEvent) => {
+      if (currentChangeIndex < 0 || currentChangeIndex >= allFileChangeEvents.length) return false;
+      return allFileChangeEvents[currentChangeIndex]?.id === event.id;
+    },
+    [allFileChangeEvents, currentChangeIndex],
+  );
+
+  // Auto-scroll to current waypoint
+  useEffect(() => {
+    if (!scrollContainerRef.current) return;
+    const el = scrollContainerRef.current.querySelector(
+      `[data-waypoint-index="${currentChangeIndex}"]`,
+    );
+    if (el) {
+      setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "center" }), 100);
+    }
+  }, [currentChangeIndex, context?.filePath]);
+
+  const canGoBack = currentChangeIndex > 0;
+  const canGoForward = timeline != null && currentChangeIndex < timeline.changes.length - 1;
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div
+        className="flex items-center gap-2 px-4 py-2 flex-shrink-0"
+        style={{
+          background: "var(--ctp-mantle)",
+          borderBottom: "1px solid var(--ctp-surface0)",
+        }}
+      >
+        <span className="font-semibold text-xs" style={{ color: "var(--ctp-mauve)" }}>
+          AI Context
+        </span>
+
+        {context && context.sessions.length > 0 && (
+          <span
+            className="text-xs truncate"
+            style={{ color: "var(--ctp-subtext0)" }}
+          >
+            {context.sessions[0]!.sessionSummary}
+          </span>
+        )}
+
+        <span className="flex-1" />
+
+        {timeline && timeline.changes.length > 1 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium" style={{ color: "var(--ctp-mauve)" }}>
+              Change {currentChangeIndex + 1} of {timeline.changes.length}
+            </span>
+            <button
+              className="px-2 py-0.5 text-xs rounded"
+              style={{
+                background: "var(--ctp-surface0)",
+                color: "var(--ctp-text)",
+                opacity: canGoBack ? 1 : 0.4,
+              }}
+              disabled={!canGoBack}
+              onClick={() => onChangeIndex(currentChangeIndex - 1)}
+            >
+              Prev
+            </button>
+            <button
+              className="px-2 py-0.5 text-xs rounded"
+              style={{
+                background: "var(--ctp-surface0)",
+                color: "var(--ctp-text)",
+                opacity: canGoForward ? 1 : 0.4,
+              }}
+              disabled={!canGoForward}
+              onClick={() => onChangeIndex(currentChangeIndex + 1)}
+            >
+              Next
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Content */}
+      {context ? (
+        <div ref={scrollContainerRef} className="flex-1 overflow-auto p-4">
+          <div className="flex flex-col gap-2">
+            {context.sessions.map((session) =>
+              session.messages.map((msg, msgIdx) => {
+                const eventsForMessage = session.fileChanges.filter(
+                  (e) => e.messageIndex === msgIdx,
+                );
+                return (
+                  <div key={`${session.id}-${msgIdx}`}>
+                    {msg.text && (
+                      <MessageBubble message={msg} />
+                    )}
+                    {eventsForMessage.map((event, eventIdx) => {
+                      // Find global index for this event
+                      let globalIdx = 0;
+                      outer: for (const s of context.sessions) {
+                        for (const e of s.fileChanges) {
+                          if (e.id === event.id) break outer;
+                          globalIdx++;
+                        }
+                      }
+                      return (
+                        <ToolCallWaypoint
+                          key={event.id}
+                          event={event}
+                          isCurrent={isCurrentWaypoint(event)}
+                          globalIndex={globalIdx}
+                        />
+                      );
+                    })}
+                  </div>
+                );
+              }),
+            )}
+          </div>
+        </div>
+      ) : (
+        <div
+          className="flex-1 flex flex-col items-center justify-center gap-1"
+          style={{ color: "var(--ctp-subtext0)" }}
+        >
+          <span className="text-sm">No AI context for this file</span>
+          <span className="text-xs opacity-60">
+            This file was not modified by Claude
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Sub-components ---
+
+function MessageBubble({ message }: { message: SessionMessage }) {
+  const isUser = message.type === "user";
+  const text = message.text ?? "";
+  const parsed = parseCommand(text);
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span
+        className="text-[10px] font-medium"
+        style={{ color: isUser ? "var(--ctp-teal)" : "var(--ctp-blue)" }}
+      >
+        {isUser ? "You" : "Claude"}
+      </span>
+      <div
+        className="px-2 py-1.5 rounded text-xs"
+        style={{
+          background: isUser ? "rgba(148, 226, 213, 0.1)" : "transparent",
+          border: isUser ? "1px solid rgba(148, 226, 213, 0.3)" : "none",
+          color: "var(--ctp-text)",
+        }}
+      >
+        {parsed ? (
+          <div className="flex flex-col gap-1">
+            <span className="font-semibold font-mono" style={{ color: "var(--ctp-teal)" }}>
+              /{parsed.name}
+            </span>
+            {parsed.args && (
+              <span className="text-xs">
+                {truncate(parsed.args, 250)}
+              </span>
+            )}
+          </div>
+        ) : (
+          truncate(stripTags(text), 300)
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ToolCallWaypoint({
+  event,
+  isCurrent,
+  globalIndex,
+}: {
+  event: FileChangeEvent;
+  isCurrent: boolean;
+  globalIndex: number;
+}) {
+  return (
+    <div
+      data-waypoint-index={globalIndex}
+      className="flex items-center gap-1.5 px-2 py-1.5 rounded text-xs"
+      style={{
+        background: isCurrent
+          ? "rgba(203, 166, 247, 0.15)"
+          : "rgba(203, 166, 247, 0.05)",
+        border: `1px solid ${isCurrent ? "var(--ctp-mauve)" : "rgba(203, 166, 247, 0.2)"}`,
+      }}
+    >
+      <span style={{ color: "var(--ctp-mauve)" }}>&#x270E;</span>
+      <span className="font-semibold" style={{ color: "var(--ctp-mauve)" }}>
+        {event.toolName}
+      </span>
+      <span
+        className="truncate flex-1"
+        style={{ color: "var(--ctp-text)" }}
+      >
+        {event.inputSummary}
+      </span>
+      {isCurrent && (
+        <span
+          className="px-1.5 py-0.5 text-[10px] font-bold rounded-full"
+          style={{
+            background: "var(--ctp-mauve)",
+            color: "var(--ctp-base)",
+          }}
+        >
+          CURRENT
+        </span>
+      )}
+    </div>
+  );
+}
+
+// --- Helpers ---
+
+function parseCommand(text: string): { name: string; args: string } | null {
+  const nameMatch = text.match(/<command-name>\s*\/?([^<]+?)\s*<\/command-name>/);
+  if (!nameMatch) return null;
+  const name = nameMatch[1]!;
+  const argsMatch = text.match(/<command-args>\s*([\s\S]*?)\s*<\/command-args>/);
+  const args = argsMatch ? argsMatch[1]! : "";
+  return { name, args };
+}
+
+function stripTags(text: string): string {
+  return text.replace(/<[^>]+>/g, "").trim();
+}
+
+function truncate(text: string, limit: number): string {
+  return text.length > limit ? text.slice(0, limit) + "..." : text;
+}

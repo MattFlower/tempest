@@ -5,13 +5,20 @@
 // ============================================================
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { DiffFile } from "../../../../shared/ipc-types";
-import { DiffScope } from "../../../../shared/ipc-types";
+import type {
+  DiffFile,
+  FileAIContext,
+  FileChangeTimeline,
+} from "../../../../shared/ipc-types";
+import { DiffScope, PaneTabKind, ViewMode } from "../../../../shared/ipc-types";
 import { api } from "../../state/rpc-client";
 import { useStore } from "../../state/store";
+import { createTab, createPane, allPanes, addingPane, toNodeState } from "../../models/pane-node";
 import { FileTreeView } from "./FileTreeView";
 import { DiffContent } from "./DiffContent";
 import { DiffHeader } from "./DiffHeader";
+import { DiffContextMenu } from "./DiffContextMenu";
+import { AIContextPanel } from "./AIContextPanel";
 import { parseDiffFileStats } from "./diff-utils";
 
 export function DiffView() {
@@ -27,6 +34,24 @@ export function DiffView() {
   const [hunkIndex, setHunkIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // AI Context state
+  const [aiContext, setAiContext] = useState<FileAIContext | null>(null);
+  const [aiTimeline, setAiTimeline] = useState<FileChangeTimeline | null>(null);
+  const [currentChangeIndex, setCurrentChangeIndex] = useState(0);
+  const [aiContextPaths, setAiContextPaths] = useState<Set<string>>(new Set());
+  const [aiPanelRatio, setAiPanelRatio] = useState(0.3); // 0.1 to 0.6
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    lineNumber: number | null;
+    filePath: string;
+  } | null>(null);
+
+  const paneTrees = useStore((s) => s.paneTrees);
+  const setViewMode = useStore((s) => s.setViewMode);
 
   // Cache raw diffs per file for quick switching
   const rawDiffsByFile = useRef<Map<string, string>>(new Map());
@@ -69,10 +94,69 @@ export function DiffView() {
     loadDiff();
   }, [loadDiff]);
 
-  // Reset hunk index when file changes
+  // Reset hunk index and load AI context when file changes
   useEffect(() => {
     setHunkIndex(0);
-  }, [selectedPath]);
+    setCurrentChangeIndex(0);
+
+    if (!selectedPath || !selectedWorkspacePath) {
+      setAiContext(null);
+      setAiTimeline(null);
+      return;
+    }
+
+    const fullPath = `${selectedWorkspacePath}/${selectedPath}`;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const [ctx, tl] = await Promise.all([
+          api.getAIContextForFile(fullPath),
+          api.getAITimelineForFile(fullPath),
+        ]);
+        if (!cancelled) {
+          setAiContext(ctx);
+          setAiTimeline(tl);
+        }
+      } catch {
+        if (!cancelled) {
+          setAiContext(null);
+          setAiTimeline(null);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [selectedPath, selectedWorkspacePath]);
+
+  // Load AI context indicators for all files when diff loads
+  useEffect(() => {
+    if (!selectedWorkspacePath || files.length === 0) {
+      setAiContextPaths(new Set());
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      const paths = new Set<string>();
+      for (const file of files) {
+        try {
+          const ctx = await api.getAIContextForFile(
+            `${selectedWorkspacePath}/${file.newPath}`,
+          );
+          if (ctx && ctx.sessions.length > 0) {
+            paths.add(file.newPath);
+          }
+        } catch {
+          // skip
+        }
+      }
+      if (!cancelled) setAiContextPaths(paths);
+    })();
+
+    return () => { cancelled = true; };
+  }, [files, selectedWorkspacePath]);
 
   // Get raw diff for selected file
   const selectedFileDiff = selectedPath
@@ -96,6 +180,73 @@ export function DiffView() {
   const handleNextHunk = useCallback(() => {
     setHunkIndex((prev) => Math.min(totalHunks - 1, prev + 1));
   }, [totalHunks]);
+
+  const handleContextMenuLine = useCallback(
+    (lineNumber: number | null, fp: string, x: number, y: number) => {
+      setContextMenu({ x, y, lineNumber, filePath: fp });
+    },
+    [],
+  );
+
+  const handleDividerDrag = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const startY = e.clientY;
+      const startRatio = aiPanelRatio;
+      const container = (e.target as HTMLElement).closest(
+        "[data-diff-right-panel]",
+      );
+      if (!container) return;
+      const containerHeight = container.getBoundingClientRect().height;
+
+      const onMove = (ev: MouseEvent) => {
+        const delta = startY - ev.clientY;
+        const newRatio = Math.min(
+          0.6,
+          Math.max(0.1, startRatio + delta / containerHeight),
+        );
+        setAiPanelRatio(newRatio);
+      };
+      const onUp = () => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    },
+    [aiPanelRatio],
+  );
+
+  const handleOpenInEditor = useCallback(() => {
+    if (!contextMenu || !selectedWorkspacePath) return;
+
+    const tree = paneTrees[selectedWorkspacePath];
+    if (!tree) return;
+
+    // Create a new pane with the editor tab, placed after the last pane
+    const panes = allPanes(tree);
+    const lastPaneId = panes[panes.length - 1]?.id;
+    if (!lastPaneId) return;
+
+    const fullPath = `${selectedWorkspacePath}/${contextMenu.filePath}`;
+    const label = contextMenu.filePath.split("/").pop() ?? "Editor";
+    const tab = createTab(PaneTabKind.Editor, label, {
+      terminalId: crypto.randomUUID(),
+      editorFilePath: fullPath,
+      editorLineNumber: contextMenu.lineNumber ?? undefined,
+    });
+    const newPane = createPane(tab);
+    const newTree = addingPane(tree, newPane, lastPaneId);
+
+    // Commit the tree and focus the new pane
+    useStore.getState().setPaneTree(selectedWorkspacePath, newTree);
+    useStore.getState().setFocusedPaneId(newPane.id);
+    api.notifyPaneTreeChanged(selectedWorkspacePath, toNodeState(newTree));
+
+    setContextMenu(null);
+    // Switch to Terminal view so the new editor pane is visible
+    setViewMode(selectedWorkspacePath, ViewMode.Terminal);
+  }, [contextMenu, selectedWorkspacePath, paneTrees, setViewMode]);
 
   if (!selectedWorkspacePath) {
     return (
@@ -166,6 +317,7 @@ export function DiffView() {
             onSelectFile={() => {}}
             scope={scope}
             onScopeChange={handleScopeChange}
+            aiContextPaths={aiContextPaths}
           />
         </div>
         <div
@@ -199,11 +351,12 @@ export function DiffView() {
           onSelectFile={setSelectedPath}
           scope={scope}
           onScopeChange={handleScopeChange}
+          aiContextPaths={aiContextPaths}
         />
       </div>
 
-      {/* Right panel — diff header + content */}
-      <div className="flex-1 h-full min-w-0 flex flex-col">
+      {/* Right panel — diff header + content + AI panel */}
+      <div className="flex-1 h-full min-w-0 flex flex-col" data-diff-right-panel>
         {selectedPath && selectedFile ? (
           <>
             <DiffHeader
@@ -217,12 +370,36 @@ export function DiffView() {
               onPreviousHunk={handlePreviousHunk}
               onNextHunk={handleNextHunk}
             />
-            <div className="flex-1 min-h-0">
-              <DiffContent
-                rawDiff={selectedFileDiff}
-                displayMode={displayMode}
-                hunkIndex={hunkIndex}
+            <div className="flex-1 min-h-0 flex flex-col">
+              {/* Diff content area */}
+              <div style={{ flex: `${1 - aiPanelRatio}` }} className="min-h-0">
+                <DiffContent
+                  rawDiff={selectedFileDiff}
+                  displayMode={displayMode}
+                  hunkIndex={hunkIndex}
+                  filePath={selectedPath}
+                  onContextMenuLine={handleContextMenuLine}
+                />
+              </div>
+              {/* Draggable divider */}
+              <div
+                className="flex-shrink-0 cursor-row-resize"
+                style={{
+                  height: 3,
+                  background: "var(--ctp-mauve)",
+                  opacity: 0.6,
+                }}
+                onMouseDown={handleDividerDrag}
               />
+              {/* AI Context Panel */}
+              <div style={{ flex: `${aiPanelRatio}` }} className="min-h-0">
+                <AIContextPanel
+                  context={aiContext}
+                  timeline={aiTimeline}
+                  currentChangeIndex={currentChangeIndex}
+                  onChangeIndex={setCurrentChangeIndex}
+                />
+              </div>
             </div>
           </>
         ) : (
@@ -237,6 +414,17 @@ export function DiffView() {
           </div>
         )}
       </div>
+
+      {/* Right-click context menu */}
+      {contextMenu && (
+        <DiffContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          lineNumber={contextMenu.lineNumber}
+          onOpenInEditor={handleOpenInEditor}
+          onDismiss={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }

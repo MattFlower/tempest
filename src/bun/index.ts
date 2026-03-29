@@ -23,6 +23,8 @@ import {
   unwatchAll as unwatchAllMarkdown,
 } from "./markdown/markdown-service";
 import { getDiff } from "./diff/diff-provider";
+import { buildEditorCommand } from "./editor/editor-command";
+import { AIContextProvider } from "./diff/ai-context-provider";
 import { PRMonitor } from "./pr/pr-monitor";
 
 // --- Stream A: Terminal + Session ---
@@ -49,6 +51,7 @@ const activityTracker = new SessionActivityTracker();
 
 // --- Stream G: History ---
 const historyStore = new HistoryStore();
+const aiContextProvider = new AIContextProvider(historyStore);
 
 // --- Stream H: PR Feedback ---
 const prMonitor = new PRMonitor();
@@ -95,6 +98,10 @@ const rpc = BrowserView.defineRPC({
       },
       buildClaudeCommand: (params: any) => sessionManager.buildClaudeCommand(params),
       buildShellCommand: (params: any) => sessionManager.buildShellCommand(params),
+      buildEditorCommand: async (params: any) => {
+        const config = await loadConfig();
+        return buildEditorCommand(config.editor ?? "nvim", params.filePath, params.lineNumber);
+      },
 
       // --- Repos & Workspaces (Stream D) ---
       getRepos: () => workspaceManager.getRepos(),
@@ -208,7 +215,13 @@ const rpc = BrowserView.defineRPC({
 
       // --- Diff Viewer (Feature 1) ---
       getDiff: async (params: any) => {
-        return await getDiff(params.workspacePath, params.scope, params.contextLines);
+        return await getDiff(params.workspacePath, params.scope, params.contextLines, params.commitRef);
+      },
+      getAIContextForFile: async (params: any) => {
+        return await aiContextProvider.contextForFile(params.filePath, params.projectPath);
+      },
+      getAITimelineForFile: async (params: any) => {
+        return await aiContextProvider.timelineForFile(params.filePath, params.projectPath);
       },
 
       // --- PR Feedback (Feature 3) ---

@@ -60,6 +60,76 @@ export function createLeaf(pane: Pane): PaneNode {
   return { type: "leaf", pane };
 }
 
+// --- Serialization (PaneNode ↔ PaneNodeState) ---
+
+import type { PaneNodeState, PaneState, PaneTabState } from "../../../shared/ipc-types";
+
+/** Convert live PaneNode → serializable PaneNodeState for persistence. */
+export function toNodeState(node: PaneNode): PaneNodeState {
+  if (node.type === "leaf") {
+    const pane = node.pane;
+    return {
+      type: "leaf",
+      pane: {
+        tabs: pane.tabs.map((tab) => ({
+          kind: tab.kind,
+          label: tab.label,
+          sessionId: tab.sessionId,
+          browserURL: tab.browserUrl,
+          markdownFilePath: tab.markdownFilePath,
+          editorFilePath: tab.editorFilePath,
+        })),
+        selectedTabIndex: Math.max(
+          0,
+          pane.tabs.findIndex((t) => t.id === pane.selectedTabId),
+        ),
+      },
+    };
+  }
+  return {
+    type: "split",
+    children: node.children.map(toNodeState),
+    ratios: node.ratios,
+  };
+}
+
+/** Convert serialized PaneNodeState → live PaneNode (assigns new IDs + terminalIds). */
+export function fromNodeState(state: PaneNodeState): PaneNode {
+  if (state.type === "leaf") {
+    const ps = state.pane;
+    const tabs: PaneTab[] = ps.tabs.map((ts) => ({
+      id: crypto.randomUUID(),
+      kind: ts.kind,
+      label: ts.label,
+      isAlive: true,
+      sessionId: ts.sessionId,
+      browserUrl: ts.browserURL,
+      markdownFilePath: ts.markdownFilePath,
+      editorFilePath: ts.editorFilePath,
+      // Terminal/Claude tabs get fresh terminalIds so new PTYs are created
+      terminalId:
+        ts.kind === PaneTabKind.Claude || ts.kind === PaneTabKind.Shell
+          ? crypto.randomUUID()
+          : undefined,
+    }));
+    const selectedTab = tabs[ps.selectedTabIndex] ?? tabs[0];
+    return {
+      type: "leaf",
+      pane: {
+        id: crypto.randomUUID(),
+        tabs,
+        selectedTabId: selectedTab?.id,
+      },
+    };
+  }
+  return {
+    type: "split",
+    id: crypto.randomUUID(),
+    children: state.children.map(fromNodeState),
+    ratios: state.ratios,
+  };
+}
+
 export function createSplit(
   children: PaneNode[],
   ratios?: number[],

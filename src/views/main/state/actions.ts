@@ -19,6 +19,7 @@ import {
   updatingPane,
   movingTab,
   withRatios,
+  toNodeState,
 } from "../models/pane-node";
 import { useStore } from "./store";
 import { api } from "./rpc-client";
@@ -35,7 +36,7 @@ function currentTree(): { workspacePath: string; tree: PaneNode } | null {
 
 function commitTree(workspacePath: string, tree: PaneNode) {
   useStore.getState().setPaneTree(workspacePath, tree);
-  api.notifyPaneTreeChanged(workspacePath, tree);
+  api.notifyPaneTreeChanged(workspacePath, toNodeState(tree));
 }
 
 // --- Tab Actions ---

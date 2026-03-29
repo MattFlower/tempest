@@ -1,8 +1,10 @@
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useStore } from "./state/store";
 import { Sidebar } from "./components/sidebar/Sidebar";
 import { CommandPalette } from "./components/palette/CommandPalette";
 import { WorkspaceDetail } from "./components/layout";
+import { api } from "./state/rpc-client";
+import { fromNodeState } from "./models/pane-node";
 
 const MIN_SIDEBAR_WIDTH = 180;
 const MAX_SIDEBAR_WIDTH = 400;
@@ -20,6 +22,36 @@ export function App() {
     if (selectedWorkspacePath) paths.add(selectedWorkspacePath);
     return Array.from(paths);
   }, [paneTrees, selectedWorkspacePath]);
+
+  // Restore session state on startup
+  useEffect(() => {
+    api.loadSessionState().then((state: any) => {
+      if (!state) return;
+      const store = useStore.getState();
+
+      // Restore pane trees for each workspace
+      for (const [wsPath, wsPaneState] of Object.entries(state.workspaces)) {
+        const ws = wsPaneState as any;
+        if (ws.paneTree) {
+          const tree = fromNodeState(ws.paneTree);
+          store.setPaneTree(wsPath, tree);
+        }
+      }
+
+      // Restore selected workspace
+      if (state.selectedWorkspacePath) {
+        store.selectWorkspace(state.selectedWorkspacePath);
+      }
+
+      console.log(
+        "[App] Session restored:",
+        Object.keys(state.workspaces).length,
+        "workspaces",
+      );
+    }).catch((err: any) => {
+      console.error("[App] Session restore failed:", err);
+    });
+  }, []);
 
   const [isDragging, setIsDragging] = useState(false);
   const startX = useRef(0);

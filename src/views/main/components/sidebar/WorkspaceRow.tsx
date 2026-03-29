@@ -34,7 +34,14 @@ function DiffStatsPill({ stats, onRefresh }: { stats: DiffStats; onRefresh: () =
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onRefresh(); }}
-      className="flex items-center gap-1 rounded border border-[var(--ctp-surface2)] px-1.5 py-0.5 font-mono text-[10px] hover:border-[var(--ctp-overlay0)]"
+      className="flex items-center font-mono"
+      style={{
+        gap: "6px",
+        borderRadius: "6px",
+        border: "1px solid var(--ctp-overlay1)",
+        padding: "1px 6px",
+        fontSize: "10px",
+      }}
     >
       <span style={{ color: "var(--ctp-green)" }}>+{stats.additions}</span>
       <span style={{ color: "var(--ctp-red)" }}>-{stats.deletions}</span>

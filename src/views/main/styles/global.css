@@ -39,7 +39,7 @@ body,
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui,
     sans-serif;
   font-size: 13px;
-  -webkit-font-smoothing: antialiased;
+  -webkit-font-smoothing: auto;
   user-select: none;
 }
 

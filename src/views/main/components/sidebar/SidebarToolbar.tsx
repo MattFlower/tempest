@@ -8,7 +8,7 @@ export function SidebarToolbar({ onAddRepo, onOpenSettings }: Props) {
     <div className="flex items-center px-3 py-2 border-t border-[var(--ctp-surface0)] bg-[var(--ctp-mantle)]">
       <button
         onClick={onAddRepo}
-        className="flex items-center gap-1.5 text-[12px] text-[var(--ctp-overlay1)] hover:text-[var(--ctp-text)] transition-colors"
+        className="flex items-center gap-1.5 text-[12px] text-[var(--ctp-text)] hover:text-[var(--ctp-text)] transition-colors"
         title="Add Repository"
       >
         <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
@@ -19,7 +19,7 @@ export function SidebarToolbar({ onAddRepo, onOpenSettings }: Props) {
       <span className="flex-1" />
       <button
         onClick={onOpenSettings}
-        className="text-[var(--ctp-overlay1)] hover:text-[var(--ctp-text)] transition-colors"
+        className="text-[var(--ctp-text)] hover:text-[var(--ctp-text)] transition-colors"
         title="Settings"
       >
         <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">

@@ -58,11 +58,11 @@ export function TabButton({ tab, paneId, isSelected }: TabButtonProps) {
     <div
       className={`
         group relative flex items-center gap-1.5 px-3 h-full
-        cursor-pointer select-none whitespace-nowrap text-xs
+        cursor-pointer select-none whitespace-nowrap text-sm
         transition-colors duration-100
         ${isSelected
           ? "bg-[var(--ctp-surface0)] text-[var(--ctp-text)]"
-          : "text-[var(--ctp-subtext0)] hover:bg-[var(--ctp-surface0)]/50"
+          : "text-[var(--ctp-text)] hover:bg-[var(--ctp-surface0)]/50"
         }
       `}
       draggable

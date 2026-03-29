@@ -1,2 +1,8 @@
 @import "tailwindcss";
 @source "../../../";
+
+@layer base {
+  *, ::before, ::after {
+    -webkit-font-smoothing: auto;
+  }
+}

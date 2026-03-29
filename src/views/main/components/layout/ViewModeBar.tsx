@@ -32,7 +32,7 @@ export function ViewModeBar({ workspacePath }: ViewModeBarProps) {
     >
       <div
         className="flex items-center rounded-full overflow-hidden"
-        style={{ backgroundColor: "var(--ctp-surface0)" }}
+        style={{ backgroundColor: "var(--ctp-crust)" }}
       >
         {modes.map(({ mode, label }) => {
           const isActive = viewMode === mode;
@@ -40,10 +40,10 @@ export function ViewModeBar({ workspacePath }: ViewModeBarProps) {
             <button
               key={mode}
               onClick={() => handleSelect(mode)}
-              className="px-4 py-1 text-xs font-medium rounded-full transition-colors duration-100"
+              className="px-4 py-1.5 text-xs font-medium rounded-full transition-colors duration-100"
               style={{
-                backgroundColor: isActive ? "var(--ctp-surface1)" : "transparent",
-                color: isActive ? "var(--ctp-text)" : "var(--ctp-overlay0)",
+                backgroundColor: isActive ? "var(--ctp-surface0)" : "transparent",
+                color: "var(--ctp-text)",
               }}
             >
               {label}

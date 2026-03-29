@@ -14,6 +14,7 @@ import {
   allPanes,
   findPane,
   addingPane,
+  addingPaneBefore,
   removingPane,
   updatingPane,
   movingTab,
@@ -162,12 +163,7 @@ export function splitPane(direction: "right" | "left" = "right", emptyPane = fal
   if (direction === "right") {
     newTree = addingPane(ctx.tree, newPane, focusedPaneId);
   } else {
-    // For "left", we need to add before — swap insertion logic
-    // addingPane inserts after, so we swap the panes after insertion
-    newTree = addingPane(ctx.tree, newPane, focusedPaneId);
-    // Actually, let's just insert after and it'll work for now
-    // A true "before" would need addingPaneBefore, but the Swift uses a separate method
-    // For simplicity, both directions insert to the right
+    newTree = addingPaneBefore(ctx.tree, newPane, focusedPaneId);
   }
 
   commitTree(ctx.workspacePath, newTree);

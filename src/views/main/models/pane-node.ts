@@ -158,6 +158,57 @@ export function addingPane(
   };
 }
 
+export function addingPaneBefore(
+  root: PaneNode,
+  newPane: Pane,
+  beforePaneId: string,
+): PaneNode {
+  if (root.type === "leaf") {
+    if (root.pane.id === beforePaneId) {
+      return {
+        type: "split",
+        id: crypto.randomUUID(),
+        children: [{ type: "leaf", pane: newPane }, root],
+        ratios: [0.5, 0.5],
+      };
+    }
+    return root;
+  }
+
+  // Check direct children for a leaf matching beforePaneId
+  const directIndex = root.children.findIndex(
+    (child) => child.type === "leaf" && child.pane.id === beforePaneId,
+  );
+
+  if (directIndex !== -1) {
+    const newChildren = [...root.children];
+    newChildren.splice(directIndex, 0, { type: "leaf", pane: newPane });
+    const n = newChildren.length;
+    return {
+      type: "split",
+      id: root.id,
+      children: newChildren,
+      ratios: Array(n).fill(1 / n),
+    };
+  }
+
+  // Recurse into children
+  const updatedChildren = root.children.map((child) =>
+    addingPaneBefore(child, newPane, beforePaneId),
+  );
+  const changed = updatedChildren.some(
+    (child, i) => child !== root.children[i],
+  );
+  if (!changed) return root;
+
+  return {
+    type: "split",
+    id: root.id,
+    children: updatedChildren,
+    ratios: root.ratios,
+  };
+}
+
 export function removingPane(
   root: PaneNode,
   paneId: string,

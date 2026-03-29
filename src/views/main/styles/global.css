@@ -1,5 +1,3 @@
-@import "tailwindcss";
-
 /* Catppuccin Mocha palette as CSS variables */
 :root {
   --ctp-rosewater: #f5e0dc;
@@ -28,12 +26,6 @@
   --ctp-base: #1e1e2e;
   --ctp-mantle: #181825;
   --ctp-crust: #11111b;
-}
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
 }
 
 html,

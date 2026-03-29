@@ -64,7 +64,7 @@ export function WorkspaceRow({ workspace, sidebarInfo, shortcutIndex, isSelected
         e.preventDefault();
         // Context menu handled at a higher level if needed
       }}
-      className={`group flex flex-col gap-0.5 rounded-md px-2 py-1.5 cursor-pointer ${
+      className={`group flex flex-col gap-1 rounded-md px-3 py-2.5 cursor-pointer ${
         isSelected
           ? "bg-[var(--ctp-surface0)]"
           : "hover:bg-[var(--ctp-surface0)]/50"
@@ -72,8 +72,12 @@ export function WorkspaceRow({ workspace, sidebarInfo, shortcutIndex, isSelected
     >
       {/* Line 1: branch icon + name + diff stats */}
       <div className="flex items-center gap-1.5 min-w-0">
-        <svg className="w-3.5 h-3.5 flex-shrink-0 text-[var(--ctp-overlay1)]" viewBox="0 0 16 16" fill="currentColor">
-          <path d="M5 3.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm0 9.5a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm7.5-9.5a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM4.25 5v5.174a2.25 2.25 0 1 0 1.5 0V5A2.25 2.25 0 1 0 4.25 5Zm6.5-2.174V5a2.25 2.25 0 1 0 1.5 0V2.826a2.25 2.25 0 1 0-1.5 0Z" />
+        <svg className="w-3.5 h-3.5 flex-shrink-0 text-[var(--ctp-overlay1)]" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="8" cy="13" r="1.5" />
+          <circle cx="4.5" cy="3" r="1.5" />
+          <circle cx="11.5" cy="3" r="1.5" />
+          <path d="M4.5 4.5V7.5C4.5 9 5.5 10 8 10V11.5" />
+          <path d="M11.5 4.5V7.5C11.5 9 10.5 10 8 10" />
         </svg>
         <span className="truncate text-[13px] font-semibold text-[var(--ctp-text)]">
           {workspace.name}

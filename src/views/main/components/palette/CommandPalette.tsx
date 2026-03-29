@@ -1,17 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { PaneTabKind } from "../../../../shared/ipc-types";
+import { PaneTabKind, ViewMode } from "../../../../shared/ipc-types";
 import { createTab } from "../../models/pane-node";
 import { useStore } from "../../state/store";
 import { api } from "../../state/rpc-client";
 import { fuzzyMatch } from "./fuzzy-match";
 import {
   addTab,
+  closeTab,
   splitPane,
   focusNextPane,
   focusPreviousPane,
   toggleMaximize,
   resetRatios,
 } from "../../state/actions";
+import { findPane } from "../../models/pane-node";
 
 type PaletteMode = "commands" | "files";
 
@@ -38,17 +40,48 @@ function addTabToFocusedPane(kind: PaneTabKind, label: string, overrides?: Recor
 
 function useCommands(): PaletteCommand[] {
   const toggleSidebar = useStore((s) => s.toggleSidebar);
+  const setViewMode = useStore((s) => s.setViewMode);
+  const selectedWorkspacePath = useStore((s) => s.selectedWorkspacePath);
+
+  const setMode = (mode: ViewMode) => {
+    if (selectedWorkspacePath) setViewMode(selectedWorkspacePath, mode);
+  };
+
+  const closeSelectedTab = () => {
+    const state = useStore.getState();
+    const { focusedPaneId, paneTrees, selectedWorkspacePath: wsPath } = state;
+    if (!focusedPaneId || !wsPath) return;
+    const tree = paneTrees[wsPath];
+    if (!tree) return;
+    const pane = findPane(tree, focusedPaneId);
+    if (pane?.selectedTabId) closeTab(focusedPaneId, pane.selectedTabId);
+  };
+
   return [
-    { id: "toggle-sidebar", label: "Toggle Sidebar", shortcutHint: "⌘\\", canOpenAsPane: false, action: toggleSidebar },
-    { id: "new-claude", label: "New Claude Tab", shortcutHint: "⌘T", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.Claude, "Claude") },
-    { id: "new-shell", label: "New Shell Tab", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.Shell, "Shell") },
-    { id: "new-browser", label: "New Browser Tab", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.Browser, "Browser") },
-    { id: "split-pane", label: "Split Pane Right", shortcutHint: "⌘D", canOpenAsPane: false, action: () => splitPane("right") },
+    // Tab commands
+    { id: "new-claude", label: "Claude", shortcutHint: "⌘T", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.Claude, "Claude") },
+    { id: "new-shell", label: "New Shell Tab", shortcutHint: "⌘⏎", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.Shell, "Shell") },
+    { id: "new-browser", label: "Browser", shortcutHint: "⌘⇧B", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.Browser, "Browser") },
+    { id: "history", label: "Chat History", shortcutHint: "⌘⇧H", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.HistoryViewer, "History") },
+    { id: "pr-dashboard", label: "PR Review Dashboard", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.PRDashboard, "PR Reviews") },
+
+    // Tab/pane actions
+    { id: "close-tab", label: "Close Tab", shortcutHint: "⌘W", canOpenAsPane: false, action: closeSelectedTab },
+    { id: "split-pane", label: "Split Pane", shortcutHint: "⌘D", canOpenAsPane: false, action: () => splitPane("right") },
     { id: "focus-next", label: "Focus Next Pane", shortcutHint: "⌘]", canOpenAsPane: false, action: focusNextPane },
     { id: "focus-prev", label: "Focus Previous Pane", shortcutHint: "⌘[", canOpenAsPane: false, action: focusPreviousPane },
-    { id: "toggle-maximize", label: "Toggle Maximize", shortcutHint: "⌘⇧⏎", canOpenAsPane: false, action: toggleMaximize },
-    { id: "reset-ratios", label: "Reset Pane Sizes", canOpenAsPane: false, action: resetRatios },
-    { id: "pr-dashboard", label: "PR Review Dashboard", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.PRDashboard, "PR Reviews") },
+    { id: "focus-left", label: "Focus Pane Left", shortcutHint: "⌘⌥←", canOpenAsPane: false, action: focusPreviousPane },
+    { id: "focus-right", label: "Focus Pane Right", shortcutHint: "⌘⌥→", canOpenAsPane: false, action: focusNextPane },
+    { id: "toggle-maximize", label: "Toggle Maximize Pane", shortcutHint: "⌘⇧⏎", canOpenAsPane: false, action: toggleMaximize },
+    { id: "reset-ratios", label: "Reset Pane Sizes", shortcutHint: "⌘⇧=", canOpenAsPane: false, action: resetRatios },
+
+    // View modes
+    { id: "terminal-view", label: "Terminal View", shortcutHint: "⌘1", canOpenAsPane: false, action: () => setMode(ViewMode.Terminal) },
+    { id: "diff-view", label: "Diff View", shortcutHint: "⌘2", canOpenAsPane: false, action: () => setMode(ViewMode.Diff) },
+    { id: "dashboard-view", label: "Dashboard View", shortcutHint: "⌘3", canOpenAsPane: false, action: () => setMode(ViewMode.Dashboard) },
+
+    // App
+    { id: "toggle-sidebar", label: "Toggle Sidebar", shortcutHint: "⌘\\", canOpenAsPane: false, action: toggleSidebar },
   ];
 }
 

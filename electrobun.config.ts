@@ -20,6 +20,7 @@ export default {
     },
     copy: {
       "node_modules/@xterm/xterm/css/xterm.css": "views/main/xterm.css",
+      "src/views/main/styles/tailwind.css": "views/main/tailwind.css",
       "src/views/main/index.html": "views/main/index.html",
     },
     mac: {

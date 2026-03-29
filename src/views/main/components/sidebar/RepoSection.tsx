@@ -54,7 +54,7 @@ export function RepoSection({
           >
             <path d="M6.427 4.427l3.396 3.396a.25.25 0 0 1 0 .354l-3.396 3.396A.25.25 0 0 1 6 11.396V4.604a.25.25 0 0 1 .427-.177Z" />
           </svg>
-          <span className="truncate text-[12px] font-semibold uppercase tracking-wider text-[var(--ctp-overlay1)]">
+          <span className="truncate text-[12px] font-semibold uppercase tracking-wider text-[var(--ctp-text)]">
             {repo.name}
           </span>
         </button>

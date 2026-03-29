@@ -131,7 +131,18 @@ export function CommandPalette() {
         item.cmd.action();
       }
     }
-    // File mode handled separately when we have file-opening integrated
+  }, [mode, filteredCommands, selectedIndex, dismiss]);
+
+  const executeInPane = useCallback((direction: "left" | "right") => {
+    if (mode === "commands") {
+      const item = filteredCommands[selectedIndex];
+      if (item?.cmd.canOpenAsPane) {
+        dismiss();
+        // Split with an empty pane, then the action fills it
+        splitPane(direction, true);
+        setTimeout(() => item.cmd.action(), 0);
+      }
+    }
   }, [mode, filteredCommands, selectedIndex, dismiss]);
 
   const handleKeyDown = useCallback(
@@ -148,6 +159,14 @@ export function CommandPalette() {
         case "Enter":
           e.preventDefault();
           executeSelected();
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          executeInPane("left");
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          executeInPane("right");
           break;
         case "Escape":
           e.preventDefault();
@@ -263,6 +282,8 @@ export function CommandPalette() {
         <div className="flex items-center gap-4 px-3 py-1.5">
           <FooterHint keys="↑↓" label="navigate" />
           <FooterHint keys="⏎" label="open" />
+          <FooterHint keys="←" label="open left" />
+          <FooterHint keys="→" label="open right" />
           <FooterHint keys="Tab" label="switch mode" />
           <FooterHint keys="esc" label="dismiss" />
         </div>

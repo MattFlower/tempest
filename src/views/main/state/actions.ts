@@ -141,17 +141,22 @@ export function moveTab(
 
 // --- Split / Pane Actions ---
 
-export function splitPane(direction: "right" | "left" = "right") {
+export function splitPane(direction: "right" | "left" = "right", emptyPane = false) {
   const ctx = currentTree();
   if (!ctx) return;
 
   const { focusedPaneId } = useStore.getState();
   if (!focusedPaneId) return;
 
-  const tab = createTab(PaneTabKind.Shell, "Shell", {
-    terminalId: crypto.randomUUID(),
-  });
-  const newPane = createPane(tab);
+  let newPane;
+  if (emptyPane) {
+    newPane = createPane();
+  } else {
+    const tab = createTab(PaneTabKind.Shell, "Shell", {
+      terminalId: crypto.randomUUID(),
+    });
+    newPane = createPane(tab);
+  }
 
   let newTree: PaneNode;
   if (direction === "right") {

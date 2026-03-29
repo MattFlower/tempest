@@ -97,13 +97,14 @@ export function toNodeState(node: PaneNode): PaneNodeState {
 export function fromNodeState(state: PaneNodeState): PaneNode {
   if (state.type === "leaf") {
     const ps = state.pane;
-    const tabs: PaneTab[] = ps.tabs.map((ts) => ({
+    const tabs: PaneTab[] = ps.tabs.map((ts: any) => ({
       id: crypto.randomUUID(),
       kind: ts.kind,
       label: ts.label,
       isAlive: true,
-      sessionId: ts.sessionId,
-      browserUrl: ts.browserURL,
+      // Handle both Swift's "sessionID" and our "sessionId"
+      sessionId: ts.sessionId ?? ts.sessionID,
+      browserUrl: ts.browserURL ?? ts.browserUrl,
       markdownFilePath: ts.markdownFilePath,
       editorFilePath: ts.editorFilePath,
       // Terminal/Claude tabs get fresh terminalIds so new PTYs are created

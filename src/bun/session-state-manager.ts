@@ -16,7 +16,7 @@ export class SessionStateManager {
   private autoSaveTimer?: ReturnType<typeof setInterval>;
 
   constructor(stateDir?: string) {
-    const dir = stateDir ?? join(homedir(), ".local", "share", "Tempest");
+    const dir = stateDir ?? join(homedir(), "Library", "Application Support", "Tempest");
     this.stateFilePath = join(dir, "session-state.json");
   }
 

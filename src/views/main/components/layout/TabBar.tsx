@@ -95,27 +95,13 @@ export function TabBar({ pane }: TabBarProps) {
           isSelected={tab.id === pane.selectedTabId}
         />
       ))}
-      <div className="flex-shrink-0 flex items-center gap-0.5 px-1">
+      <div className="flex-shrink-0 flex items-center px-1 relative">
         <button
-          className="px-1.5 text-[var(--ctp-overlay0)] hover:text-[var(--ctp-text)] text-xs"
+          className="w-6 h-6 flex items-center justify-center rounded-md text-[var(--ctp-overlay0)] hover:text-[var(--ctp-text)] hover:bg-[var(--ctp-surface0)] text-sm transition-colors"
           onClick={handleAddShell}
-          title="New shell"
+          title="New tab (Shell)"
         >
-          +sh
-        </button>
-        <button
-          className="px-1.5 text-[var(--ctp-overlay0)] hover:text-[var(--ctp-text)] text-xs"
-          onClick={handleAddClaude}
-          title="New Claude"
-        >
-          +cc
-        </button>
-        <button
-          className="px-1.5 text-[var(--ctp-overlay0)] hover:text-[var(--ctp-text)] text-xs"
-          onClick={handleAddBrowser}
-          title="New browser"
-        >
-          +www
+          +
         </button>
       </div>
     </div>

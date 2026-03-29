@@ -32,7 +32,7 @@ export function RepoSection({
 
   return (
     <div>
-      {showDivider && <div className="h-px bg-[var(--ctp-surface0)] mx-2 my-1" />}
+      {showDivider && <div className="h-px bg-[var(--ctp-surface0)] mx-2 my-3" />}
 
       {/* Repo header */}
       <div

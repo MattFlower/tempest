@@ -35,7 +35,7 @@ function UsagePill({ label, data, costColor }: { label: string; data: UsageToken
       <span className="flex items-center gap-2 text-[11px]" style={{ color: "rgba(255,255,255,0.7)" }}>
         <span>↓{formatTokens(data.inputTokens)}</span>
         <span>↑{formatTokens(data.outputTokens)}</span>
-        <span>⟳{formatTokens(data.cacheReadTokens)}</span>
+        <span>cache:{formatTokens(data.cacheReadTokens)}</span>
       </span>
       <span className="text-[11px] font-medium" style={{ color: costColor }}>
         ${data.totalCost.toFixed(2)}
@@ -98,7 +98,7 @@ export function UsageFooter() {
     >
       {/* Timestamp */}
       <div className="flex items-center gap-1 text-[10px]" style={{ color: "rgba(255,255,255,0.25)" }}>
-        {isStale && <span style={{ color: "var(--ctp-yellow)" }}>⚠</span>}
+        {isStale && <span style={{ color: "var(--ctp-yellow)", fontSize: "10px" }}>stale</span>}
         {lastUpdated ? relativeTime(lastUpdated) : "Loading..."}
       </div>
 

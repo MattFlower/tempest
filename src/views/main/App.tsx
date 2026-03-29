@@ -112,14 +112,17 @@ export function App() {
       )}
 
       {/* Titlebar drag region — spans full window width */}
-      <div className="titlebar-drag h-10 flex-shrink-0" />
+      <div className="titlebar-drag h-10 flex-shrink-0" style={{ backgroundColor: "var(--ctp-mantle)" }} />
 
       {/* Main content area below titlebar */}
       <div className="flex flex-1 min-h-0">
         {/* Sidebar */}
         {sidebarVisible && (
           <>
-            <div className="flex-shrink-0" style={{ width: sidebarWidth }}>
+            <div
+              className="flex-shrink-0"
+              style={{ width: sidebarWidth }}
+            >
               <Sidebar />
             </div>
 
@@ -127,7 +130,8 @@ export function App() {
             <div
               className="w-px flex-shrink-0 cursor-col-resize"
               style={{
-                backgroundColor: isDragging ? "var(--ctp-blue)" : "var(--ctp-surface0)",
+                backgroundColor: isDragging ? "var(--ctp-surface2)" : "var(--ctp-surface0)",
+                opacity: isDragging ? 1 : 0.5,
                 padding: "0 2px",
                 margin: "0 -2px",
               }}

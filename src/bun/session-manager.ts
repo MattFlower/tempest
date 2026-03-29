@@ -32,7 +32,13 @@ export class SessionManager {
     const parts = [claudePath];
 
     if (params.resume && params.sessionId) {
-      parts.push("--resume", params.sessionId);
+      // Check if the session file still exists before attempting --resume
+      if (await this.sessionExists(params.sessionId, params.workspacePath)) {
+        parts.push("--resume", params.sessionId);
+      } else {
+        console.log(`[session] Session ${params.sessionId} not found, starting new session`);
+        // Don't pass --resume — start fresh
+      }
     } else if (params.resume) {
       parts.push("-c");
     }
@@ -70,6 +76,24 @@ export class SessionManager {
     if (path) {
       await HookSettingsBuilder.cleanupSettingsFile(path);
     }
+  }
+
+  /** Check if a Claude session JSONL file exists under ~/.claude/projects/ */
+  private async sessionExists(sessionId: string, workspacePath: string): Promise<boolean> {
+    const home = homedir();
+    // Claude encodes workspace paths as directory names with / replaced by -
+    const encodedPath = workspacePath.replace(/\//g, "-");
+    const directPath = join(home, ".claude", "projects", encodedPath, `${sessionId}.jsonl`);
+
+    if (await Bun.file(directPath).exists()) return true;
+
+    // Fallback: glob across all project directories
+    const glob = new Bun.Glob(`*/${sessionId}.jsonl`);
+    const projectsDir = join(home, ".claude", "projects");
+    for await (const _ of glob.scan({ cwd: projectsDir, onlyFiles: true })) {
+      return true;
+    }
+    return false;
   }
 
   private resolveBinary(name: string, configuredPath?: string): string {

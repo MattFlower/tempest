@@ -15,7 +15,7 @@ interface PaneViewProps {
   pane: Pane;
 }
 
-function TabContent({ tab, paneId, isFocused }: { tab: PaneTab; paneId: string; isFocused: boolean }) {
+function TabContent({ tab, paneId, isFocused, isVisible }: { tab: PaneTab; paneId: string; isFocused: boolean; isVisible: boolean }) {
   const selectedWorkspacePath = useStore((s) => s.selectedWorkspacePath);
   const handleCloseRequest = useCallback(() => {
     closeTab(paneId, tab.id);
@@ -48,6 +48,7 @@ function TabContent({ tab, paneId, isFocused }: { tab: PaneTab; paneId: string; 
           tab={tab}
           repoPath={selectedWorkspacePath || ""}
           isFocused={isFocused}
+          isVisible={isVisible}
         />
       );
     case PaneTabKind.HistoryViewer:
@@ -84,7 +85,7 @@ export const PaneView = memo(function PaneView({ pane }: PaneViewProps) {
         flex flex-col h-full w-full overflow-hidden
         ${
           isFocused
-            ? "border-2 border-[var(--ctp-blue)]"
+            ? "border border-[var(--ctp-surface1)]"
             : "border border-[var(--ctp-surface0)]"
         }
       `}
@@ -107,6 +108,7 @@ export const PaneView = memo(function PaneView({ pane }: PaneViewProps) {
               tab={tab}
               paneId={pane.id}
               isFocused={isFocused && tab.id === pane.selectedTabId}
+              isVisible={tab.id === pane.selectedTabId}
             />
           </div>
         ))}

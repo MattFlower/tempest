@@ -25,24 +25,7 @@ function activityColor(tab: PaneTab): string {
   }
 }
 
-function tabIcon(kind: PaneTabKind): string {
-  switch (kind) {
-    case PaneTabKind.Browser:
-      return "\u{1F310}"; // globe
-    case PaneTabKind.Shell:
-      return "$";
-    case PaneTabKind.Claude:
-      return "\u{2728}"; // sparkles
-    case PaneTabKind.HistoryViewer:
-      return "\u{1F4CB}"; // clipboard
-    case PaneTabKind.MarkdownViewer:
-      return "\u{1F4C4}"; // page
-    case PaneTabKind.Editor:
-      return "\u{270F}\u{FE0F}"; // pencil
-    default:
-      return "";
-  }
-}
+// tabIcon removed — emoji icons replaced with activity dot for native feel
 
 interface TabButtonProps {
   tab: PaneTab;
@@ -74,36 +57,30 @@ export function TabButton({ tab, paneId, isSelected }: TabButtonProps) {
   return (
     <div
       className={`
-        group relative flex items-center gap-1 px-3 h-full
+        group relative flex items-center gap-1.5 px-3 h-full
         cursor-pointer select-none whitespace-nowrap text-xs
-        hover:bg-[var(--ctp-surface0)]
-        ${isSelected ? "text-[var(--ctp-text)]" : "text-[var(--ctp-subtext0)]"}
+        transition-colors duration-100
+        ${isSelected
+          ? "bg-[var(--ctp-surface0)] text-[var(--ctp-text)]"
+          : "text-[var(--ctp-subtext0)] hover:bg-[var(--ctp-surface0)]/50"
+        }
       `}
       draggable
       onDragStart={handleDragStart}
       onClick={handleSelect}
     >
-      {/* Activity indicator */}
-      {tab.kind === PaneTabKind.Browser ? (
-        <span className="text-[10px] opacity-60">{tabIcon(tab.kind)}</span>
-      ) : (
-        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${activityColor(tab)}`} />
-      )}
+      {/* Activity indicator dot */}
+      <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${activityColor(tab)}`} />
 
       <span>{tab.label}</span>
 
-      {/* Close button */}
+      {/* Close button — visible on hover, macOS-style */}
       <button
-        className="ml-1 opacity-0 group-hover:opacity-100 text-[var(--ctp-overlay0)] hover:text-[var(--ctp-red)] transition-opacity"
+        className="ml-0.5 w-4 h-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 text-[10px] text-[var(--ctp-overlay0)] hover:text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)] transition-opacity"
         onClick={handleClose}
       >
         {"×"}
       </button>
-
-      {/* Selected underline */}
-      {isSelected && (
-        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--ctp-blue)]" />
-      )}
     </div>
   );
 }

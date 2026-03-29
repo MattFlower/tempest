@@ -34,7 +34,7 @@ function DiffStatsPill({ stats, onRefresh }: { stats: DiffStats; onRefresh: () =
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onRefresh(); }}
-      className="flex items-center gap-1 rounded border border-[var(--ctp-surface1)] px-1.5 py-0.5 font-mono text-[10px] hover:border-[var(--ctp-surface2)]"
+      className="flex items-center gap-1 rounded border border-[var(--ctp-surface2)] px-1.5 py-0.5 font-mono text-[10px] hover:border-[var(--ctp-overlay0)]"
     >
       <span style={{ color: "var(--ctp-green)" }}>+{stats.additions}</span>
       <span style={{ color: "var(--ctp-red)" }}>-{stats.deletions}</span>
@@ -64,7 +64,7 @@ export function WorkspaceRow({ workspace, sidebarInfo, shortcutIndex, isSelected
         e.preventDefault();
         // Context menu handled at a higher level if needed
       }}
-      className={`group flex flex-col gap-1 rounded-md px-3 py-2.5 cursor-pointer ${
+      className={`group flex flex-col gap-1 rounded-md px-3 pl-4 py-2.5 cursor-pointer ${
         isSelected
           ? "bg-[var(--ctp-surface0)]"
           : "hover:bg-[var(--ctp-surface0)]/50"
@@ -92,7 +92,7 @@ export function WorkspaceRow({ workspace, sidebarInfo, shortcutIndex, isSelected
       <div className="flex items-center gap-1 pl-5 min-w-0">
         <span
           className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
-          style={{ backgroundColor: dotColor, opacity: isIdle ? 0.4 : 1 }}
+          style={{ backgroundColor: dotColor, opacity: isIdle ? 0.3 : 1 }}
         />
         <span className="truncate text-[11px] text-[var(--ctp-overlay1)]">
           {secondaryParts}

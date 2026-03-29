@@ -1,31 +1,31 @@
-/* Catppuccin Mocha palette as CSS variables */
+/* macOS dark mode palette — neutral greys */
 :root {
-  --ctp-rosewater: #f5e0dc;
-  --ctp-flamingo: #f2cdcd;
-  --ctp-pink: #f5c2e7;
-  --ctp-mauve: #cba6f7;
-  --ctp-red: #f38ba8;
-  --ctp-maroon: #eba0ac;
-  --ctp-peach: #fab387;
-  --ctp-yellow: #f9e2af;
-  --ctp-green: #a6e3a1;
-  --ctp-teal: #94e2d5;
-  --ctp-sky: #89dceb;
-  --ctp-sapphire: #74c7ec;
-  --ctp-blue: #89b4fa;
-  --ctp-lavender: #b4befe;
-  --ctp-text: #cdd6f4;
-  --ctp-subtext1: #bac2de;
-  --ctp-subtext0: #a6adc8;
-  --ctp-overlay2: #9399b2;
-  --ctp-overlay1: #7f849c;
-  --ctp-overlay0: #6c7086;
-  --ctp-surface2: #585b70;
-  --ctp-surface1: #45475a;
-  --ctp-surface0: #313244;
-  --ctp-base: #1e1e2e;
-  --ctp-mantle: #181825;
-  --ctp-crust: #11111b;
+  --ctp-rosewater: #f5d5cf;
+  --ctp-flamingo: #f0c6c6;
+  --ctp-pink: #f0b8db;
+  --ctp-mauve: #c4a7e7;
+  --ctp-red: #eb6f92;
+  --ctp-maroon: #e89bac;
+  --ctp-peach: #f6a878;
+  --ctp-yellow: #f0d399;
+  --ctp-green: #5ec85e;
+  --ctp-teal: #6ec2b8;
+  --ctp-sky: #6eb8d4;
+  --ctp-sapphire: #5aa8cc;
+  --ctp-blue: #4a9eff;
+  --ctp-lavender: #a0b0e8;
+  --ctp-text: #e5e5e5;
+  --ctp-subtext1: #c8c8c8;
+  --ctp-subtext0: #aaaaaa;
+  --ctp-overlay2: #8a8a8a;
+  --ctp-overlay1: #6e6e6e;
+  --ctp-overlay0: #555555;
+  --ctp-surface2: #555555;
+  --ctp-surface1: #484848;
+  --ctp-surface0: #3a3a3a;
+  --ctp-base: #2e2e2e;
+  --ctp-mantle: #282828;
+  --ctp-crust: #222222;
 }
 
 html,
@@ -57,6 +57,34 @@ body,
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--ctp-surface2);
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Focus ring styling — only on keyboard navigation */
+:focus-visible {
+  outline: 2px solid var(--ctp-blue);
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Subtle text-shadow on headers for depth */
+h1, h2, h3, h4, h5, h6 {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Button base styles — native feel */
+button {
+  border: none;
+  font: inherit;
+  cursor: pointer;
+  background: transparent;
 }
 
 /* Drag region for titlebar */

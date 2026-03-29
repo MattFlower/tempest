@@ -115,8 +115,10 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
 
   return (
     <div className="flex flex-col h-full w-full">
-      {/* View mode selector bar */}
-      <ViewModeBar workspacePath={workspacePath} />
+      {/* View mode selector bar — no bottom border for seamless transition */}
+      <div style={{ borderBottom: "none" }}>
+        <ViewModeBar workspacePath={workspacePath} />
+      </div>
 
       {/* ZStack keeps terminal views alive across view mode switches.
           CRITICAL: Never unmount the terminal — use opacity to hide it.

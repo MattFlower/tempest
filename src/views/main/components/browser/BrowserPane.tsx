@@ -26,9 +26,10 @@ export interface BrowserPaneProps {
   tab: PaneTab;
   repoPath: string;
   isFocused: boolean;
+  isVisible: boolean;
 }
 
-export function BrowserPane({ paneId, tab, repoPath, isFocused }: BrowserPaneProps) {
+export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: BrowserPaneProps) {
   const webviewRef = useRef<ElectrobunWebview | null>(null);
   const webviewId = `browser-${tab.id}`;
 
@@ -189,7 +190,7 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused }: BrowserPanePro
         id={webviewId}
         src={tab.browserURL || "about:blank"}
         renderer="cef"
-        style={{ flex: 1, width: "100%", minHeight: 0 }}
+        style={{ flex: 1, width: "100%", minHeight: 0, display: isVisible ? "block" : "none" }}
       />
     </div>
   );

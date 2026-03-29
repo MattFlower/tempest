@@ -6,6 +6,9 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { PaneTab } from "../../models/pane-node";
+import { findPane } from "../../models/pane-node";
+import { useStore } from "../../state/store";
+import { ViewMode } from "../../../../shared/ipc-types";
 import { BrowserToolbar, FindBar } from "./BrowserToolbar";
 
 // Electrobun webview element type (CEF-backed custom element)
@@ -18,6 +21,7 @@ interface ElectrobunWebview extends HTMLElement {
   canGoForward(): boolean;
   findInPage(text: string, opts?: { forward?: boolean; matchCase?: boolean }): void;
   stopFindInPage(): void;
+  toggleHidden(value?: boolean): void;
   on(event: string, handler: (...args: any[]) => void): void;
 }
 
@@ -32,6 +36,23 @@ export interface BrowserPaneProps {
 export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: BrowserPaneProps) {
   const webviewRef = useRef<ElectrobunWebview | null>(null);
   const webviewId = `browser-${tab.id}`;
+
+  // True visibility: combines all four hiding layers (tab selection, pane
+  // maximization, workspace selection, view mode) so we can tell the native
+  // CEF overlay to hide — CSS opacity/display have no effect on it.
+  const isTrulyVisible = useStore((s) => {
+    if (!isVisible) return false;
+    if (s.maximizedPaneId !== null && s.maximizedPaneId !== paneId) return false;
+    for (const [wsPath, tree] of Object.entries(s.paneTrees)) {
+      if (findPane(tree, paneId)) {
+        if (wsPath !== s.selectedWorkspacePath) return false;
+        const vm = s.workspaceViewMode[wsPath] ?? ViewMode.Terminal;
+        if (vm !== ViewMode.Terminal) return false;
+        return true;
+      }
+    }
+    return false;
+  });
 
   // Navigation state
   const [currentUrl, setCurrentUrl] = useState(tab.browserURL || "");
@@ -98,6 +119,17 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isFocused]);
+
+  // Show/hide the native CEF overlay when visibility changes
+  useEffect(() => {
+    const el = webviewRef.current;
+    if (!el) return;
+    try {
+      el.toggleHidden(!isTrulyVisible);
+    } catch {
+      // Method may not be available during initialization
+    }
+  }, [isTrulyVisible]);
 
   // Navigation actions — wrapped in try-catch for resilience against
   // webview methods being unavailable during initialization or teardown.

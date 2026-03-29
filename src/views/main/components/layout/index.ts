@@ -5,3 +5,6 @@ export { PaneDivider } from "./PaneDivider";
 export { TabBar } from "./TabBar";
 export { TabButton } from "./TabButton";
 export { ViewModeBar } from "./ViewModeBar";
+export { WorkspaceToolbar } from "./WorkspaceToolbar";
+export { DropdownButton } from "./DropdownButton";
+export { StatusBadge } from "./StatusBadge";

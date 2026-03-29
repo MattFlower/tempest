@@ -15,6 +15,7 @@ interface TerminalPaneProps {
   sessionId?: string;
   /** Pre-built command to run. If provided, skips the Claude/Shell command building. */
   initialCommand?: string[];
+  resume?: boolean;
   isFocused: boolean;
   onExit?: (exitCode: number) => void;
   onCloseRequest?: () => void;
@@ -26,6 +27,7 @@ export function TerminalPane({
   cwd,
   sessionId,
   initialCommand,
+  resume,
   isFocused,
   onExit,
   onCloseRequest,
@@ -43,6 +45,7 @@ export function TerminalPane({
   const cwdRef = useRef(cwd);
   const sessionIdRef = useRef(sessionId);
   const initialCommandRef = useRef(initialCommand);
+  const resumeRef = useRef(resume);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -83,7 +86,7 @@ export function TerminalPane({
         try {
           const result = await api.buildClaudeCommand({
             workspacePath: cwdRef.current,
-            resume: !!sessionIdRef.current,
+            resume: resumeRef.current || !!sessionIdRef.current,
             sessionId: sessionIdRef.current,
             withHooks: true,
           });

@@ -38,6 +38,7 @@ function TabContent({ tab, paneId, isFocused, isVisible }: { tab: PaneTab; paneI
           tabKind={tab.kind}
           cwd={selectedWorkspacePath || "/tmp"}
           sessionId={tab.sessionId}
+          resume={tab.resume}
           isFocused={isFocused}
           onCloseRequest={handleCloseRequest}
         />

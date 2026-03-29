@@ -21,6 +21,7 @@ export interface PaneTab {
   editorFilePath?: string;
   editorLineNumber?: number;
   diffScope?: DiffScope;
+  resume?: boolean; // Transient: launch Claude with -c (continue). Not persisted.
 }
 
 export interface Pane {

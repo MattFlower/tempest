@@ -5,6 +5,7 @@ import { createPane, createTab, createLeaf, createSplit } from "../../models/pan
 import { useStore } from "../../state/store";
 import { PaneTreeView } from "./PaneTreeView";
 import { ViewModeBar } from "./ViewModeBar";
+import { WorkspaceToolbar } from "./WorkspaceToolbar";
 import { DiffView } from "../diff/DiffView";
 import { PRDashboard } from "../pr/PRDashboard";
 import { initTerminalDispatch } from "../../state/terminal-dispatch";
@@ -119,6 +120,9 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
       <div style={{ borderBottom: "none" }}>
         <ViewModeBar workspacePath={workspacePath} />
       </div>
+
+      {/* Workspace toolbar — name, status badge, action buttons */}
+      <WorkspaceToolbar workspacePath={workspacePath} />
 
       {/* ZStack keeps terminal views alive across view mode switches.
           CRITICAL: Never unmount the terminal — use opacity to hide it.

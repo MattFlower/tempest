@@ -15,6 +15,7 @@ interface TerminalPaneProps {
   sessionId?: string;
   isFocused: boolean;
   onExit?: (exitCode: number) => void;
+  onCloseRequest?: () => void;
 }
 
 export function TerminalPane({
@@ -24,11 +25,15 @@ export function TerminalPane({
   sessionId,
   isFocused,
   onExit,
+  onCloseRequest,
 }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const instanceRef = useRef<TerminalInstance | null>(null);
   const onExitRef = useRef(onExit);
   onExitRef.current = onExit;
+  const onCloseRequestRef = useRef(onCloseRequest);
+  onCloseRequestRef.current = onCloseRequest;
+  const exitedRef = useRef(false);
 
   // Capture initial values in refs
   const tabKindRef = useRef(tabKind);
@@ -39,12 +44,20 @@ export function TerminalPane({
     const container = containerRef.current;
     if (!container) return;
 
+    exitedRef.current = false;
     initTerminalDispatch();
 
     const instance = new TerminalInstance(
       terminalId,
       container,
-      (data) => api.writeToTerminal(terminalId, data),
+      (data) => {
+        if (exitedRef.current) {
+          // Any input after exit → close the tab
+          onCloseRequestRef.current?.();
+          return;
+        }
+        api.writeToTerminal(terminalId, data);
+      },
       (cols, rows) => {
         api.resizeTerminal({ id: terminalId, cols, rows });
       },
@@ -111,8 +124,9 @@ export function TerminalPane({
         instance.writeBytes(bytes);
       },
       (exitCode) => {
+        exitedRef.current = true;
         instance.terminal.writeln(
-          `\r\n\x1b[33m[Process exited with code ${exitCode}]\x1b[0m`,
+          `\r\n\x1b[33m[Process exited with code ${exitCode}. Press any key to close.]\x1b[0m`,
         );
         onExitRef.current?.(exitCode);
       },

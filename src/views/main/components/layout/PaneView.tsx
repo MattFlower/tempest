@@ -5,6 +5,7 @@ import { useStore } from "../../state/store";
 import { TabBar } from "./TabBar";
 import { TerminalPane } from "../terminal/TerminalPane";
 import { BrowserPane } from "../browser/BrowserPane";
+import { closeTab } from "../../state/actions";
 
 interface PaneViewProps {
   pane: Pane;
@@ -12,6 +13,9 @@ interface PaneViewProps {
 
 function TabContent({ tab, paneId, isFocused }: { tab: PaneTab; paneId: string; isFocused: boolean }) {
   const selectedWorkspacePath = useStore((s) => s.selectedWorkspacePath);
+  const handleCloseRequest = useCallback(() => {
+    closeTab(paneId, tab.id);
+  }, [paneId, tab.id]);
 
   switch (tab.kind) {
     case PaneTabKind.Shell:
@@ -30,6 +34,7 @@ function TabContent({ tab, paneId, isFocused }: { tab: PaneTab; paneId: string; 
           cwd={selectedWorkspacePath || "/tmp"}
           sessionId={tab.sessionId}
           isFocused={isFocused}
+          onCloseRequest={handleCloseRequest}
         />
       );
     case PaneTabKind.Browser:

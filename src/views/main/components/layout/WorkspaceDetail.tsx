@@ -5,7 +5,8 @@ import { createPane, createTab, createLeaf, createSplit } from "../../models/pan
 import { useStore } from "../../state/store";
 import { PaneTreeView } from "./PaneTreeView";
 import { initTerminalDispatch } from "../../state/terminal-dispatch";
-import { splitPane, focusNextPane, focusPreviousPane, toggleMaximize } from "../../state/actions";
+import { splitPane, focusNextPane, focusPreviousPane, toggleMaximize, closeTab } from "../../state/actions";
+import { findPane } from "../../models/pane-node";
 
 // Normalize: if root is a leaf, wrap it in a single-child split.
 // This prevents React from tearing down & recreating the component
@@ -54,6 +55,18 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
       if (e.metaKey && e.shiftKey && e.key === "Enter") {
         e.preventDefault();
         toggleMaximize();
+      }
+      if (e.metaKey && e.key === "w") {
+        e.preventDefault();
+        const state = useStore.getState();
+        const { focusedPaneId } = state;
+        const tree = state.paneTrees[workspacePath];
+        if (focusedPaneId && tree) {
+          const pane = findPane(tree, focusedPaneId);
+          if (pane?.selectedTabId) {
+            closeTab(focusedPaneId, pane.selectedTabId);
+          }
+        }
       }
     };
     document.addEventListener("keydown", handler);

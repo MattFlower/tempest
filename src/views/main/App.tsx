@@ -7,6 +7,7 @@ import { OnboardingDialog } from "./components/onboarding/OnboardingDialog";
 import { UsageFooter } from "./components/usage/UsageFooter";
 import { api } from "./state/rpc-client";
 import { fromNodeState } from "./models/pane-node";
+import type { AppConfig } from "../../shared/ipc-types";
 
 const MIN_SIDEBAR_WIDTH = 180;
 const MAX_SIDEBAR_WIDTH = 400;
@@ -24,10 +25,8 @@ export function App() {
 
   // Load config on startup and decide if onboarding is needed
   useEffect(() => {
-    api.getConfig().then((cfg: any) => {
+    api.getConfig().then((cfg: AppConfig) => {
       useStore.getState().setConfig(cfg);
-      // Show onboarding if workspaceRoot is empty or matches the default uninitialized path
-      // and no config file has been explicitly saved yet
       if (!cfg.workspaceRoot || cfg.workspaceRoot.trim() === "") {
         setShowOnboarding(true);
       }

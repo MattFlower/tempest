@@ -256,6 +256,7 @@ export const api = {
   // Onboarding
   checkBinaries: () => rpcRequest.checkBinaries(),
   setWorkspaceRoot: (path: string) => rpcRequest.setWorkspaceRoot({ path }),
+  browseDirectory: (startingFolder?: string) => rpcRequest.browseDirectory({ startingFolder }),
 
   // Usage tracking
   getUsageData: (since?: string) => rpcRequest.getUsageData({ since }),

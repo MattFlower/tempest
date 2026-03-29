@@ -4,7 +4,7 @@
 // All 5 streams integrated.
 // ============================================================
 
-import { BrowserWindow, BrowserView, ApplicationMenu } from "electrobun/bun";
+import { BrowserWindow, BrowserView, ApplicationMenu, Utils } from "electrobun/bun";
 import { PtyManager } from "./pty-manager";
 import { SessionManager } from "./session-manager";
 import { BookmarkManager } from "./browser/bookmark-manager";
@@ -169,17 +169,31 @@ const rpc = BrowserView.defineRPC({
 
       // --- Onboarding (Stream F) ---
       checkBinaries: () => {
+        const config = workspaceManager.getConfig();
+        const resolve = (name: string, configuredPath?: string) =>
+          configuredPath ? Bun.which(configuredPath) !== null : Bun.which(name) !== null;
         return {
-          git: Bun.which("git") !== null,
-          jj: Bun.which("jj") !== null,
-          claude: Bun.which("claude") !== null,
-          gh: Bun.which("gh") !== null,
+          git: resolve("git", config.gitPath),
+          jj: resolve("jj", config.jjPath),
+          claude: resolve("claude", config.claudePath),
+          gh: resolve("gh", config.ghPath),
         };
       },
       setWorkspaceRoot: async (_params: any) => {
+        const { path } = _params as { path: string };
         const config = workspaceManager.getConfig();
-        const updated = { ...config, workspaceRoot: _params.path };
+        const updated = { ...config, workspaceRoot: path };
         await workspaceManager.saveConfig(updated);
+      },
+      browseDirectory: async (_params: any) => {
+        const { startingFolder } = (_params ?? {}) as { startingFolder?: string };
+        const paths = await Utils.openFileDialog({
+          startingFolder: startingFolder || "~/",
+          canChooseFiles: false,
+          canChooseDirectory: true,
+          allowsMultipleSelection: false,
+        });
+        return { path: paths.length > 0 ? paths[0] : null };
       },
 
       // --- Usage Tracking (Stream F) ---

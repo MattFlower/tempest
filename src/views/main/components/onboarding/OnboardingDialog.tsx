@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api } from "../../state/rpc-client";
+import { useStore } from "../../state/store";
 import type { BinaryStatus } from "../../../../shared/ipc-types";
 
 interface OnboardingDialogProps {
@@ -39,7 +40,7 @@ function BinaryCheckRow({
       <span className="flex-1" />
       {!checking && !found && (
         <span className="text-xs" style={{ color: optional ? "var(--ctp-overlay0)" : "var(--ctp-red)" }}>
-          {optional ? `Optional -- ${name} features unavailable` : "Not found -- required"}
+          {optional ? `Not installed — ${name} repositories won't be available` : "Not found"}
         </span>
       )}
     </div>
@@ -64,13 +65,12 @@ export function OnboardingDialog({ defaultRoot, onComplete }: OnboardingDialogPr
 
   const canProceed = !checking && binaries?.git && binaries?.claude && workspaceRoot.trim().length > 0;
 
-  const handleGetStarted = async () => {
+  const handleGetStarted = useCallback(async () => {
+    if (!canProceed || saving) return;
     setSaving(true);
     try {
       await api.setWorkspaceRoot(workspaceRoot.trim());
-      // Reload config into store
       const config = await api.getConfig();
-      const { useStore } = await import("../../state/store");
       useStore.getState().setConfig(config);
       onComplete();
     } catch (err) {
@@ -78,7 +78,25 @@ export function OnboardingDialog({ defaultRoot, onComplete }: OnboardingDialogPr
     } finally {
       setSaving(false);
     }
+  }, [canProceed, saving, workspaceRoot, onComplete]);
+
+  const handleBrowse = async () => {
+    const result = await api.browseDirectory(workspaceRoot || undefined);
+    if (result.path) {
+      setWorkspaceRoot(result.path);
+    }
   };
+
+  // Enter key submits the form
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Enter" && canProceed && !saving) {
+        handleGetStarted();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [canProceed, saving, handleGetStarted]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.6)" }}>
@@ -113,21 +131,31 @@ export function OnboardingDialog({ defaultRoot, onComplete }: OnboardingDialogPr
           <label className="text-xs font-semibold" style={{ color: "var(--ctp-subtext0)" }}>
             Workspace Root
           </label>
-          <input
-            type="text"
-            value={workspaceRoot}
-            onChange={(e) => setWorkspaceRoot(e.target.value)}
-            placeholder="/path/to/workspaces"
-            className="px-3 py-1.5 rounded text-sm outline-none"
-            style={{
-              backgroundColor: "var(--ctp-surface0)",
-              color: "var(--ctp-text)",
-              border: "1px solid var(--ctp-surface1)",
-            }}
-          />
-          <span className="text-xs" style={{ color: "var(--ctp-overlay0)" }}>
-            Directory where Tempest creates workspace folders.
-          </span>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={workspaceRoot}
+              onChange={(e) => setWorkspaceRoot(e.target.value)}
+              placeholder="/path/to/workspaces"
+              className="flex-1 px-3 py-1.5 rounded text-sm outline-none"
+              style={{
+                backgroundColor: "var(--ctp-surface0)",
+                color: "var(--ctp-text)",
+                border: "1px solid var(--ctp-surface1)",
+              }}
+            />
+            <button
+              onClick={handleBrowse}
+              className="px-3 py-1.5 rounded text-sm"
+              style={{
+                backgroundColor: "var(--ctp-surface0)",
+                color: "var(--ctp-text)",
+                border: "1px solid var(--ctp-surface1)",
+              }}
+            >
+              Browse…
+            </button>
+          </div>
         </div>
 
         {/* Binary checks */}

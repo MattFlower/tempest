@@ -169,6 +169,10 @@ export interface BunRequests {
     params: { path: string };
     response: void;
   };
+  browseDirectory: {
+    params: { startingFolder?: string };
+    response: { path: string | null };
+  };
 
   // Usage tracking
   getUsageData: {

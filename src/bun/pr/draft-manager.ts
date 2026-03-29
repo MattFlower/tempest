@@ -68,6 +68,34 @@ export class DraftManager {
     return draft;
   }
 
+  markSent(id: string): PRDraft | undefined {
+    const draft = this.drafts.find((d) => d.id === id);
+    if (draft) {
+      draft.status = "sent";
+      this.onDraftsChanged?.();
+    }
+    return draft;
+  }
+
+  markFailed(id: string, message: string): PRDraft | undefined {
+    const draft = this.drafts.find((d) => d.id === id);
+    if (draft) {
+      draft.status = "failed";
+      draft.failureMessage = message;
+      this.onDraftsChanged?.();
+    }
+    return draft;
+  }
+
+  updateDraftText(id: string, text: string): PRDraft | undefined {
+    const draft = this.drafts.find((d) => d.id === id);
+    if (draft) {
+      draft.replyText = text;
+      this.onDraftsChanged?.();
+    }
+    return draft;
+  }
+
   dismissDraft(id: string): void {
     const idx = this.drafts.findIndex((d) => d.id === id);
     if (idx !== -1) {

@@ -12,6 +12,7 @@ export interface PRMonitorConfig {
 
 export interface PRComment {
   nodeId: string;
+  commentId: number; // REST API numeric ID
   author: string;
   body: string;
   path?: string;
@@ -30,7 +31,8 @@ export interface PRDraft {
   commitDescription?: string;
   commitRef?: string;
   createdAt: string;
-  status: "pending" | "approved" | "dismissed";
+  status: "pending" | "approved" | "sent" | "failed" | "dismissed";
+  failureMessage?: string;
   // Original comment context
   originalAuthor?: string;
   originalBody?: string;

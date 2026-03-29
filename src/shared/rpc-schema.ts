@@ -60,6 +60,7 @@ export interface BunRequests {
       sessionId?: string;
       withHooks: boolean;
       withChannel?: boolean;
+      workspaceName?: string;
     };
     response: { command: string[]; settingsPath?: string };
   };
@@ -240,6 +241,18 @@ export interface BunRequests {
   };
   dismissDraft: {
     params: { draftId: string; abandon: boolean };
+    response: void;
+  };
+  pollNow: {
+    params: { workspacePath: string };
+    response: void;
+  };
+  getLastPoll: {
+    params: { workspacePath: string };
+    response: string | null;
+  };
+  updateDraftText: {
+    params: { draftId: string; text: string };
     response: void;
   };
 }

@@ -249,6 +249,15 @@ const rpc = BrowserView.defineRPC({
       dismissDraft: (params: any) => {
         prMonitor.dismissDraft(params.draftId, params.abandon);
       },
+      pollNow: async (params: any) => {
+        await prMonitor.pollNow(params.workspacePath);
+      },
+      getLastPoll: (params: any) => {
+        return prMonitor.getLastPoll(params.workspacePath);
+      },
+      updateDraftText: (params: any) => {
+        prMonitor.updateDraftText(params.draftId, params.text);
+      },
     },
     messages: {
       // --- Terminal I/O (Stream A) ---

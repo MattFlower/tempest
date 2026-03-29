@@ -37,15 +37,21 @@ export function PRDashboard() {
   const [drafts, setDrafts] = useState<PRDraftSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [lastPoll, setLastPoll] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
 
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Refresh drafts
+  // Refresh drafts and last-poll timestamp
   const refreshDrafts = useCallback(async () => {
     if (!selectedWorkspacePath || !monitoring) return;
     try {
-      const result = await api.getPRDrafts(selectedWorkspacePath);
+      const [result, poll] = await Promise.all([
+        api.getPRDrafts(selectedWorkspacePath),
+        api.getLastPoll(selectedWorkspacePath),
+      ]);
       setDrafts(result);
+      setLastPoll(poll);
     } catch (err) {
       console.error("[PRDashboard] refresh drafts error:", err);
     }
@@ -76,6 +82,19 @@ export function PRDashboard() {
       offPRDraftsChanged();
     };
   }, [selectedWorkspacePath]);
+
+  const handleCheckNow = useCallback(async () => {
+    if (!selectedWorkspacePath || checking) return;
+    setChecking(true);
+    try {
+      await api.pollNow(selectedWorkspacePath);
+      await refreshDrafts();
+    } catch (err) {
+      console.error("[PRDashboard] check now error:", err);
+    } finally {
+      setChecking(false);
+    }
+  }, [selectedWorkspacePath, checking, refreshDrafts]);
 
   const handleStart = useCallback(async () => {
     if (!selectedWorkspacePath) return;
@@ -130,6 +149,16 @@ export function PRDashboard() {
     refreshDrafts();
   }, [refreshDrafts]);
 
+  const handleEditReply = useCallback(async (draftId: string, text: string) => {
+    await api.updateDraftText(draftId, text);
+    refreshDrafts();
+  }, [refreshDrafts]);
+
+  const handleViewDiff = useCallback((commitRef: string) => {
+    // TODO: open diff viewer for commitRef
+    console.log("[PRDashboard] view diff for commit:", commitRef);
+  }, []);
+
   if (!selectedWorkspacePath) {
     return (
       <div
@@ -171,18 +200,40 @@ export function PRDashboard() {
           )}
         </div>
 
-        {monitoring ? (
-          <button
-            onClick={handleStop}
-            className="px-3 py-1 text-xs font-medium rounded"
-            style={{
-              backgroundColor: "var(--ctp-red)",
-              color: "var(--ctp-base)",
-            }}
-          >
-            Stop Monitoring
-          </button>
-        ) : null}
+        {monitoring && (
+          <div className="flex items-center gap-3">
+            {lastPoll && (
+              <span
+                className="text-xs"
+                style={{ color: "var(--ctp-overlay0)" }}
+              >
+                Last checked: {formatRelativeTime(lastPoll)}
+              </span>
+            )}
+            <button
+              onClick={handleCheckNow}
+              disabled={checking}
+              className="px-3 py-1 text-xs font-medium rounded"
+              style={{
+                backgroundColor: "var(--ctp-surface1)",
+                color: "var(--ctp-text)",
+                opacity: checking ? 0.5 : 1,
+              }}
+            >
+              {checking ? "Checking..." : "Check Now"}
+            </button>
+            <button
+              onClick={handleStop}
+              className="px-3 py-1 text-xs font-medium rounded"
+              style={{
+                backgroundColor: "var(--ctp-red)",
+                color: "var(--ctp-base)",
+              }}
+            >
+              Stop
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Start form or content */}
@@ -272,6 +323,8 @@ export function PRDashboard() {
                 draft={draft}
                 onApprove={handleApprove}
                 onDismiss={handleDismiss}
+                onEditReply={handleEditReply}
+                onViewDiff={handleViewDiff}
               />
             ))}
             {completedDrafts.map((draft) => (
@@ -280,6 +333,7 @@ export function PRDashboard() {
                   draft={draft}
                   onApprove={handleApprove}
                   onDismiss={handleDismiss}
+                  onViewDiff={handleViewDiff}
                 />
               </div>
             ))}
@@ -300,4 +354,18 @@ export function PRDashboard() {
       )}
     </div>
   );
+}
+
+function formatRelativeTime(isoDate: string): string {
+  const date = new Date(isoDate);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHr = Math.floor(diffMin / 60);
+
+  if (diffSec < 60) return "just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHr < 24) return `${diffHr}h ago`;
+  return `${Math.floor(diffHr / 24)}d ago`;
 }

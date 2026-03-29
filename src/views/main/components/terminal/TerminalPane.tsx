@@ -84,11 +84,14 @@ export function TerminalPane({
         command = initialCommandRef.current;
       } else if (tabKindRef.current === PaneTabKind.Claude) {
         try {
+          const workspacePath = cwdRef.current;
+          const workspaceName = workspacePath.split("/").pop() ?? "default";
           const result = await api.buildClaudeCommand({
-            workspacePath: cwdRef.current,
+            workspacePath,
             resume: resumeRef.current || !!sessionIdRef.current,
             sessionId: sessionIdRef.current,
             withHooks: true,
+            workspaceName,
           });
           command = result.command;
         } catch (e) {

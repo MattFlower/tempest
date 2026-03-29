@@ -7,6 +7,7 @@ export class HookSettingsBuilder {
     hookBinaryPath: string,
     socketPath: string,
     channelScriptPath?: string,
+    workspaceName?: string,
   ): string {
     const cmd = (eventType: string) =>
       `${hookBinaryPath} ${eventType} ${socketPath}`;
@@ -39,6 +40,7 @@ export class HookSettingsBuilder {
           args: [channelScriptPath],
           env: {
             TEMPEST_SOCKET_PATH: socketPath,
+            ...(workspaceName ? { TEMPEST_WORKSPACE: workspaceName } : {}),
           },
         },
       };
@@ -51,11 +53,13 @@ export class HookSettingsBuilder {
     hookBinaryPath: string,
     socketPath: string,
     channelScriptPath?: string,
+    workspaceName?: string,
   ): Promise<string> {
     const json = this.buildSettingsJSON(
       hookBinaryPath,
       socketPath,
       channelScriptPath,
+      workspaceName,
     );
     const dir = join(homedir(), ".tempest");
     await mkdir(dir, { recursive: true });

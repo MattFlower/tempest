@@ -20,6 +20,7 @@ function makeStoredComments(
   for (const e of entries) {
     map.set(e.nodeId, {
       nodeId: e.nodeId,
+      commentId: 1,
       author: e.author,
       body: e.body,
       createdAt: "2026-01-01T00:00:00Z",

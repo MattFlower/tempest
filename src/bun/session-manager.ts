@@ -23,6 +23,7 @@ export class SessionManager {
     sessionId?: string;
     withHooks: boolean;
     withChannel?: boolean;
+    workspaceName?: string;
   }): Promise<{ command: string[]; settingsPath?: string }> {
     const claudePath = this.resolveBinary(
       "claude",
@@ -53,6 +54,7 @@ export class SessionManager {
         HookSettingsBuilder.hookBinaryPath,
         HookSettingsBuilder.socketPath,
         channelPath,
+        params.workspaceName,
       );
       parts.push("--settings", settingsPath);
     }

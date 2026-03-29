@@ -5,20 +5,30 @@
 // and approve/dismiss actions.
 // ============================================================
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { PRDraftSummary } from "../../../../shared/ipc-types";
 
 interface DraftCardProps {
   draft: PRDraftSummary;
   onApprove: (id: string) => void;
   onDismiss: (id: string, abandon: boolean) => void;
+  onEditReply?: (id: string, text: string) => void;
+  onViewDiff?: (commitRef: string) => void;
 }
 
-export function DraftCard({ draft, onApprove, onDismiss }: DraftCardProps) {
+export function DraftCard({ draft, onApprove, onDismiss, onEditReply, onViewDiff }: DraftCardProps) {
   const [showDismissConfirm, setShowDismissConfirm] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(draft.replyText);
+
+  // Sync editText when draft.replyText changes externally (e.g. after save + refresh)
+  useEffect(() => {
+    if (!isEditing) setEditText(draft.replyText);
+  }, [draft.replyText, isEditing]);
 
   const isPending = draft.status === "pending";
+  const isActionable = draft.status === "pending" || draft.status === "failed";
 
   const handleApprove = useCallback(async () => {
     setApproving(true);
@@ -62,7 +72,7 @@ export function DraftCard({ draft, onApprove, onDismiss }: DraftCardProps) {
               className="text-xs font-mono"
               style={{ color: "var(--ctp-subtext0)" }}
             >
-              {draft.originalPath}
+              {draft.originalPath}{draft.originalLine ? `:${draft.originalLine}` : ""}
             </span>
           </>
         )}
@@ -112,15 +122,59 @@ export function DraftCard({ draft, onApprove, onDismiss }: DraftCardProps) {
         >
           DRAFT REPLY
         </div>
-        <div
-          className="text-sm whitespace-pre-wrap rounded px-2 py-1.5"
-          style={{
-            color: "var(--ctp-text)",
-            backgroundColor: "var(--ctp-mantle)",
-          }}
-        >
-          {draft.replyText}
-        </div>
+        {isEditing ? (
+          <>
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              className="w-full text-sm rounded px-2 py-1.5 outline-none resize-y"
+              style={{
+                color: "var(--ctp-text)",
+                backgroundColor: "var(--ctp-mantle)",
+                border: "1px solid var(--ctp-surface1)",
+                minHeight: "60px",
+              }}
+            />
+            <div className="flex gap-2 mt-1">
+              <button
+                onClick={() => {
+                  onEditReply?.(draft.id, editText);
+                  setIsEditing(false);
+                }}
+                className="px-2 py-0.5 text-xs font-medium rounded"
+                style={{
+                  backgroundColor: "var(--ctp-blue)",
+                  color: "var(--ctp-base)",
+                }}
+              >
+                Save
+              </button>
+              <button
+                onClick={() => {
+                  setEditText(draft.replyText);
+                  setIsEditing(false);
+                }}
+                className="px-2 py-0.5 text-xs font-medium rounded"
+                style={{
+                  backgroundColor: "var(--ctp-surface1)",
+                  color: "var(--ctp-text)",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </>
+        ) : (
+          <div
+            className="text-sm whitespace-pre-wrap rounded px-2 py-1.5"
+            style={{
+              color: "var(--ctp-text)",
+              backgroundColor: "var(--ctp-mantle)",
+            }}
+          >
+            {draft.replyText}
+          </div>
+        )}
       </div>
 
       {/* Code change indicator */}
@@ -143,11 +197,23 @@ export function DraftCard({ draft, onApprove, onDismiss }: DraftCardProps) {
             Code change:
           </span>
           <span
-            className="text-xs"
+            className="text-xs flex-1"
             style={{ color: "var(--ctp-subtext0)" }}
           >
             {draft.commitDescription || ""}
           </span>
+          {draft.commitRef && onViewDiff && (
+            <button
+              onClick={() => onViewDiff(draft.commitRef!)}
+              className="px-2 py-0.5 text-xs font-medium rounded"
+              style={{
+                backgroundColor: "var(--ctp-surface1)",
+                color: "var(--ctp-text)",
+              }}
+            >
+              View Diff
+            </button>
+          )}
         </div>
       ) : (
         <div className="flex items-center gap-2 px-3 py-2">
@@ -160,8 +226,8 @@ export function DraftCard({ draft, onApprove, onDismiss }: DraftCardProps) {
         </div>
       )}
 
-      {/* Actions (only for pending) */}
-      {isPending && (
+      {/* Actions (pending and failed drafts can be retried/edited/dismissed) */}
+      {isActionable && (
         <>
           <div
             className="h-px"
@@ -179,7 +245,17 @@ export function DraftCard({ draft, onApprove, onDismiss }: DraftCardProps) {
                     color: "var(--ctp-base)",
                   }}
                 >
-                  {approving ? "Posting..." : "Approve"}
+                  {approving ? "Posting..." : draft.status === "failed" ? "Retry" : "Approve"}
+                </button>
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="px-3 py-1 text-xs font-medium rounded"
+                  style={{
+                    backgroundColor: "var(--ctp-surface1)",
+                    color: "var(--ctp-text)",
+                  }}
+                >
+                  Edit Reply
                 </button>
                 <button
                   onClick={() => setShowDismissConfirm(true)}
@@ -241,8 +317,8 @@ export function DraftCard({ draft, onApprove, onDismiss }: DraftCardProps) {
         </>
       )}
 
-      {/* Approved/dismissed status */}
-      {draft.status === "approved" && (
+      {/* Sent status */}
+      {draft.status === "sent" && (
         <>
           <div
             className="h-px"
@@ -258,6 +334,27 @@ export function DraftCard({ draft, onApprove, onDismiss }: DraftCardProps) {
           </div>
         </>
       )}
+
+      {/* Failed status */}
+      {draft.status === "failed" && (
+        <>
+          <div
+            className="h-px"
+            style={{ backgroundColor: "var(--ctp-surface1)" }}
+          />
+          <div
+            className="px-3 py-2"
+            style={{ backgroundColor: "rgba(243, 139, 168, 0.05)" }}
+          >
+            <span
+              className="text-xs font-mono"
+              style={{ color: "var(--ctp-red)" }}
+            >
+              {draft.failureMessage || "Failed to post reply"}
+            </span>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -265,7 +362,9 @@ export function DraftCard({ draft, onApprove, onDismiss }: DraftCardProps) {
 function StatusBadge({ status }: { status: string }) {
   const config: Record<string, { label: string; color: string }> = {
     pending: { label: "PENDING", color: "var(--ctp-peach)" },
-    approved: { label: "APPROVED", color: "var(--ctp-green)" },
+    approved: { label: "APPROVED", color: "var(--ctp-blue)" },
+    sent: { label: "SENT", color: "var(--ctp-green)" },
+    failed: { label: "FAILED", color: "var(--ctp-red)" },
     dismissed: { label: "DISMISSED", color: "var(--ctp-overlay0)" },
   };
 
@@ -289,7 +388,11 @@ function borderColor(status: string): string {
     case "pending":
       return "rgba(250, 179, 135, 0.3)"; // peach
     case "approved":
+      return "rgba(137, 180, 250, 0.3)"; // blue
+    case "sent":
       return "rgba(166, 227, 161, 0.3)"; // green
+    case "failed":
+      return "rgba(243, 139, 168, 0.3)"; // red
     default:
       return "var(--ctp-surface1)";
   }

@@ -204,6 +204,8 @@ export const api = {
     resume: boolean;
     sessionId?: string;
     withHooks: boolean;
+    withChannel?: boolean;
+    workspaceName?: string;
   }) => rpcRequest.buildClaudeCommand(params),
 
   buildShellCommand: (params: { workspacePath: string }) =>
@@ -303,4 +305,10 @@ export const api = {
     rpcRequest.approveDraft({ draftId }),
   dismissDraft: (draftId: string, abandon: boolean) =>
     rpcRequest.dismissDraft({ draftId, abandon }),
+  pollNow: (workspacePath: string) =>
+    rpcRequest.pollNow({ workspacePath }),
+  getLastPoll: (workspacePath: string) =>
+    rpcRequest.getLastPoll({ workspacePath }),
+  updateDraftText: (draftId: string, text: string) =>
+    rpcRequest.updateDraftText({ draftId, text }),
 };

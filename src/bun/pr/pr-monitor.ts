@@ -13,6 +13,7 @@ interface MonitorState {
   config: PRMonitorConfig;
   poller: PRPoller;
   storedComments: Map<string, PRComment>;
+  lastPoll: string | null;
 }
 
 export class PRMonitor {
@@ -99,7 +100,14 @@ export class PRMonitor {
       }
     };
 
-    const state: MonitorState = { config, poller, storedComments };
+    poller.onPollComplete = (workspacePath) => {
+      const monitor = this.monitors.get(workspacePath);
+      if (monitor) {
+        monitor.lastPoll = new Date().toISOString();
+      }
+    };
+
+    const state: MonitorState = { config, poller, storedComments, lastPoll: null };
     this.monitors.set(config.workspacePath, state);
 
     await poller.startPolling(config);
@@ -129,6 +137,18 @@ export class PRMonitor {
     return this.monitors.get(workspacePath)?.config ?? null;
   }
 
+  /** Force an immediate poll (e.g. "Check Now" button). */
+  async pollNow(workspacePath: string): Promise<void> {
+    const monitor = this.monitors.get(workspacePath);
+    if (!monitor) return;
+    await monitor.poller.pollNow(monitor.config);
+  }
+
+  /** Get last poll timestamp for a workspace. */
+  getLastPoll(workspacePath: string): string | null {
+    return this.monitors.get(workspacePath)?.lastPoll ?? null;
+  }
+
   // --- Draft management (delegates to DraftManager) ---
 
   getDrafts(workspacePath: string): PRDraftSummary[] {
@@ -143,15 +163,22 @@ export class PRMonitor {
       return { success: false, error: "Draft not found" };
     }
 
-    // Post the reply to GitHub
+    // Mark as approved (user intent), then attempt to post
+    this.draftManager.approveDraft(draftId);
+
     try {
       await this.postReplyToGitHub(draft);
-      this.draftManager.approveDraft(draftId);
+      this.draftManager.markSent(draftId);
       return { success: true };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      this.draftManager.markFailed(draftId, message);
       return { success: false, error: message };
     }
+  }
+
+  updateDraftText(draftId: string, text: string): void {
+    this.draftManager.updateDraftText(draftId, text);
   }
 
   dismissDraft(draftId: string, abandon: boolean): void {
@@ -205,15 +232,7 @@ export class PRMonitor {
 
     const repo = `${monitor.config.owner}/${monitor.config.repo}`;
 
-    // Use the REST API to reply to a pull request review comment
-    // The comment ID from the stored comment is needed (numeric ID)
-    // We need to extract it from the stored comment. The nodeId is the GraphQL ID,
-    // but we need the REST API numeric ID. We stored the GitHub URL which contains it.
-    const commentIdMatch = stored.url.match(/comments\/(\d+)/);
-    if (!commentIdMatch) {
-      throw new Error("Could not extract comment ID from URL");
-    }
-    const commentId = commentIdMatch[1];
+    const commentId = stored.commentId;
 
     const body = JSON.stringify({ body: draft.replyText });
 
@@ -257,10 +276,13 @@ function toDraftSummary(draft: PRDraft): PRDraftSummary {
     replyText: draft.replyText,
     hasCodeChange: draft.hasCodeChange,
     commitDescription: draft.commitDescription,
+    commitRef: draft.commitRef,
     createdAt: draft.createdAt,
     status: draft.status,
+    failureMessage: draft.failureMessage,
     originalAuthor: draft.originalAuthor,
     originalBody: draft.originalBody,
     originalPath: draft.originalPath,
+    originalLine: draft.originalLine,
   };
 }

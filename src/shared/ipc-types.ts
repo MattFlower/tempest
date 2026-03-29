@@ -250,12 +250,15 @@ export interface PRDraftSummary {
   replyText: string;
   hasCodeChange: boolean;
   commitDescription?: string;
+  commitRef?: string;
   createdAt: string;
-  status: "pending" | "approved" | "dismissed";
+  status: "pending" | "approved" | "sent" | "failed" | "dismissed";
+  failureMessage?: string;
   // Original comment context
   originalAuthor?: string;
   originalBody?: string;
   originalPath?: string;
+  originalLine?: number;
 }
 
 // --- Latency Stats (from prototype) ---

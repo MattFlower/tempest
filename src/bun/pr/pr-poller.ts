@@ -21,6 +21,9 @@ export class PRPoller {
     | ((workspacePath: string, comments: PRComment[]) => void)
     | null = null;
 
+  /** Called after every poll attempt completes (success or failure). */
+  onPollComplete: ((workspacePath: string) => void) | null = null;
+
   constructor(interval: number = 60_000) {
     this.interval = interval;
   }
@@ -75,6 +78,7 @@ export class PRPoller {
   static toStoredComment(c: GitHubReviewComment): PRComment {
     return {
       nodeId: c.node_id,
+      commentId: c.id,
       author: c.user.login,
       body: c.body,
       path: c.path,
@@ -155,6 +159,8 @@ export class PRPoller {
     } catch (err) {
       // Silently skip failed polls — will retry next interval
       console.error("[PRPoller] poll failed:", err);
+    } finally {
+      this.onPollComplete?.(config.workspacePath);
     }
   }
 

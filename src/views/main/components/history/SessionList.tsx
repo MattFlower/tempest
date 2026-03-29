@@ -16,6 +16,7 @@ interface SessionListProps {
   onScopeChange: (scope: "all" | "project") => void;
   hasProjectScope: boolean;
   onSelectSession: (filePath: string) => void;
+  showRipgrepHint?: boolean;
 }
 
 /** Format an ISO date string as a relative time (e.g. "3h ago", "2d ago") */
@@ -54,6 +55,7 @@ export function SessionList({
   onScopeChange,
   hasProjectScope,
   onSelectSession,
+  showRipgrepHint,
 }: SessionListProps) {
   const clearSearch = useCallback(
     () => onSearchQueryChange(""),
@@ -115,6 +117,17 @@ export function SessionList({
           backgroundColor: "var(--ctp-surface0)",
         }}
       />
+
+      {/* Ripgrep install hint */}
+      {showRipgrepHint && (
+        <div
+          className="flex items-center gap-1 px-2.5 py-1.5 shrink-0 text-[11px]"
+          style={{ color: "var(--ctp-overlay0)" }}
+        >
+          <span>&#9432;</span>
+          <span>Install ripgrep for full search: brew install ripgrep</span>
+        </div>
+      )}
 
       {/* Session list */}
       <div className="flex-1 overflow-y-auto">

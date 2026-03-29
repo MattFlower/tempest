@@ -34,8 +34,11 @@ export function PaneDivider({ splitId, index, hidden }: PaneDividerProps) {
     (e: React.MouseEvent) => {
       e.preventDefault();
       startXRef.current = e.clientX;
-      // Get the parent split container's width
-      const parent = (e.currentTarget as HTMLElement).parentElement;
+      // Walk up to the actual layout container (skip display:contents wrappers)
+      let parent = (e.currentTarget as HTMLElement).parentElement;
+      while (parent && parent.offsetWidth === 0) {
+        parent = parent.parentElement;
+      }
       containerWidthRef.current = parent?.getBoundingClientRect().width ?? 1;
 
       document.addEventListener("mousemove", onMouseMove);

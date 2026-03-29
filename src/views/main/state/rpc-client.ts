@@ -268,6 +268,8 @@ export const api = {
     rpcRequest.searchHistory({ query, scope, projectPath }),
   getSessionMessages: (sessionFilePath: string) =>
     rpcRequest.getSessionMessages({ sessionFilePath }),
+  isHistorySearchAvailable: () =>
+    rpcRequest.isHistorySearchAvailable(undefined as any),
 
   // Markdown
   readMarkdownFile: (filePath: string) =>

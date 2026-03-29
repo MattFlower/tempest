@@ -188,6 +188,10 @@ export interface BunRequests {
     params: { sessionFilePath: string };
     response: SessionMessage[];
   };
+  isHistorySearchAvailable: {
+    params: void;
+    response: boolean;
+  };
 
   // Markdown
   readMarkdownFile: {

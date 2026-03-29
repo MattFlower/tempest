@@ -6,23 +6,23 @@
 
 import { watch, type FSWatcher } from "fs";
 import { basename } from "path";
+import { buildMarkdownHTML } from "./markdown-html-builder";
 
 export interface MarkdownFileResult {
-  content: string;
+  content: string;  // Pre-rendered HTML (not raw markdown)
   fileName: string;
 }
 
 /**
- * Read a markdown file and return its content + filename.
- * Returns an error message in content if the file cannot be read.
+ * Read a markdown file, render to HTML, and return the result.
  */
 export async function readMarkdownFile(
   filePath: string,
 ): Promise<MarkdownFileResult> {
   try {
     const file = Bun.file(filePath);
-    const content = await file.text();
-    return { content, fileName: basename(filePath) };
+    const markdown = await file.text();
+    return { content: buildMarkdownHTML(markdown), fileName: basename(filePath) };
   } catch (err: any) {
     throw new Error(`Cannot read file: ${err?.message ?? String(err)}`);
   }
@@ -51,8 +51,8 @@ export function watchMarkdownFile(
       if (eventType === "change") {
         try {
           const file = Bun.file(filePath);
-          const content = await file.text();
-          onChanged(filePath, content);
+          const markdown = await file.text();
+          onChanged(filePath, buildMarkdownHTML(markdown));
         } catch {
           // File may have been deleted; ignore
         }

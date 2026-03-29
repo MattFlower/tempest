@@ -6,7 +6,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { api, onMarkdownFileChanged, offMarkdownFileChanged } from "../../state/rpc-client";
-import { buildMarkdownHTML } from "./markdown-html-builder";
 
 interface MarkdownViewerProps {
   filePath?: string;
@@ -20,28 +19,63 @@ export function MarkdownViewer({ filePath }: MarkdownViewerProps) {
   const [fileDeleted, setFileDeleted] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const currentPathRef = useRef<string | undefined>(filePath);
+  const savedScrollRef = useRef<number>(0);
 
-  // Load the file content
+  /** Save the current scroll position from the iframe */
+  const saveScrollPosition = useCallback(() => {
+    try {
+      const iframeWin = iframeRef.current?.contentWindow;
+      if (iframeWin) {
+        savedScrollRef.current = iframeWin.scrollY ?? 0;
+      }
+    } catch {
+      // Cross-origin iframe access may fail in some sandbox configs
+    }
+  }, []);
+
+  /** Restore saved scroll position in the iframe after it reloads */
+  const handleIframeLoad = useCallback(() => {
+    const scrollY = savedScrollRef.current;
+    if (scrollY > 0) {
+      // Delay to let markdown-it render content before scrolling
+      setTimeout(() => {
+        try {
+          iframeRef.current?.contentWindow?.scrollTo(0, scrollY);
+        } catch {
+          // Ignore cross-origin errors
+        }
+      }, 100);
+    }
+  }, []);
+
+  // Load the file content with a timeout to avoid hanging forever
   const loadFile = useCallback(async () => {
     if (!filePath) return;
+    saveScrollPosition();
     try {
-      const result = await api.readMarkdownFile(filePath);
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Request timed out")), 5000),
+      );
+      const result = await Promise.race([
+        api.readMarkdownFile(filePath),
+        timeout,
+      ]);
       setContent(result.content);
       setFileName(result.fileName);
       setError(null);
       setFileDeleted(false);
     } catch (err: any) {
+      console.warn("[MarkdownViewer] loadFile failed:", err?.message, "path:", filePath);
       setError(err?.message ?? "Failed to read file");
       setContent(null);
     }
-  }, [filePath]);
+  }, [filePath, saveScrollPosition]);
 
   // Initial load + set up file watching
   useEffect(() => {
     if (!filePath) return;
     currentPathRef.current = filePath;
 
-    // Load file
     loadFile();
 
     // Start watching
@@ -50,6 +84,7 @@ export function MarkdownViewer({ filePath }: MarkdownViewerProps) {
     // Listen for push notifications
     onMarkdownFileChanged((changedPath, newContent) => {
       if (changedPath === currentPathRef.current) {
+        saveScrollPosition();
         setContent(newContent);
         setFileChanged(false); // Auto-update since we get the content directly
       }
@@ -64,8 +99,8 @@ export function MarkdownViewer({ filePath }: MarkdownViewerProps) {
     };
   }, [filePath, loadFile]);
 
-  // Build the srcdoc HTML when content changes
-  const srcdoc = content !== null ? buildMarkdownHTML(content) : null;
+  // content is pre-rendered HTML from the backend
+  const srcdoc = content;
 
   if (!filePath) {
     return (
@@ -171,10 +206,11 @@ export function MarkdownViewer({ filePath }: MarkdownViewerProps) {
       <iframe
         ref={iframeRef}
         srcDoc={srcdoc ?? ""}
-        sandbox="allow-scripts"
+        sandbox="allow-scripts allow-same-origin"
         className="flex-1 w-full border-0"
         style={{ backgroundColor: "var(--ctp-base)" }}
         title={`Markdown: ${fileName}`}
+        onLoad={handleIframeLoad}
       />
     </div>
   );

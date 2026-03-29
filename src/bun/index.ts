@@ -197,6 +197,9 @@ const rpc = BrowserView.defineRPC({
       getSessionMessages: async (params: any) => {
         return historyStore.getMessages(params.sessionFilePath);
       },
+      isHistorySearchAvailable: async () => {
+        return historyStore.isSearchAvailable;
+      },
 
       // --- Markdown (Feature 4) ---
       readMarkdownFile: async (params: any) => {

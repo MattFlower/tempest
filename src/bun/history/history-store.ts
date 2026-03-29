@@ -15,6 +15,10 @@ export class HistoryStore {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private initialized = false;
 
+  get isSearchAvailable(): boolean {
+    return this.searcher.isAvailable;
+  }
+
   constructor() {
     this.cache = new HistoryMetadataCache();
     this.searcher = new RipgrepSearcher();

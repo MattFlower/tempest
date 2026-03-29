@@ -35,6 +35,38 @@ function formatDate(isoString: string): string {
   }
 }
 
+// --- Command Invocation Parsing ---
+
+interface CommandInvocation {
+  commandName: string;
+  args: string | null;
+  remainingText: string | null;
+}
+
+/** Parse command invocation XML tags from user messages (e.g. /brainstorm) */
+function parseCommandInvocation(text: string): CommandInvocation | null {
+  const nameMatch = text.match(/<command-name>([\s\S]*?)<\/command-name>/);
+  if (!nameMatch) return null;
+
+  const commandName = nameMatch[1]!.trim().replace(/^\//, "");
+
+  const argsMatch = text.match(/<command-args>([\s\S]*?)<\/command-args>/);
+  const args = argsMatch ? argsMatch[1]!.trim() || null : null;
+
+  // Get any text not inside tags
+  let remaining = text
+    .replace(/<command-message>[\s\S]*?<\/command-message>/g, "")
+    .replace(/<command-name>[\s\S]*?<\/command-name>/g, "")
+    .replace(/<command-args>[\s\S]*?<\/command-args>/g, "")
+    .trim();
+
+  return {
+    commandName,
+    args,
+    remainingText: remaining || null,
+  };
+}
+
 /** Format ISO date string as short date+time */
 function formatTime(isoString: string): string {
   try {
@@ -257,6 +289,57 @@ export function MessageStream({ messages, summary, searchQuery }: MessageStreamP
   );
 }
 
+// --- Command Invocation View ---
+
+function CommandInvocationView({ invocation }: { invocation: CommandInvocation }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div>
+      {invocation.remainingText && (
+        <div
+          className="text-[13px] select-text whitespace-pre-wrap break-words mb-1"
+          style={{ color: "var(--ctp-text)" }}
+        >
+          {invocation.remainingText}
+        </div>
+      )}
+      <div className="rounded" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+        <button
+          onClick={() => invocation.args && setIsExpanded((p) => !p)}
+          className="flex items-center gap-1.5 w-full text-left px-2.5 py-1.5 rounded cursor-pointer"
+        >
+          {invocation.args && (
+            <span
+              className="text-[10px] font-mono"
+              style={{ color: "var(--ctp-overlay0)" }}
+            >
+              {isExpanded ? "\u25BC" : "\u25B6"}
+            </span>
+          )}
+          <span className="text-[10px]" style={{ color: "var(--ctp-overlay0)" }}>
+            {"\u276F"}
+          </span>
+          <span
+            className="text-xs font-semibold font-mono"
+            style={{ color: "var(--ctp-text)" }}
+          >
+            /{invocation.commandName}
+          </span>
+        </button>
+        {isExpanded && invocation.args && (
+          <div
+            className="text-xs select-text px-2.5 pb-2"
+            style={{ color: "var(--ctp-text)" }}
+          >
+            {invocation.args}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // --- User Message ---
 
 function UserMessage({
@@ -266,6 +349,11 @@ function UserMessage({
   msg: SessionMessage;
   index: number;
 }) {
+  const invocation = useMemo(
+    () => (msg.text ? parseCommandInvocation(msg.text) : null),
+    [msg.text],
+  );
+
   return (
     <div className="flex items-start gap-2.5">
       {/* Person icon badge */}
@@ -294,12 +382,18 @@ function UserMessage({
           )}
         </div>
         {msg.text && (
-          <div
-            className="text-[13px] mt-1 select-text whitespace-pre-wrap break-words"
-            style={{ color: "var(--ctp-text)" }}
-          >
-            {msg.text}
-          </div>
+          invocation ? (
+            <div className="mt-1">
+              <CommandInvocationView invocation={invocation} />
+            </div>
+          ) : (
+            <div
+              className="text-[13px] mt-1 select-text whitespace-pre-wrap break-words"
+              style={{ color: "var(--ctp-text)" }}
+            >
+              {msg.text}
+            </div>
+          )
         )}
       </div>
     </div>

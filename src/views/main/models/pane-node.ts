@@ -81,6 +81,8 @@ export function toNodeState(node: PaneNode): PaneNodeState {
           sessionID: tab.sessionId,
           browserURL: tab.browserUrl,
           markdownFilePath: tab.markdownFilePath,
+          // Also write Swift's nested format for cross-compat
+          markdownViewerState: tab.markdownFilePath ? { filePath: tab.markdownFilePath } : undefined,
           editorFilePath: tab.editorFilePath,
           editorLineNumber: tab.editorLineNumber,
           diffScope: tab.diffScope,
@@ -111,7 +113,8 @@ export function fromNodeState(state: PaneNodeState): PaneNode {
       // Handle both Swift's "sessionID" and our "sessionId"
       sessionId: ts.sessionId ?? ts.sessionID,
       browserUrl: ts.browserURL ?? ts.browserUrl,
-      markdownFilePath: ts.markdownFilePath,
+      // Handle both Swift's nested "markdownViewerState.filePath" and our flat "markdownFilePath"
+      markdownFilePath: ts.markdownFilePath ?? ts.markdownViewerState?.filePath,
       editorFilePath: ts.editorFilePath,
       editorLineNumber: ts.editorLineNumber,
       diffScope: ts.diffScope,

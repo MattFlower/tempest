@@ -11,6 +11,27 @@ import { useStore } from "../../state/store";
 import { SessionList } from "./SessionList";
 import { MessageStream } from "./MessageStream";
 
+/** Hook to track element width for responsive layout */
+function useContainerWidth(): [React.RefObject<HTMLDivElement | null>, number] {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [width, setWidth] = useState(800);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setWidth(entry.contentRect.width);
+      }
+    });
+    observer.observe(el);
+    setWidth(el.clientWidth);
+    return () => observer.disconnect();
+  }, []);
+
+  return [ref, width];
+}
+
 /** Encode a workspace path to the directory name format used by ~/.claude/projects/ */
 function encodePath(path: string): string {
   return path.replace(/\//g, "-");
@@ -26,14 +47,23 @@ export function HistoryViewer() {
   const [scope, setScope] = useState<"all" | "project">(
     selectedWorkspacePath ? "project" : "all",
   );
+  const [showingMessageStream, setShowingMessageStream] = useState(false);
+  const [isSearchAvailable, setIsSearchAvailable] = useState(true);
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [containerRef, containerWidth] = useContainerWidth();
+  const isNarrow = containerWidth < 600;
 
   const hasProjectScope = !!selectedWorkspacePath;
   const projectPath = selectedWorkspacePath
     ? encodePath(selectedWorkspacePath)
     : undefined;
+
+  // Check ripgrep availability on mount
+  useEffect(() => {
+    api.isHistorySearchAvailable().then(setIsSearchAvailable).catch(() => {});
+  }, []);
 
   // Load sessions
   const loadSessions = useCallback(async () => {
@@ -99,6 +129,7 @@ export function HistoryViewer() {
   // Select a session and load its messages
   const selectSession = useCallback(async (filePath: string) => {
     setSelectedFilePath(filePath);
+    setShowingMessageStream(true);
     try {
       const msgs = await api.getSessionMessages(filePath);
       // Guard against a newer selection overwriting
@@ -117,49 +148,91 @@ export function HistoryViewer() {
     (s) => s.filePath === selectedFilePath,
   );
 
-  return (
-    <div className="flex h-full w-full">
-      {/* Left panel — session list */}
-      <div
-        className="flex-shrink-0 h-full"
-        style={{
-          width: 280,
-          borderRight: "1px solid var(--ctp-surface0)",
-        }}
-      >
-        <SessionList
-          sessions={sessions}
-          selectedFilePath={selectedFilePath}
-          searchQuery={searchQuery}
-          onSearchQueryChange={setSearchQuery}
-          scope={scope}
-          onScopeChange={setScope}
-          hasProjectScope={hasProjectScope}
-          onSelectSession={selectSession}
-        />
-      </div>
+  const showRipgrepHint = !isSearchAvailable && !!searchQuery.trim();
 
-      {/* Right panel — message stream or placeholder */}
-      <div className="flex-1 h-full min-w-0">
-        {selectedSummary ? (
-          <MessageStream
-            messages={messages}
-            summary={selectedSummary}
-            searchQuery={searchQuery}
-          />
-        ) : (
+  const sessionListProps = {
+    sessions,
+    selectedFilePath,
+    searchQuery,
+    onSearchQueryChange: setSearchQuery,
+    scope,
+    onScopeChange: setScope,
+    hasProjectScope,
+    onSelectSession: selectSession,
+    showRipgrepHint,
+  };
+
+  return (
+    <div ref={containerRef} className="h-full w-full overflow-hidden">
+      {isNarrow ? (
+        // Narrow layout: single panel with back navigation
+        <div className="flex flex-col h-full w-full">
+          {showingMessageStream && selectedSummary ? (
+            <>
+              <div
+                className="flex items-center shrink-0"
+                style={{ backgroundColor: "rgba(255,255,255,0.03)" }}
+              >
+                <button
+                  onClick={() => setShowingMessageStream(false)}
+                  className="flex items-center gap-1 px-2 py-2 text-xs cursor-pointer"
+                  style={{ color: "var(--ctp-blue)" }}
+                >
+                  <span>&#9664;</span>
+                  <span>Sessions</span>
+                </button>
+              </div>
+              <div
+                className="shrink-0"
+                style={{ height: 1, backgroundColor: "var(--ctp-surface0)" }}
+              />
+              <div className="flex-1 min-h-0">
+                <MessageStream
+                  messages={messages}
+                  summary={selectedSummary}
+                  searchQuery={searchQuery}
+                />
+              </div>
+            </>
+          ) : (
+            <SessionList {...sessionListProps} />
+          )}
+        </div>
+      ) : (
+        // Wide layout: two-panel
+        <div className="flex h-full w-full">
           <div
-            className="flex flex-col items-center justify-center h-full gap-2"
-            style={{ color: "var(--ctp-subtext0)" }}
+            className="flex-shrink-0 h-full"
+            style={{
+              width: 280,
+              borderRight: "1px solid var(--ctp-surface0)",
+            }}
           >
-            <span className="text-2xl opacity-40">{"\uD83D\uDCAC"}</span>
-            <span className="text-sm">Select a Session</span>
-            <span className="text-xs opacity-60">
-              Choose a session from the list to view its messages.
-            </span>
+            <SessionList {...sessionListProps} />
           </div>
-        )}
-      </div>
+
+          <div className="flex-1 h-full min-w-0">
+            {selectedSummary ? (
+              <MessageStream
+                messages={messages}
+                summary={selectedSummary}
+                searchQuery={searchQuery}
+              />
+            ) : (
+              <div
+                className="flex flex-col items-center justify-center h-full gap-2"
+                style={{ color: "var(--ctp-subtext0)" }}
+              >
+                <span className="text-2xl opacity-40">{"\uD83D\uDCAC"}</span>
+                <span className="text-sm">Select a Session</span>
+                <span className="text-xs opacity-60">
+                  Choose a session from the list to view its messages.
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

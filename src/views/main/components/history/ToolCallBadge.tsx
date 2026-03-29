@@ -38,10 +38,15 @@ function toolColor(tool: string): string {
   }
 }
 
+/** Tools that always show their primary param inline regardless of total param count */
+const ALWAYS_INLINE = new Set([
+  "Bash", "Read", "Edit", "Write", "Grep", "Glob", "Skill", "Agent", "TaskCreate",
+]);
+
 /** Whether to show the summary inline on the collapsed header line */
 function showInlineSummary(toolCall: ToolCallInfo): boolean {
   if (toolCall.tool === "TaskUpdate") return false;
-  if (toolCall.tool === "TaskCreate") return true;
+  if (ALWAYS_INLINE.has(toolCall.tool)) return true;
   return (toolCall.inputParamCount ?? 1) <= 1;
 }
 

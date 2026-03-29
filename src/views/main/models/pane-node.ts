@@ -74,7 +74,8 @@ export function toNodeState(node: PaneNode): PaneNodeState {
         tabs: pane.tabs.map((tab) => ({
           kind: tab.kind,
           label: tab.label,
-          sessionId: tab.sessionId,
+          // Write as sessionID (uppercase D) to match Swift Tempest format
+          sessionID: tab.sessionId,
           browserURL: tab.browserUrl,
           markdownFilePath: tab.markdownFilePath,
           editorFilePath: tab.editorFilePath,

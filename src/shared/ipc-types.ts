@@ -123,7 +123,8 @@ export interface PaneState {
 export interface PaneTabState {
   kind: PaneTabKind;
   label: string;
-  sessionId?: string;
+  sessionID?: string; // Uppercase D — matches Swift Tempest format
+  sessionId?: string; // Accept lowercase too for forward compat
   browserURL?: string;
   markdownFilePath?: string;
   editorFilePath?: string;

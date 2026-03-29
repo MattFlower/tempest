@@ -178,10 +178,10 @@ describe("parseLine", () => {
       expect(result.kind).toBe("message");
       if (result.kind === "message") {
         expect(result.message.toolCalls).toHaveLength(1);
-        expect(result.message.toolCalls[0].name).toBe("Bash");
-        expect(result.message.toolCalls[0].inputSummary).toBe("ls -la");
-        expect(result.message.toolCalls[0].inputParamCount).toBe(1);
-        expect(result.message.toolCalls[0].fullInput).toBe(
+        expect(result.message.toolCalls[0]!.name).toBe("Bash");
+        expect(result.message.toolCalls[0]!.inputSummary).toBe("ls -la");
+        expect(result.message.toolCalls[0]!.inputParamCount).toBe(1);
+        expect(result.message.toolCalls[0]!.fullInput).toBe(
           JSON.stringify({ command: "ls -la" }, null, 2),
         );
       }
@@ -209,8 +209,8 @@ describe("parseLine", () => {
           "Let me check that file.\nHere is the content.",
         );
         expect(result.message.toolCalls).toHaveLength(1);
-        expect(result.message.toolCalls[0].name).toBe("Read");
-        expect(result.message.toolCalls[0].inputSummary).toBe("/tmp/foo.txt");
+        expect(result.message.toolCalls[0]!.name).toBe("Read");
+        expect(result.message.toolCalls[0]!.inputSummary).toBe("/tmp/foo.txt");
       }
     });
 
@@ -286,7 +286,7 @@ describe("parseLine", () => {
       const result = parseLine(line);
       expect(result.kind).toBe("message");
       if (result.kind === "message") {
-        expect(result.message.toolCalls[0].name).toBe("Unknown");
+        expect(result.message.toolCalls[0]!.name).toBe("Unknown");
       }
     });
 
@@ -300,10 +300,10 @@ describe("parseLine", () => {
       const result = parseLine(line);
       expect(result.kind).toBe("message");
       if (result.kind === "message") {
-        expect(result.message.toolCalls[0].name).toBe("Bash");
-        expect(result.message.toolCalls[0].inputParamCount).toBe(0);
+        expect(result.message.toolCalls[0]!.name).toBe("Bash");
+        expect(result.message.toolCalls[0]!.inputParamCount).toBe(0);
         // Fallback summary: "Bash " (name + empty sorted keys)
-        expect(result.message.toolCalls[0].inputSummary).toBe("Bash ");
+        expect(result.message.toolCalls[0]!.inputSummary).toBe("Bash ");
       }
     });
 
@@ -661,15 +661,15 @@ describe("parseFile", () => {
     );
     const messages = await parseFile(filePath);
     expect(messages).toHaveLength(3);
-    expect(messages[0].type).toBe("user");
-    expect(messages[0].uuid).toBe("u1");
-    expect(messages[0].textContent).toBe("Hello");
-    expect(messages[1].type).toBe("assistant");
-    expect(messages[1].uuid).toBe("a1");
-    expect(messages[1].textContent).toBe("Hi there!");
-    expect(messages[2].type).toBe("user");
-    expect(messages[2].uuid).toBe("u2");
-    expect(messages[2].textContent).toBe("Thanks");
+    expect(messages[0]!.type).toBe("user");
+    expect(messages[0]!.uuid).toBe("u1");
+    expect(messages[0]!.textContent).toBe("Hello");
+    expect(messages[1]!.type).toBe("assistant");
+    expect(messages[1]!.uuid).toBe("a1");
+    expect(messages[1]!.textContent).toBe("Hi there!");
+    expect(messages[2]!.type).toBe("user");
+    expect(messages[2]!.uuid).toBe("u2");
+    expect(messages[2]!.textContent).toBe("Thanks");
   });
 
   it("skips empty lines and malformed JSON", async () => {
@@ -694,8 +694,8 @@ describe("parseFile", () => {
     );
     const messages = await parseFile(filePath);
     expect(messages).toHaveLength(2);
-    expect(messages[0].textContent).toBe("valid line");
-    expect(messages[1].textContent).toBe("also valid");
+    expect(messages[0]!.textContent).toBe("valid line");
+    expect(messages[1]!.textContent).toBe("also valid");
   });
 
   it("skips noise types in file context", async () => {
@@ -714,7 +714,7 @@ describe("parseFile", () => {
     );
     const messages = await parseFile(filePath);
     expect(messages).toHaveLength(1);
-    expect(messages[0].textContent).toBe("real message");
+    expect(messages[0]!.textContent).toBe("real message");
   });
 
   it("returns empty array for file with only empty lines", async () => {
@@ -740,7 +740,7 @@ describe("parseFile", () => {
     );
     const messages = await parseFile(filePath);
     expect(messages).toHaveLength(1);
-    expect(messages[0].textContent).toBe("only message");
+    expect(messages[0]!.textContent).toBe("only message");
   });
 
   it("parses file with tool calls", async () => {
@@ -765,10 +765,10 @@ describe("parseFile", () => {
     );
     const messages = await parseFile(filePath);
     expect(messages).toHaveLength(1);
-    expect(messages[0].textContent).toBe("Let me run that.");
-    expect(messages[0].toolCalls).toHaveLength(1);
-    expect(messages[0].toolCalls[0].name).toBe("Bash");
-    expect(messages[0].toolCalls[0].inputSummary).toBe("echo hello");
+    expect(messages[0]!.textContent).toBe("Let me run that.");
+    expect(messages[0]!.toolCalls).toHaveLength(1);
+    expect(messages[0]!.toolCalls[0]!.name).toBe("Bash");
+    expect(messages[0]!.toolCalls[0]!.inputSummary).toBe("echo hello");
   });
 
   it("handles file with all three message types", async () => {
@@ -791,11 +791,11 @@ describe("parseFile", () => {
     );
     const messages = await parseFile(filePath);
     expect(messages).toHaveLength(3);
-    expect(messages[0].type).toBe("system");
-    expect(messages[0].textContent).toBe("You are helpful.");
-    expect(messages[1].type).toBe("user");
-    expect(messages[1].textContent).toBe("What is 2+2?");
-    expect(messages[2].type).toBe("assistant");
-    expect(messages[2].textContent).toBe("4");
+    expect(messages[0]!.type).toBe("system");
+    expect(messages[0]!.textContent).toBe("You are helpful.");
+    expect(messages[1]!.type).toBe("user");
+    expect(messages[1]!.textContent).toBe("What is 2+2?");
+    expect(messages[2]!.type).toBe("assistant");
+    expect(messages[2]!.textContent).toBe("4");
   });
 });

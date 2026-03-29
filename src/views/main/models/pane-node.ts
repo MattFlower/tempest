@@ -79,7 +79,7 @@ export function toNodeState(node: PaneNode): PaneNodeState {
           label: tab.label,
           // Write as sessionID (uppercase D) to match Swift Tempest format
           sessionID: tab.sessionId,
-          browserURL: tab.browserUrl,
+          browserURL: tab.browserURL,
           markdownFilePath: tab.markdownFilePath,
           // Also write Swift's nested format for cross-compat
           markdownViewerState: tab.markdownFilePath ? { filePath: tab.markdownFilePath } : undefined,
@@ -112,7 +112,7 @@ export function fromNodeState(state: PaneNodeState): PaneNode {
       isAlive: true,
       // Handle both Swift's "sessionID" and our "sessionId"
       sessionId: ts.sessionId ?? ts.sessionID,
-      browserUrl: ts.browserURL ?? ts.browserUrl,
+      browserURL: ts.browserURL ?? ts.browserUrl,
       // Handle both Swift's nested "markdownViewerState.filePath" and our flat "markdownFilePath"
       markdownFilePath: ts.markdownFilePath ?? ts.markdownViewerState?.filePath,
       editorFilePath: ts.editorFilePath,

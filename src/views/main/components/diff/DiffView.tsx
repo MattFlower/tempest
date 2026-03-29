@@ -74,7 +74,7 @@ export function DiffView() {
       // Auto-select first file if nothing selected
       if (result.files.length > 0) {
         setSelectedPath((prev) => {
-          if (prev && result.files.some((f) => f.newPath === prev)) return prev;
+          if (prev && result.files.some((f: DiffFile) => f.newPath === prev)) return prev;
           return result.files[0]!.newPath;
         });
       } else {

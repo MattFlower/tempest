@@ -133,7 +133,7 @@ describe("watchMarkdownFile", () => {
     let changedContent: string | null = null;
     let changedPath: string | null = null;
 
-    watchMarkdownFile(filePath, (path, content) => {
+    watchMarkdownFile(filePath, (path, content, _deleted) => {
       changedPath = path;
       changedContent = content;
     });
@@ -144,9 +144,9 @@ describe("watchMarkdownFile", () => {
     // Wait for the watcher to fire (fs.watch is async)
     await new Promise((resolve) => setTimeout(resolve, 200));
 
-    expect(changedPath).toBe(filePath);
-    expect(changedContent).toContain("<!DOCTYPE html>");
-    expect(changedContent).toContain("<h1>Modified</h1>");
+    expect(changedPath!).toBe(filePath);
+    expect(changedContent!).toContain("<!DOCTYPE html>");
+    expect(changedContent!).toContain("<h1>Modified</h1>");
   });
 
   it("replaces existing watcher when called twice for same path", async () => {

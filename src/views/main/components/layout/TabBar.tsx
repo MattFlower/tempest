@@ -69,7 +69,7 @@ export function TabBar({ pane }: TabBarProps) {
 
   const handleAddBrowser = useCallback(() => {
     const tab = createTab(PaneTabKind.Browser, "Browser", {
-      browserUrl: "https://google.com",
+      browserURL: "https://google.com",
     });
     addTab(pane.id, tab);
   }, [pane.id]);

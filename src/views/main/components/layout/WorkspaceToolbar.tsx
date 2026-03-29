@@ -17,7 +17,7 @@ function addTabToFocusedPane(kind: PaneTabKind, label: string, overrides?: Recor
     ...(kind === PaneTabKind.Claude || kind === PaneTabKind.Shell
       ? { terminalId: crypto.randomUUID() }
       : {}),
-    ...(kind === PaneTabKind.Browser ? { browserUrl: "https://google.com" } : {}),
+    ...(kind === PaneTabKind.Browser ? { browserURL: "https://google.com" } : {}),
     ...overrides,
   });
   addTab(focusedPaneId, tab);

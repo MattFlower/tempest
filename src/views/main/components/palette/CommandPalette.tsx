@@ -88,6 +88,8 @@ function useCommands(): PaletteCommand[] {
 export function CommandPalette() {
   const visible = useStore((s) => s.commandPaletteVisible);
   const toggleCommandPalette = useStore((s) => s.toggleCommandPalette);
+  const openCommandPaletteFiles = useStore((s) => s.openCommandPaletteFiles);
+  const commandPaletteInitialMode = useStore((s) => s.commandPaletteInitialMode);
   const selectedWorkspacePath = useStore((s) => s.selectedWorkspacePath);
 
   const [mode, setMode] = useState<PaletteMode>("commands");
@@ -124,10 +126,10 @@ export function CommandPalette() {
     if (visible) {
       setQuery("");
       setSelectedIndex(0);
-      setMode("commands");
+      setMode(commandPaletteInitialMode);
       setTimeout(() => inputRef.current?.focus(), 0);
     }
-  }, [visible]);
+  }, [visible, commandPaletteInitialMode]);
 
   // Load files when switching to file mode
   useEffect(() => {
@@ -236,6 +238,9 @@ export function CommandPalette() {
       if (e.metaKey && e.shiftKey && e.key === "p") {
         e.preventDefault();
         toggleCommandPalette();
+      } else if (e.metaKey && !e.shiftKey && e.key === "p") {
+        e.preventDefault();
+        openCommandPaletteFiles();
       }
       if (e.metaKey && e.key === "\\") {
         e.preventDefault();
@@ -244,7 +249,7 @@ export function CommandPalette() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [toggleCommandPalette]);
+  }, [toggleCommandPalette, openCommandPaletteFiles]);
 
   if (!visible) return null;
 

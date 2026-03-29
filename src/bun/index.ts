@@ -13,12 +13,12 @@ import { SessionStateManager } from "./session-state-manager";
 import { HookEventListener } from "./hooks/hook-event-listener";
 import { SessionActivityTracker } from "./hooks/session-activity-tracker";
 
+import { loadConfig, saveConfig as saveConfigFile, defaultConfig } from "./config/app-config";
+
 // --- Stream A: Terminal + Session ---
 const ptyManager = new PtyManager();
-const sessionManager = new SessionManager({
-  workspaceRoot: "~/tempest/workspaces",
-  claudeArgs: ["--dangerously-skip-permissions"],
-});
+// SessionManager starts with defaults, updated with real config after async load
+const sessionManager = new SessionManager(defaultConfig());
 
 // --- Stream C: Bookmark Managers ---
 const bookmarkManagers = new Map<string, BookmarkManager>();
@@ -257,8 +257,17 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
   }
 });
 
-// --- Stream D: Async initialization ---
+// --- Async initialization ---
 (async () => {
+  // Load config and update SessionManager
+  try {
+    const config = await loadConfig();
+    sessionManager.updateConfig(config);
+    console.log("[main] Config loaded:", config.workspaceRoot, "claudeArgs:", config.claudeArgs);
+  } catch (err) {
+    console.error("[main] Config load failed, using defaults:", err);
+  }
+
   try {
     await workspaceManager.initialize();
     console.log("[main] WorkspaceManager initialized");

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { PaneTabKind } from "../../../../shared/ipc-types";
 import { TerminalInstance } from "./terminal-instance";
 import { api } from "../../state/rpc-client";
 import {
@@ -9,18 +10,18 @@ import {
 
 interface TerminalPaneProps {
   terminalId: string;
-  command: string[];
+  tabKind: PaneTabKind;
   cwd: string;
-  env?: Record<string, string>;
+  sessionId?: string;
   isFocused: boolean;
   onExit?: (exitCode: number) => void;
 }
 
 export function TerminalPane({
   terminalId,
-  command,
+  tabKind,
   cwd,
-  env,
+  sessionId,
   isFocused,
   onExit,
 }: TerminalPaneProps) {
@@ -28,10 +29,11 @@ export function TerminalPane({
   const instanceRef = useRef<TerminalInstance | null>(null);
   const onExitRef = useRef(onExit);
   onExitRef.current = onExit;
-  // Capture initial values in refs so useEffect doesn't re-fire on re-renders
-  const commandRef = useRef(command);
+
+  // Capture initial values in refs
+  const tabKindRef = useRef(tabKind);
   const cwdRef = useRef(cwd);
-  const envRef = useRef(env);
+  const sessionIdRef = useRef(sessionId);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -50,25 +52,57 @@ export function TerminalPane({
     instanceRef.current = instance;
 
     const dims = instance.proposeDimensions();
+    const cols = dims?.cols ?? 80;
+    const rows = dims?.rows ?? 24;
 
-    api.createTerminal({
-      id: terminalId,
-      command: commandRef.current,
-      cwd: cwdRef.current,
-      env: envRef.current,
-      cols: dims?.cols ?? 80,
-      rows: dims?.rows ?? 24,
-    }).then((result: any) => {
-      if (!result.success) {
+    // Build the right command based on tab kind via RPC
+    const createTerminalWithCommand = async () => {
+      let command: string[];
+
+      if (tabKindRef.current === PaneTabKind.Claude) {
+        try {
+          const result = await api.buildClaudeCommand({
+            workspacePath: cwdRef.current,
+            resume: !!sessionIdRef.current,
+            sessionId: sessionIdRef.current,
+            withHooks: true,
+          });
+          command = result.command;
+        } catch (e) {
+          console.error("Failed to build Claude command:", e);
+          command = ["/bin/zsh", "-lic", "exec claude"];
+        }
+      } else {
+        try {
+          const result = await api.buildShellCommand({
+            workspacePath: cwdRef.current,
+          });
+          command = result.command;
+        } catch {
+          command = ["/bin/zsh", "-l"];
+        }
+      }
+
+      const createResult = await api.createTerminal({
+        id: terminalId,
+        command,
+        cwd: cwdRef.current,
+        cols,
+        rows,
+      });
+
+      if (!createResult.success) {
         console.error(
           `Failed to create terminal ${terminalId}:`,
-          result.error,
+          createResult.error,
         );
         instance.terminal.writeln(
-          `\x1b[31mFailed to create terminal: ${result.error}\x1b[0m`,
+          `\x1b[31mFailed to create terminal: ${createResult.error}\x1b[0m`,
         );
       }
-    });
+    };
+
+    createTerminalWithCommand();
 
     registerTerminal(
       terminalId,
@@ -89,8 +123,6 @@ export function TerminalPane({
       instance.dispose();
       api.killTerminal({ id: terminalId });
     };
-    // Only re-create the terminal if the terminalId changes.
-    // command/cwd/env are captured at creation time via refs below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terminalId]);
 

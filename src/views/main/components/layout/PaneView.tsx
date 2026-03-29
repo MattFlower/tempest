@@ -15,21 +15,6 @@ function TabContent({ tab, paneId, isFocused }: { tab: PaneTab; paneId: string; 
 
   switch (tab.kind) {
     case PaneTabKind.Shell:
-      if (!tab.terminalId) {
-        return (
-          <div className="flex h-full items-center justify-center text-[var(--ctp-overlay0)] text-xs">
-            No terminal ID — tab not initialized
-          </div>
-        );
-      }
-      return (
-        <TerminalPane
-          terminalId={tab.terminalId}
-          command={["/bin/zsh"]}
-          cwd={selectedWorkspacePath || "/tmp"}
-          isFocused={isFocused}
-        />
-      );
     case PaneTabKind.Claude:
       if (!tab.terminalId) {
         return (
@@ -41,8 +26,9 @@ function TabContent({ tab, paneId, isFocused }: { tab: PaneTab; paneId: string; 
       return (
         <TerminalPane
           terminalId={tab.terminalId}
-          command={["/bin/zsh", "-lic", "exec claude"]}
+          tabKind={tab.kind}
           cwd={selectedWorkspacePath || "/tmp"}
+          sessionId={tab.sessionId}
           isFocused={isFocused}
         />
       );

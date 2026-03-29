@@ -36,3 +36,5 @@ src/views/main/styles/tailwind.css
 
 # Finder (MacOS) folder config
 .DS_Store
+
+.claude/settings.local.json

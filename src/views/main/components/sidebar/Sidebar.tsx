@@ -84,6 +84,9 @@ export function Sidebar() {
 
   return (
     <div className="flex flex-col h-full bg-[var(--ctp-mantle)]">
+      {/* Titlebar drag region — room for traffic lights */}
+      <div className="titlebar-drag h-8 flex-shrink-0" />
+
       {/* Scrollable repo list */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden py-1">
         {addingRepo && (

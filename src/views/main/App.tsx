@@ -111,10 +111,7 @@ export function App() {
         />
       )}
 
-      {/* Titlebar drag region — spans full window width */}
-      <div className="titlebar-drag h-10 flex-shrink-0" style={{ backgroundColor: "var(--ctp-mantle)" }} />
-
-      {/* Main content area below titlebar */}
+      {/* Main content area — starts at top of window */}
       <div className="flex flex-1 min-h-0">
         {/* Sidebar */}
         {sidebarVisible && (

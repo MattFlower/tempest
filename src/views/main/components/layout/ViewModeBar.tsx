@@ -27,11 +27,11 @@ export function ViewModeBar({ workspacePath }: ViewModeBarProps) {
 
   return (
     <div
-      className="flex items-center justify-center py-3 flex-shrink-0"
+      className="titlebar-drag flex items-center justify-center pt-2.5 pb-1.5 flex-shrink-0"
       style={{ backgroundColor: "var(--ctp-mantle)" }}
     >
       <div
-        className="flex items-center rounded-full overflow-hidden"
+        className="flex items-center rounded-full overflow-hidden border border-[var(--ctp-surface0)]"
         style={{ backgroundColor: "var(--ctp-crust)" }}
       >
         {modes.map(({ mode, label }) => {
@@ -40,7 +40,7 @@ export function ViewModeBar({ workspacePath }: ViewModeBarProps) {
             <button
               key={mode}
               onClick={() => handleSelect(mode)}
-              className="px-4 py-1.5 text-xs font-medium rounded-full transition-colors duration-100"
+              className="px-4 py-2 text-xs font-medium rounded-full transition-colors duration-100"
               style={{
                 backgroundColor: isActive ? "var(--ctp-surface0)" : "transparent",
                 color: "var(--ctp-text)",

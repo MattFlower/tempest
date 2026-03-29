@@ -43,14 +43,18 @@ export function DropdownButton({ label, icon, items }: DropdownButtonProps) {
     <div ref={containerRef} className="relative">
       <button
         onClick={() => setIsOpen((o) => !o)}
-        className="flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-md text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)] transition-colors"
-        style={{ backgroundColor: isOpen ? "var(--ctp-surface1)" : "transparent" }}
+        className="flex items-center gap-0 px-0 py-0 text-xs font-medium rounded-md border border-[var(--ctp-surface1)] text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)] transition-colors"
+        style={{ backgroundColor: isOpen ? "var(--ctp-surface1)" : "var(--ctp-surface0)" }}
       >
-        {icon}
-        {label}
-        <svg className="w-3 h-3 text-[var(--ctp-overlay1)]" viewBox="0 0 12 12" fill="currentColor">
-          <path d="M3 5l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        <span className="flex items-center gap-1 px-2.5 py-1">
+          {icon}
+          {label}
+        </span>
+        <span className="border-l border-[var(--ctp-surface1)] px-1.5 py-1 flex items-center">
+          <svg className="w-3 h-3 text-[var(--ctp-overlay1)]" viewBox="0 0 12 12" fill="currentColor">
+            <path d="M3 5l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
       </button>
 
       {isOpen && (

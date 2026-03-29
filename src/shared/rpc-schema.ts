@@ -158,6 +158,7 @@ export interface WebviewMessages {
   terminalOutput: { id: string; data: string; seq: number };
   terminalExit: { id: string; exitCode: number };
   hookEvent: HookEvent;
+  workspaceActivityChanged: { workspacePath: string; activityState: number | null; pid: number };
   workspacesChanged: { repoId: string; workspaces: TempestWorkspace[] };
   sidebarInfoUpdated: { workspacePath: string; info: WorkspaceSidebarInfo };
   configChanged: AppConfig;

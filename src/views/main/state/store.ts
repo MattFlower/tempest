@@ -7,6 +7,7 @@
 
 import { create } from "zustand";
 import type { SourceRepo, TempestWorkspace, WorkspaceSidebarInfo, AppConfig } from "../models/workspace";
+import type { ActivityState } from "../../../shared/ipc-types";
 import type { PaneNode } from "../models/pane-node";
 
 export interface TempestStore {
@@ -21,6 +22,9 @@ export interface TempestStore {
   paneTrees: Record<string, PaneNode>; // keyed by workspace path
   focusedPaneId: string | null;
   maximizedPaneId: string | null;
+
+  // --- Activity state (from hook events) ---
+  workspaceActivity: Record<string, ActivityState>; // keyed by workspace path
 
   // --- UI state ---
   sidebarWidth: number;
@@ -38,6 +42,8 @@ export interface TempestStore {
   setFocusedPaneId: (id: string | null) => void;
   setMaximizedPaneId: (id: string | null) => void;
 
+  setWorkspaceActivity: (path: string, state: ActivityState) => void;
+
   setSidebarWidth: (width: number) => void;
   toggleSidebar: () => void;
   toggleCommandPalette: () => void;
@@ -54,6 +60,8 @@ export const useStore = create<TempestStore>((set) => ({
   paneTrees: {},
   focusedPaneId: null,
   maximizedPaneId: null,
+
+  workspaceActivity: {},
 
   sidebarWidth: 240,
   sidebarVisible: true,
@@ -75,6 +83,9 @@ export const useStore = create<TempestStore>((set) => ({
     set((s) => ({ paneTrees: { ...s.paneTrees, [workspacePath]: tree } })),
   setFocusedPaneId: (id) => set({ focusedPaneId: id }),
   setMaximizedPaneId: (id) => set({ maximizedPaneId: id }),
+
+  setWorkspaceActivity: (path, state) =>
+    set((s) => ({ workspaceActivity: { ...s.workspaceActivity, [path]: state } })),
 
   setSidebarWidth: (width) => set({ sidebarWidth: width }),
   toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),

@@ -281,6 +281,19 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
       try {
         (rpc as any).send?.hookEvent?.(event);
       } catch { /* webview not ready yet */ }
+
+      // Push aggregated activity state for the workspace this event belongs to
+      if (event.cwd) {
+        const pids = activityTracker.pidsForCWD(event.cwd);
+        const state = activityTracker.aggregateState(pids);
+        try {
+          (rpc as any).send?.workspaceActivityChanged?.({
+            workspacePath: event.cwd,
+            activityState: state ?? null,
+            pid: event.pid,
+          });
+        } catch { /* webview not ready yet */ }
+      }
     });
   } catch (err) {
     console.error("[main] HookEventListener start failed:", err);

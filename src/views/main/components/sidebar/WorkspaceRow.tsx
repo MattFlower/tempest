@@ -1,5 +1,6 @@
 import type { TempestWorkspace, WorkspaceSidebarInfo, DiffStats } from "../../../../shared/ipc-types";
-import { WorkspaceStatus } from "../../../../shared/ipc-types";
+import { WorkspaceStatus, ActivityState } from "../../../../shared/ipc-types";
+import { useStore } from "../../state/store";
 
 interface Props {
   workspace: TempestWorkspace;
@@ -42,9 +43,17 @@ function DiffStatsPill({ stats, onRefresh }: { stats: DiffStats; onRefresh: () =
 }
 
 export function WorkspaceRow({ workspace, sidebarInfo, shortcutIndex, isSelected, onSelect, onArchive, onRefreshDiffStats }: Props) {
-  const dotColor = statusDotColor[workspace.status] ?? "var(--ctp-overlay0)";
-  const isIdle = workspace.status === WorkspaceStatus.Idle;
-  const secondaryParts = [sidebarInfo?.bookmarkName, statusLabel(workspace)].filter(Boolean).join(" \u00B7 ");
+  // Hook-driven activity state overrides the workspace status for display
+  const activity = useStore((s) => s.workspaceActivity[workspace.path]);
+
+  let effectiveStatus = workspace.status;
+  if (activity === ActivityState.Working) effectiveStatus = WorkspaceStatus.Working;
+  else if (activity === ActivityState.NeedsInput) effectiveStatus = WorkspaceStatus.NeedsInput;
+  else if (activity === ActivityState.Idle) effectiveStatus = WorkspaceStatus.Idle;
+
+  const dotColor = statusDotColor[effectiveStatus] ?? "var(--ctp-overlay0)";
+  const isIdle = effectiveStatus === WorkspaceStatus.Idle;
+  const secondaryParts = [sidebarInfo?.bookmarkName, statusLabel({ ...workspace, status: effectiveStatus })].filter(Boolean).join(" \u00B7 ");
 
   return (
     <div

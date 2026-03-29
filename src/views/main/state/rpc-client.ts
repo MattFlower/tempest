@@ -75,6 +75,13 @@ const rpc = Electroview.defineRPC({
       hookEvent: (event: WebviewMessages["hookEvent"]) => {
         hookEventHandler?.(event);
       },
+      workspaceActivityChanged: (msg: any) => {
+        if (msg.activityState !== null && msg.activityState !== undefined) {
+          import("./store").then(({ useStore }) => {
+            useStore.getState().setWorkspaceActivity(msg.workspacePath, msg.activityState);
+          });
+        }
+      },
       workspacesChanged: (msg: WebviewMessages["workspacesChanged"]) => {
         // Handled by store subscription — imported dynamically to avoid circular deps
         import("./store").then(({ useStore }) => {

@@ -6,6 +6,7 @@
   "scripts": {
     "build:css": "bun x @tailwindcss/cli -i src/views/main/styles/tailwind-input.css -o src/views/main/styles/tailwind.css",
     "dev": "bun run build:css && bun x electrobun dev",
+    "build:release": "bun run build:css && bun x electrobun build --env=stable",
     "test": "bun test"
   },
   "devDependencies": {

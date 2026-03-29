@@ -25,6 +25,8 @@ export default {
     },
     mac: {
       bundleCEF: true,
+      codesign: true,
+      notarize: false,
     },
   },
 } satisfies ElectrobunConfig;

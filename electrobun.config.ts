@@ -22,6 +22,8 @@ export default {
       "node_modules/@xterm/xterm/css/xterm.css": "views/main/xterm.css",
       "src/views/main/styles/tailwind.css": "views/main/tailwind.css",
       "src/views/main/index.html": "views/main/index.html",
+      "src/bun/hooks/tempest-hook.ts": "bun/tempest-hook.ts",
+      "src/bun/hooks/tempest-channel.ts": "bun/tempest-channel.ts",
     },
     mac: {
       icons: "icon.iconset",

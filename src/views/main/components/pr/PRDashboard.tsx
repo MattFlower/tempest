@@ -42,6 +42,25 @@ export function PRDashboard() {
 
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // On mount (or workspace change), recover monitoring state from backend
+  useEffect(() => {
+    if (!selectedWorkspacePath) return;
+    let cancelled = false;
+    api.getPRMonitorStatus(selectedWorkspacePath).then((status: { monitoring: true; prNumber: number; prURL: string; owner: string; repo: string } | null) => {
+      if (cancelled) return;
+      if (status) {
+        setMonitoring(true);
+        setMonitorInfo({
+          owner: status.owner,
+          repo: status.repo,
+          prNumber: status.prNumber,
+        });
+        setPrURL(status.prURL);
+      }
+    }).catch(() => { /* ignore — backend may not support this yet */ });
+    return () => { cancelled = true; };
+  }, [selectedWorkspacePath]);
+
   // Refresh drafts and last-poll timestamp
   const refreshDrafts = useCallback(async () => {
     if (!selectedWorkspacePath || !monitoring) return;

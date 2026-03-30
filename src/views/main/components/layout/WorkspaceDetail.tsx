@@ -160,7 +160,7 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
           {viewMode === ViewMode.Diff && <DiffView />}
         </div>
 
-        {/* Dashboard mode */}
+        {/* Dashboard mode — always rendered to preserve monitoring state */}
         <div
           className={`absolute inset-0 ${
             viewMode === ViewMode.Dashboard
@@ -168,7 +168,7 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
               : "opacity-0 pointer-events-none"
           }`}
         >
-          {viewMode === ViewMode.Dashboard && <PRDashboard />}
+          <PRDashboard />
         </div>
       </div>
     </div>

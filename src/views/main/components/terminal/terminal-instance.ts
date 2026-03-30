@@ -72,7 +72,71 @@ export class TerminalInstance {
     this.initWebGL();
     this.fitAddon.fit();
 
-    this.terminal.onData((data) => this.onInput(data));
+    // Kitty keyboard protocol negotiation.
+    // Apps like Claude Code send CSI ? u to query support; we respond so they
+    // know we encode modified keys with CSI u.
+    const kittyStack: number[] = [];
+    let kittyFlags = 0;
+    let respondingToQuery = false;
+    try {
+      this.terminal.parser.registerCsiHandler(
+        { prefix: "?", final: "u" },
+        () => {
+          if (respondingToQuery) return true;
+          respondingToQuery = true;
+          console.log(`[${this.id}] kitty query → flags=${kittyFlags}`);
+          this.onInput(`\x1b[?${kittyFlags}u`);
+          setTimeout(() => (respondingToQuery = false), 50);
+          return true;
+        },
+      );
+      this.terminal.parser.registerCsiHandler(
+        { prefix: ">", final: "u" },
+        (params) => {
+          kittyStack.push(kittyFlags);
+          kittyFlags = (params[0] as number) || 0;
+          console.log(`[${this.id}] kitty push → flags=${kittyFlags}`);
+          return true;
+        },
+      );
+      this.terminal.parser.registerCsiHandler(
+        { prefix: "<", final: "u" },
+        (params) => {
+          const count = (params[0] as number) || 1;
+          for (let i = 0; i < count && kittyStack.length > 0; i++) {
+            kittyFlags = kittyStack.pop()!;
+          }
+          console.log(`[${this.id}] kitty pop → flags=${kittyFlags}`);
+          return true;
+        },
+      );
+      this.terminal.parser.registerCsiHandler(
+        { prefix: "=", final: "u" },
+        (params) => {
+          kittyFlags = (params[0] as number) || 0;
+          console.log(`[${this.id}] kitty set → flags=${kittyFlags}`);
+          return true;
+        },
+      );
+    } catch (e) {
+      console.warn(`[${this.id}] Failed to register kitty protocol handlers:`, e);
+    }
+
+    // Track keys handled by our custom handler so we can suppress duplicate
+    // data from onData (Electrobun WebView may not fully respect preventDefault).
+    let suppressNextData: string | null = null;
+
+    this.terminal.onData((data) => {
+      if (suppressNextData !== null) {
+        const expected = suppressNextData;
+        suppressNextData = null;
+        if (data === expected) {
+          console.log(`[${this.id}] suppressed duplicate onData: ${JSON.stringify(data)}`);
+          return;
+        }
+      }
+      this.onInput(data);
+    });
     this.terminal.onResize(({ cols, rows }) =>
       this.onResizeCallback(cols, rows),
     );
@@ -111,6 +175,7 @@ export class TerminalInstance {
 
       // Shift+Enter: CSI u for Claude Code newline
       if (event.shiftKey && event.key === "Enter") {
+        suppressNextData = "\r";
         this.onInput("\x1b[13;2u");
         return false;
       }

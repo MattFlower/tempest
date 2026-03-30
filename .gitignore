@@ -39,3 +39,5 @@ src/views/main/styles/tailwind.css
 .DS_Store
 
 .claude/settings.local.json
+
+Tempest.zip

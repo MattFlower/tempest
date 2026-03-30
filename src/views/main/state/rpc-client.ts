@@ -314,7 +314,13 @@ export const api = {
   getAITimelineForFile: (filePath: string, projectPath?: string) =>
     rpcRequest.getAITimelineForFile({ filePath, projectPath }),
 
+  // PR URL Lookup
+  lookupPRUrl: (workspacePath: string) =>
+    rpcRequest.lookupPRUrl({ workspacePath }),
+
   // PR Feedback
+  getPRMonitorStatus: (workspacePath: string) =>
+    rpcRequest.getPRMonitorStatus({ workspacePath }),
   startPRMonitor: (params: {
     workspacePath: string;
     prNumber: number;

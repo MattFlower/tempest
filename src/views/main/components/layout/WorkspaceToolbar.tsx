@@ -1,8 +1,9 @@
-import { useMemo } from "react";
-import { PaneTabKind, WorkspaceStatus, ActivityState } from "../../../../shared/ipc-types";
+import { useMemo, useCallback } from "react";
+import { PaneTabKind, ViewMode, WorkspaceStatus, ActivityState } from "../../../../shared/ipc-types";
 import { createTab } from "../../models/pane-node";
 import { useStore } from "../../state/store";
 import { addTab, splitPane } from "../../state/actions";
+import { api } from "../../state/rpc-client";
 import { DropdownButton, type DropdownItem } from "./DropdownButton";
 import { StatusBadge } from "./StatusBadge";
 
@@ -62,6 +63,19 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
 
   const workspaceName = workspace?.name ?? workspacePath.split("/").pop() ?? "Workspace";
 
+  const handleViewPRInBrowser = useCallback(async () => {
+    try {
+      const result = await api.lookupPRUrl(workspacePath);
+      if ("error" in result) {
+        console.warn("[WorkspaceToolbar] View PR failed:", result.error);
+        return;
+      }
+      addTabToFocusedPane(PaneTabKind.Browser, "PR", { browserURL: result.url });
+    } catch (err) {
+      console.error("[WorkspaceToolbar] View PR error:", err);
+    }
+  }, [workspacePath]);
+
   const newItems: DropdownItem[] = [
     { label: "Terminal", action: () => addTabToFocusedPane(PaneTabKind.Shell, "Shell") },
     { label: "Claude", action: () => addTabToFocusedPane(PaneTabKind.Claude, "Claude") },
@@ -81,8 +95,8 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
   const prItems: DropdownItem[] = [
     { label: "Open PR", action: () => console.log("[TODO] Open PR") },
     { label: "Link PR", action: () => console.log("[TODO] Link PR") },
-    { label: "View PR in Browser", action: () => console.log("[TODO] View PR in Browser") },
-    { label: "PR Review", action: () => addTabToFocusedPane(PaneTabKind.PRDashboard, "PR Reviews") },
+    { label: "View PR in Browser", action: handleViewPRInBrowser },
+    { label: "PR Review", action: () => useStore.getState().setViewMode(workspacePath, ViewMode.Dashboard) },
   ];
 
   return (

@@ -26,6 +26,7 @@ import { getDiff } from "./diff/diff-provider";
 import { buildEditorCommand } from "./editor/editor-command";
 import { AIContextProvider } from "./diff/ai-context-provider";
 import { PRMonitor } from "./pr/pr-monitor";
+import { lookupPRUrl } from "./pr/pr-url-lookup";
 
 // --- Stream A: Terminal + Session ---
 const ptyManager = new PtyManager();
@@ -252,7 +253,23 @@ const rpc = BrowserView.defineRPC({
         return await aiContextProvider.timelineForFile(params.filePath, params.projectPath);
       },
 
+      // --- PR URL Lookup ---
+      lookupPRUrl: async (params: any) => {
+        return await lookupPRUrl(params.workspacePath);
+      },
+
       // --- PR Feedback (Feature 3) ---
+      getPRMonitorStatus: (params: any) => {
+        const config = prMonitor.getMonitorConfig(params.workspacePath);
+        if (!config) return null;
+        return {
+          monitoring: true as const,
+          prNumber: config.prNumber,
+          prURL: config.prURL,
+          owner: config.owner,
+          repo: config.repo,
+        };
+      },
       startPRMonitor: async (params: any) => {
         await prMonitor.startMonitor({
           workspacePath: params.workspacePath,

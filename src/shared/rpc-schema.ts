@@ -241,7 +241,17 @@ export interface BunRequests {
     response: FileChangeTimeline | null;
   };
 
+  // PR URL lookup
+  lookupPRUrl: {
+    params: { workspacePath: string };
+    response: { url: string } | { error: string };
+  };
+
   // PR Feedback
+  getPRMonitorStatus: {
+    params: { workspacePath: string };
+    response: { monitoring: true; prNumber: number; prURL: string; owner: string; repo: string } | null;
+  };
   startPRMonitor: {
     params: { workspacePath: string; prNumber: number; prURL: string; owner: string; repo: string };
     response: void;

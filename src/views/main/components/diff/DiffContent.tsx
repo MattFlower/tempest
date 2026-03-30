@@ -61,20 +61,22 @@ const CUSTOM_CSS = `
     color: var(--ctp-text);
   }
   .d2h-del {
-    background-color: rgba(243, 139, 168, 0.12);
-    border-color: rgba(243, 139, 168, 0.2);
+    background-color: rgba(248, 81, 73, 0.13);
+    border-color: rgba(248, 81, 73, 0.30);
   }
   .d2h-ins {
-    background-color: rgba(166, 227, 161, 0.12);
-    border-color: rgba(166, 227, 161, 0.2);
+    background-color: rgba(46, 160, 67, 0.18);
+    border-color: rgba(46, 160, 67, 0.30);
   }
   .d2h-del .d2h-code-side-linenumber,
   .d2h-del .d2h-code-linenumber {
-    background-color: rgba(243, 139, 168, 0.12);
+    background-color: rgba(248, 81, 73, 0.20);
+    color: var(--ctp-subtext0);
   }
   .d2h-ins .d2h-code-side-linenumber,
   .d2h-ins .d2h-code-linenumber {
-    background-color: rgba(166, 227, 161, 0.12);
+    background-color: rgba(46, 160, 67, 0.25);
+    color: var(--ctp-subtext0);
   }
   .d2h-code-line-ctn {
     font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
@@ -113,6 +115,21 @@ const CUSTOM_CSS = `
   .d2h-del .d2h-code-line-ctn,
   .d2h-ins .d2h-code-line-ctn {
     color: inherit;
+  }
+  /* Word-level inline change highlights */
+  .d2h-code-line-ctn del,
+  .d2h-code-side-line del,
+  .d2h-del .d2h-code-line-ctn del {
+    background-color: rgba(248, 81, 73, 0.35);
+    text-decoration: none;
+    border-radius: 3px;
+  }
+  .d2h-code-line-ctn ins,
+  .d2h-code-side-line ins,
+  .d2h-ins .d2h-code-line-ctn ins {
+    background-color: rgba(46, 160, 67, 0.35);
+    text-decoration: none;
+    border-radius: 3px;
   }
   /* Custom scrollbar */
   ::-webkit-scrollbar {

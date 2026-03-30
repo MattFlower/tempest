@@ -9,7 +9,7 @@ import { WorkspaceToolbar } from "./WorkspaceToolbar";
 import { DiffView } from "../diff/DiffView";
 import { PRDashboard } from "../pr/PRDashboard";
 import { initTerminalDispatch } from "../../state/terminal-dispatch";
-import { splitPane, focusNextPane, focusPreviousPane, toggleMaximize, closeTab } from "../../state/actions";
+import { addTab, splitPane, focusNextPane, focusPreviousPane, toggleMaximize, closeTab } from "../../state/actions";
 import { findPane } from "../../models/pane-node";
 
 // Normalize: if root is a leaf, wrap it in a single-child split.
@@ -74,6 +74,16 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
           if (pane?.selectedTabId) {
             closeTab(focusedPaneId, pane.selectedTabId);
           }
+        }
+      }
+      if (e.metaKey && e.key === "t") {
+        e.preventDefault();
+        const { focusedPaneId } = useStore.getState();
+        if (focusedPaneId) {
+          const tab = createTab(PaneTabKind.Claude, "Claude", {
+            terminalId: crypto.randomUUID(),
+          });
+          addTab(focusedPaneId, tab);
         }
       }
       // View mode shortcuts: Cmd+1 = Terminal, Cmd+2 = Diff, Cmd+3 = Dashboard

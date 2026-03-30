@@ -10,6 +10,10 @@ DEVELOPER_ID="Developer ID Application: Matthew Flower (24P9P34MKT)"
 
 cd "$PROJECT_DIR"
 
+# --- Install deps ---
+echo "==> Installing dependencies..."
+$BUN install
+
 # --- Build ---
 echo "==> Building ${APP_NAME} release..."
 export ELECTROBUN_DEVELOPER_ID="$DEVELOPER_ID"

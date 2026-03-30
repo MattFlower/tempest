@@ -67,14 +67,14 @@ const SUBMIT_DRAFT_TOOL = {
 };
 
 // Write a JSON-RPC response to stdout
-function sendResponse(id: number | string | null, result: unknown): void {
+export function sendResponse(id: number | string | null, result: unknown): void {
   const msg = JSON.stringify({ jsonrpc: "2.0", id, result });
   // MCP uses Content-Length framed messages on stdio
   const header = `Content-Length: ${Buffer.byteLength(msg)}\r\n\r\n`;
   process.stdout.write(header + msg);
 }
 
-function sendError(
+export function sendError(
   id: number | string | null,
   code: number,
   message: string,
@@ -88,14 +88,14 @@ function sendError(
   process.stdout.write(header + msg);
 }
 
-function sendNotification(method: string, params: unknown): void {
+export function sendNotification(method: string, params: unknown): void {
   const msg = JSON.stringify({ jsonrpc: "2.0", method, params });
   const header = `Content-Length: ${Buffer.byteLength(msg)}\r\n\r\n`;
   process.stdout.write(header + msg);
 }
 
 // Handle incoming JSON-RPC requests
-async function handleRequest(
+export async function handleRequest(
   id: number | string | null,
   method: string,
   params: Record<string, unknown>,
@@ -210,6 +210,53 @@ async function postDraft(draft: {
   });
 }
 
+// --- SSE Parsing ---
+
+export interface SSEEvent {
+  type: string;
+  data: string;
+}
+
+/** Strip HTTP response headers from a buffer. */
+export function skipHTTPHeaders(buffer: string): {
+  body: string;
+  found: boolean;
+} {
+  const headerEnd = buffer.indexOf("\r\n\r\n");
+  if (headerEnd === -1) return { body: buffer, found: false };
+  return { body: buffer.slice(headerEnd + 4), found: true };
+}
+
+/**
+ * Parse SSE events from a buffer. Returns parsed events and any remaining
+ * incomplete data. Handles multi-line data fields per the SSE spec.
+ */
+export function parseSSEBuffer(buffer: string): {
+  events: SSEEvent[];
+  remainder: string;
+} {
+  const parts = buffer.split("\n\n");
+  const remainder = parts.pop() || "";
+  const events: SSEEvent[] = [];
+
+  for (const part of parts) {
+    if (!part.trim()) continue;
+    const lines = part.split("\n");
+    let eventType = "";
+    let eventData = "";
+    for (const line of lines) {
+      if (line.startsWith("event: ")) eventType = line.slice(7);
+      else if (line.startsWith("data: "))
+        eventData += (eventData ? "\n" : "") + line.slice(6);
+    }
+    if (eventType && eventData) {
+      events.push({ type: eventType, data: eventData });
+    }
+  }
+
+  return { events, remainder };
+}
+
 // --- SSE Listener (receives events from Tempest) ---
 
 function connectSSE(): void {
@@ -229,35 +276,22 @@ function connectSSE(): void {
   sock.on("data", (data) => {
     buffer += data.toString();
 
-    // Skip HTTP headers on first chunk
     if (!headersParsed) {
-      const headerEnd = buffer.indexOf("\r\n\r\n");
-      if (headerEnd === -1) return;
-      buffer = buffer.slice(headerEnd + 4);
+      const result = skipHTTPHeaders(buffer);
+      if (!result.found) return;
+      buffer = result.body;
       headersParsed = true;
     }
 
-    // Parse SSE events
-    const events = buffer.split("\n\n");
-    buffer = events.pop() || ""; // last chunk may be incomplete
+    const { events, remainder } = parseSSEBuffer(buffer);
+    buffer = remainder;
 
     for (const event of events) {
-      if (!event.trim()) continue;
-      const lines = event.split("\n");
-      let eventType = "";
-      let eventData = "";
-      for (const line of lines) {
-        if (line.startsWith("event: ")) eventType = line.slice(7);
-        else if (line.startsWith("data: ")) eventData = line.slice(6);
-      }
-      if (eventType && eventData) {
-        forwardToChannel(eventType, eventData);
-      }
+      forwardToChannel(event.type, event.data);
     }
   });
 
   sock.on("error", () => {
-    // Reconnect after delay
     setTimeout(connectSSE, 5000);
   });
 
@@ -266,16 +300,22 @@ function connectSSE(): void {
   });
 }
 
-function forwardToChannel(eventType: string, data: string): void {
+export function forwardToChannel(eventType: string, data: string): void {
   try {
     const parsed = JSON.parse(data);
+    const author = parsed.author ?? "unknown";
+    const body = parsed.body ?? "";
+    const path = parsed.path ?? "";
+    const line = parsed.line ?? null;
+    const nodeId = parsed.node_id ?? "";
+
     sendNotification("notifications/claude/channel", {
-      content: `Review comment from @${parsed.author} on ${parsed.path || "PR"}${parsed.line ? `:${parsed.line}` : ""}:\n\n${parsed.body}`,
+      content: `Review comment from @${author} on ${path || "PR"}${line ? `:${line}` : ""}:\n\n${body}`,
       meta: {
-        node_id: parsed.node_id,
-        author: parsed.author,
-        path: parsed.path || "",
-        line: String(parsed.line || ""),
+        node_id: nodeId,
+        author,
+        path,
+        line: String(line || ""),
         event_type: eventType,
       },
     });
@@ -338,5 +378,7 @@ async function startStdioTransport(): Promise<void> {
 
 // --- Start ---
 
-startStdioTransport();
-connectSSE();
+if (import.meta.main) {
+  startStdioTransport();
+  connectSSE();
+}

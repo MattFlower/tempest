@@ -35,7 +35,7 @@ function UsagePill({ label, data, costColor }: { label: string; data: UsageToken
       <span className="flex items-center gap-2 text-[11px]" style={{ color: "rgba(255,255,255,0.7)" }}>
         <span>↓{formatTokens(data.inputTokens)}</span>
         <span>↑{formatTokens(data.outputTokens)}</span>
-        <span>cache:{formatTokens(data.cacheReadTokens)}</span>
+        <span>⟳{formatTokens(data.cacheReadTokens)}</span>
       </span>
       <span className="text-[11px] font-medium" style={{ color: costColor }}>
         ${data.totalCost.toFixed(2)}
@@ -47,7 +47,6 @@ function UsagePill({ label, data, costColor }: { label: string; data: UsageToken
 export function UsageFooter() {
   const [usage, setUsage] = useState<UsageResponse | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
-  const [isStale, setIsStale] = useState(false);
   const [, setTick] = useState(0); // force re-render for relative time
   const selectedWorkspacePath = useStore((s) => s.selectedWorkspacePath);
 
@@ -56,25 +55,28 @@ export function UsageFooter() {
       const data = await api.getUsageData();
       setUsage(data);
       setLastUpdated(Date.now());
-      setIsStale(false);
-    } catch (err) {
-      console.error("[UsageFooter] fetch error:", err);
-      setIsStale(true);
+    } catch {
+      // RPC transport error — keep showing existing data
     }
   }, []);
 
   useEffect(() => {
     fetchUsage();
-    // Retry quickly at first (data may still be loading in background), then slow down
+
+    // Retry quickly at first (data may still be loading in background)
     const quickRetry = setInterval(fetchUsage, 3_000);
+    let longInterval: ReturnType<typeof setInterval> | null = null;
+
+    // After 15s, switch to standard 5-minute polling
     const slowDown = setTimeout(() => {
       clearInterval(quickRetry);
+      longInterval = setInterval(fetchUsage, REFRESH_INTERVAL_MS);
     }, 15_000);
-    const interval = setInterval(fetchUsage, REFRESH_INTERVAL_MS);
+
     return () => {
       clearInterval(quickRetry);
       clearTimeout(slowDown);
-      clearInterval(interval);
+      if (longInterval) clearInterval(longInterval);
     };
   }, [fetchUsage]);
 
@@ -98,7 +100,7 @@ export function UsageFooter() {
     >
       {/* Timestamp */}
       <div className="flex items-center gap-1 text-[10px]" style={{ color: "rgba(255,255,255,0.25)" }}>
-        {isStale && <span style={{ color: "var(--ctp-yellow)", fontSize: "10px" }}>stale</span>}
+        {usage?.isStale && <span style={{ color: "var(--ctp-yellow)", fontSize: "10px" }}>stale</span>}
         {lastUpdated ? relativeTime(lastUpdated) : "Loading..."}
       </div>
 

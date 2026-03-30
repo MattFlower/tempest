@@ -164,6 +164,7 @@ export interface UsageTokens {
 export interface UsageResponse {
   dailyTotals: UsageTokens | null;
   projectBreakdowns: Record<string, UsageTokens>;
+  isStale: boolean;
 }
 
 // --- Binary Check ---

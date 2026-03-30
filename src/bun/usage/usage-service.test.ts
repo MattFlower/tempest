@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { parseResponse, todayString, projectSlug } from "./usage-service";
+import { parseResponse, todayString, projectSlug, formatTokens } from "./usage-service";
 
 describe("parseResponse", () => {
   it("parses per-project breakdowns from --instances response", () => {
@@ -136,5 +136,35 @@ describe("projectSlug", () => {
 
   it("handles paths with no slashes", () => {
     expect(projectSlug("project")).toBe("project");
+  });
+
+  it("handles paths with trailing slash", () => {
+    expect(projectSlug("/Users/mflower/code/")).toBe("-Users-mflower-code-");
+  });
+});
+
+describe("formatTokens", () => {
+  it("returns small numbers as-is", () => {
+    expect(formatTokens(288)).toBe("288");
+  });
+
+  it("formats thousands with K suffix", () => {
+    expect(formatTokens(4_448)).toBe("4.4K");
+  });
+
+  it("formats millions with M suffix", () => {
+    expect(formatTokens(12_684_109)).toBe("12.7M");
+  });
+
+  it("returns zero as '0'", () => {
+    expect(formatTokens(0)).toBe("0");
+  });
+
+  it("formats exact 1000 as 1.0K", () => {
+    expect(formatTokens(1_000)).toBe("1.0K");
+  });
+
+  it("formats exact 1000000 as 1.0M", () => {
+    expect(formatTokens(1_000_000)).toBe("1.0M");
   });
 });

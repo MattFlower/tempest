@@ -79,56 +79,164 @@ export function buildMarkdownHTML(markdown: string): string {
 
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #ffffff; --text: #1a1a1a; --text-secondary: #555;
-    --code-bg: #f5f5f5; --code-border: #e0e0e0;
-    --blockquote-border: #ddd; --blockquote-text: #666;
-    --link: #0066cc; --table-border: #ddd; --table-stripe: #f9f9f9; --hr: #ddd;
+    --bg: #f6f3ee; --bg-surface: #ece8e1; --text: #3d3a35; --text-secondary: #6b665e;
+    --code-bg: #e6e2da; --code-border: #d5d0c7;
+    --blockquote-border: #c49a4a; --blockquote-bg: rgba(196,154,74,0.06); --blockquote-text: #5c5850;
+    --link: #9a7430; --link-hover: #c49a4a;
+    --table-border: #d5d0c7; --table-header-bg: #e6e2da; --table-stripe: #ece8e1;
+    --hr-from: #c49a4a; --hr-to: #a08060;
+    --accent-1: #9a7430; --accent-2: #c49a4a; --accent-3: #a08060;
+    --heading-1: #2e2b27; --heading-2: #3d3a35; --heading-3: #5c5850;
+    --bullet: #c49a4a;
+    --shadow-code: rgba(0,0,0,0.05);
   }
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1e1e2e; --text: #cdd6f4; --text-secondary: #a6adc8;
-    --code-bg: #181825; --code-border: #313244;
-    --blockquote-border: #45475a; --blockquote-text: #a6adc8;
-    --link: #89b4fa; --table-border: #45475a; --table-stripe: #1a1a2e; --hr: #45475a;
+    --bg: #28272c; --bg-surface: #201f24; --text: #d6d2c8; --text-secondary: #a09b90;
+    --code-bg: #1e1d22; --code-border: #38363d;
+    --blockquote-border: #d4a85a; --blockquote-bg: rgba(212,168,90,0.05); --blockquote-text: #a09b90;
+    --link: #d4a85a; --link-hover: #e8c47a;
+    --table-border: #38363d; --table-header-bg: #201f24; --table-stripe: rgba(56,54,61,0.3);
+    --hr-from: #d4a85a; --hr-to: #a08868;
+    --accent-1: #d4a85a; --accent-2: #e8c47a; --accent-3: #c09060;
+    --heading-1: #e2ded6; --heading-2: #c8c4ba; --heading-3: #a09b90;
+    --bullet: #d4a85a;
+    --shadow-code: rgba(0,0,0,0.3);
   }
 }
 
 @media (prefers-color-scheme: light) { ${hljsCssLight} }
 @media (prefers-color-scheme: dark) { ${hljsCssDark} }
 
+* { box-sizing: border-box; }
+
 body {
-  margin: 0; padding: 24px 32px;
+  margin: 0; padding: 32px 40px 48px;
   background: var(--bg); color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
-  font-size: 15px; line-height: 1.7; -webkit-font-smoothing: antialiased;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+  font-size: 15px; line-height: 1.75; -webkit-font-smoothing: antialiased;
+  max-width: 52em; margin-left: auto; margin-right: auto;
 }
-h1, h2, h3, h4, h5, h6 { margin-top: 1.5em; margin-bottom: 0.5em; font-weight: 600; }
-h1 { font-size: 2em; border-bottom: 1px solid var(--hr); padding-bottom: 0.3em; }
-h2 { font-size: 1.5em; border-bottom: 1px solid var(--hr); padding-bottom: 0.3em; }
-h3 { font-size: 1.25em; }
-a { color: var(--link); text-decoration: none; }
-a:hover { text-decoration: underline; }
+
+/* ── Headings ── */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700; letter-spacing: -0.01em; margin-bottom: 0.6em;
+}
+h1 {
+  font-size: 2em; margin-top: 0; padding-bottom: 0.4em; color: var(--heading-1);
+  border-bottom: 2px solid transparent;
+  border-image: linear-gradient(to right, var(--accent-1), var(--accent-3), transparent) 1;
+}
+h2 {
+  font-size: 1.5em; margin-top: 2em; padding-bottom: 0.3em; color: var(--heading-2);
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(to right, var(--accent-2), transparent 80%) 1;
+}
+h3 { font-size: 1.2em; margin-top: 1.8em; color: var(--heading-3); }
+h4 { font-size: 1.05em; margin-top: 1.5em; color: var(--heading-3); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+
+/* ── Links ── */
+a {
+  color: var(--link); text-decoration: none;
+  background-image: linear-gradient(var(--link-hover), var(--link-hover));
+  background-size: 0% 1px; background-position: 0 100%; background-repeat: no-repeat;
+  transition: background-size 0.25s ease;
+}
+a:hover { background-size: 100% 1px; }
+
+/* ── Inline code ── */
 code {
-  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace; font-size: 0.9em;
-  background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 4px; border: 1px solid var(--code-border);
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace; font-size: 0.88em;
+  background: var(--code-bg); padding: 0.15em 0.45em; border-radius: 5px;
+  border: 1px solid var(--code-border);
 }
+
+/* ── Code blocks ── */
 pre {
   background: var(--code-bg); border: 1px solid var(--code-border);
-  border-radius: 8px; padding: 16px; overflow-x: auto;
+  border-radius: 10px; padding: 18px 20px; overflow-x: auto;
+  box-shadow: 0 2px 8px var(--shadow-code);
+  position: relative;
 }
-pre code { background: none; border: none; padding: 0; font-size: 13px; line-height: 1.5; }
-blockquote { margin: 1em 0; padding: 0.5em 1em; border-left: 4px solid var(--blockquote-border); color: var(--blockquote-text); }
-table { border-collapse: collapse; width: 100%; margin: 1em 0; }
-th, td { border: 1px solid var(--table-border); padding: 8px 12px; text-align: left; }
-tr:nth-child(even) { background: var(--table-stripe); }
-hr { border: none; border-top: 1px solid var(--hr); margin: 2em 0; }
-img { max-width: 100%; height: auto; border-radius: 4px; }
-ul, ol { padding-left: 2em; }
-li { margin-bottom: 0.3em; }
-.task-list-item { list-style: none; margin-left: -1.5em; }
-.task-list-item input { margin-right: 0.5em; }
-.mermaid { text-align: center; margin: 1em 0; }
+pre code {
+  background: none; border: none; padding: 0; font-size: 13px; line-height: 1.6;
+  box-shadow: none;
+}
+
+/* ── Blockquotes ── */
+blockquote {
+  margin: 1.5em 0; padding: 0.8em 1.2em;
+  border-left: 3px solid var(--blockquote-border);
+  background: var(--blockquote-bg); border-radius: 0 8px 8px 0;
+  color: var(--blockquote-text); font-style: italic;
+}
+blockquote p { margin: 0.3em 0; }
+
+/* ── Tables ── */
+table {
+  border-collapse: separate; border-spacing: 0; width: 100%; margin: 1.5em 0;
+  border-radius: 10px; overflow: hidden;
+  border: 1px solid var(--table-border);
+  box-shadow: 0 1px 4px var(--shadow-code);
+}
+th {
+  background: var(--table-header-bg); font-weight: 600; font-size: 0.85em;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary);
+  padding: 10px 14px; text-align: left;
+  border-bottom: 2px solid var(--accent-2);
+}
+td {
+  padding: 10px 14px; text-align: left;
+  border-bottom: 1px solid var(--table-border);
+}
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--table-stripe); }
+
+/* ── Horizontal rules ── */
+hr {
+  border: none; height: 2px; margin: 2.5em auto;
+  background: linear-gradient(to right, transparent, var(--hr-from), var(--hr-to), transparent);
+  border-radius: 1px; max-width: 80%;
+}
+
+/* ── Lists ── */
+ul, ol { padding-left: 1.8em; }
+li { margin-bottom: 0.35em; }
+ul > li { list-style: none; position: relative; }
+ul > li::before {
+  content: ''; position: absolute; left: -1.3em; top: 0.65em;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--bullet);
+}
+ul ul > li::before {
+  background: transparent; border: 1.5px solid var(--bullet);
+  width: 5px; height: 5px;
+}
+ol { list-style: none; counter-reset: ol-counter; }
+ol > li { counter-increment: ol-counter; position: relative; }
+ol > li::before {
+  content: counter(ol-counter); position: absolute; left: -1.8em;
+  width: 1.4em; text-align: right;
+  font-size: 0.85em; font-weight: 600; color: var(--accent-2);
+}
+
+/* ── Images ── */
+img { max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 12px var(--shadow-code); }
+
+/* ── Paragraphs & strong/em ── */
+p { margin: 0.8em 0; }
+strong { font-weight: 650; color: var(--heading-1); }
+
+/* ── Task lists ── */
+.task-list-item { list-style: none; }
+.task-list-item::before { display: none; }
+.task-list-item input { margin-right: 0.5em; margin-left: -1.3em; }
+
+/* ── Mermaid ── */
+.mermaid { text-align: center; margin: 1.5em 0; }
+
+/* ── First heading special case ── */
+body > h1:first-child { margin-top: 0.2em; }
 </style>
 </head>
 <body>

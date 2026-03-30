@@ -9,6 +9,7 @@
 // ============================================================
 
 import markdownit from "markdown-it";
+import { frontmatterPlugin } from "@mdit-vue/plugin-frontmatter";
 import hljs from "highlight.js";
 
 // @ts-ignore — Bun text import
@@ -35,6 +36,8 @@ const md = markdownit({
     return "";
   },
 });
+
+md.use(frontmatterPlugin);
 
 /**
  * Build a complete self-contained HTML page from markdown.

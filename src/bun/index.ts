@@ -353,6 +353,7 @@ ApplicationMenu.setApplicationMenu([
     submenu: [
       { label: "New Workspace", action: "new-workspace", accelerator: "Cmd+N" },
       { label: "Add Repository...", action: "add-repo", accelerator: "Cmd+O" },
+      { label: "Open File...", action: "open-file", accelerator: "Cmd+P" },
       { type: "separator" },
       { role: "close" },
     ],

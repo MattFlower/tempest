@@ -139,6 +139,9 @@ const rpc = Electroview.defineRPC({
             case "command-palette":
               store.toggleCommandPalette();
               break;
+            case "open-file":
+              store.openCommandPaletteFiles();
+              break;
             case "new-workspace":
               // Open command palette as a starting point
               if (!store.commandPaletteVisible) store.toggleCommandPalette();

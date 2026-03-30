@@ -87,7 +87,7 @@ export function closeTab(paneId: string, tabId: string) {
         useStore.getState();
       if (selectedWorkspacePath) {
         // Create a fresh default pane
-        const tab = createTab(PaneTabKind.Shell, "Shell", {
+        const tab = createTab(PaneTabKind.Claude, "Claude", {
           terminalId: crypto.randomUUID(),
         });
         const newPane = createPane(tab);

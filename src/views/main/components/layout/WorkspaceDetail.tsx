@@ -100,7 +100,7 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
   useEffect(() => {
     if (workspacePath && !paneTrees[workspacePath]) {
       const terminalId = crypto.randomUUID();
-      const tab = createTab(PaneTabKind.Shell, "Shell", {
+      const tab = createTab(PaneTabKind.Claude, "Claude", {
         terminalId,
       });
       const pane = createPane(tab);

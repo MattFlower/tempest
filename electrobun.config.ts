@@ -24,6 +24,7 @@ export default {
       "src/views/main/index.html": "views/main/index.html",
     },
     mac: {
+      icons: "icon.iconset",
       bundleCEF: true,
       codesign: true,
       notarize: false,

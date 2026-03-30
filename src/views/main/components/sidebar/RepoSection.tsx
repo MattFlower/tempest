@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { SourceRepo, TempestWorkspace, WorkspaceSidebarInfo } from "../../../../shared/ipc-types";
 import { WorkspaceRow } from "./WorkspaceRow";
-import { api } from "../../state/rpc-client";
 
 interface Props {
   repo: SourceRepo;
@@ -10,6 +9,7 @@ interface Props {
   selectedWorkspacePath: string | null;
   showDivider: boolean;
   onSelectWorkspace: (path: string) => void;
+  onArchiveWorkspace: (workspace: TempestWorkspace) => void;
   onToggleExpanded: () => void;
   onNewWorkspace: () => void;
   onRefreshWorkspaces: () => void;
@@ -24,6 +24,7 @@ export function RepoSection({
   selectedWorkspacePath,
   showDivider,
   onSelectWorkspace,
+  onArchiveWorkspace,
   onToggleExpanded,
   onNewWorkspace,
   onRefreshWorkspaces,
@@ -101,7 +102,7 @@ export function RepoSection({
               shortcutIndex={i < 9 ? i + 1 : undefined}
               isSelected={ws.path === selectedWorkspacePath}
               onSelect={() => onSelectWorkspace(ws.path)}
-              onArchive={() => api.archiveWorkspace(ws.id)}
+              onArchive={() => onArchiveWorkspace(ws)}
               onRefreshDiffStats={() => onRefreshSidebarInfo(ws.path)}
             />
           ))}

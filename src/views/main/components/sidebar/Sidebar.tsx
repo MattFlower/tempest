@@ -1,7 +1,8 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import type { SourceRepo, TempestWorkspace } from "../../../../shared/ipc-types";
 import { useStore } from "../../state/store";
 import { api } from "../../state/rpc-client";
+import { allPanes } from "../../models/pane-node";
 import { RepoSection } from "./RepoSection";
 import { SidebarToolbar } from "./SidebarToolbar";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
@@ -90,6 +91,32 @@ export function Sidebar() {
     setAddRepoError(null);
   };
 
+  const handleArchiveWorkspace = useCallback(async (workspace: TempestWorkspace) => {
+    const { paneTrees, selectedWorkspacePath, selectWorkspace: select } = useStore.getState();
+
+    // Kill all terminals in this workspace's pane tree
+    const tree = paneTrees[workspace.path];
+    if (tree) {
+      for (const pane of allPanes(tree)) {
+        for (const tab of pane.tabs) {
+          if (tab.terminalId) {
+            api.killTerminal({ id: tab.terminalId });
+          }
+        }
+      }
+    }
+
+    // Archive via backend (VCS-level operation)
+    await api.archiveWorkspace(workspace.id);
+
+    // If the archived workspace was selected, switch to another
+    if (selectedWorkspacePath === workspace.path) {
+      const allWorkspaces = Object.values(useStore.getState().workspacesByRepo).flat();
+      const other = allWorkspaces.find((w) => w.path !== workspace.path);
+      select(other?.path ?? null);
+    }
+  }, []);
+
   const handleToggleExpanded = (repoIndex: number) => {
     const updated = repos.map((r, i) =>
       i === repoIndex ? { ...r, isExpanded: !r.isExpanded } : r
@@ -159,6 +186,7 @@ export function Sidebar() {
               selectedWorkspacePath={selectedWorkspacePath}
               showDivider={index > 0}
               onSelectWorkspace={selectWorkspace}
+              onArchiveWorkspace={handleArchiveWorkspace}
               onToggleExpanded={() => handleToggleExpanded(index)}
               onNewWorkspace={() => setNewWorkspaceRepo(repo)}
               onRefreshWorkspaces={() => {

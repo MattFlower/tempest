@@ -252,6 +252,14 @@ export const api = {
   getConfig: () => rpcRequest.getConfig(),
   saveConfig: (config: any) => rpcRequest.saveConfig(config),
 
+  // Repo settings
+  getRepoSettings: (repoPath: string) =>
+    rpcRequest.getRepoSettings({ repoPath }),
+  saveRepoSettings: (repoPath: string, settings: any) =>
+    rpcRequest.saveRepoSettings({ repoPath, settings }),
+  testPrepareScript: (repoPath: string, script: string) =>
+    rpcRequest.testPrepareScript({ repoPath, script }),
+
   // Bookmarks
   getBookmarks: (repoPath: string) => rpcRequest.getBookmarks({ repoPath }),
   addBookmark: (repoPath: string, url: string, label: string) =>

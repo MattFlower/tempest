@@ -11,6 +11,7 @@ import type {
   HookEvent,
   LatencyStats,
   PaneNodeState,
+  RepoSettings,
   SessionMessage,
   SessionState,
   SessionSummary,
@@ -128,6 +129,20 @@ export interface BunRequests {
   saveConfig: {
     params: AppConfig;
     response: void;
+  };
+
+  // Repo settings
+  getRepoSettings: {
+    params: { repoPath: string };
+    response: RepoSettings;
+  };
+  saveRepoSettings: {
+    params: { repoPath: string; settings: RepoSettings };
+    response: void;
+  };
+  testPrepareScript: {
+    params: { repoPath: string; script: string };
+    response: { exitCode: number; output: string };
   };
 
   // Bookmarks

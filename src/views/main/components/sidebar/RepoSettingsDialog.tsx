@@ -1,0 +1,252 @@
+import { useState, useEffect, useRef } from "react";
+import type { SourceRepo } from "../../../../shared/ipc-types";
+import { api } from "../../state/rpc-client";
+
+interface Props {
+  repo: SourceRepo;
+  onDismiss: () => void;
+}
+
+export function RepoSettingsDialog({ repo, onDismiss }: Props) {
+  const [script, setScript] = useState("");
+  const [originalScript, setOriginalScript] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    exitCode: number;
+    output: string;
+  } | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const outputRef = useRef<HTMLPreElement>(null);
+
+  useEffect(() => {
+    (async () => {
+      const settings = await api.getRepoSettings(repo.path);
+      setScript(settings.prepareScript ?? "");
+      setOriginalScript(settings.prepareScript ?? "");
+      setLoading(false);
+      setTimeout(() => textareaRef.current?.focus(), 0);
+    })();
+  }, [repo.path]);
+
+  useEffect(() => {
+    if (testResult && outputRef.current) {
+      outputRef.current.scrollTop = outputRef.current.scrollHeight;
+    }
+  }, [testResult]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await api.saveRepoSettings(repo.path, { prepareScript: script });
+    setSaving(false);
+    onDismiss();
+  };
+
+  const handleTestRun = async () => {
+    setTesting(true);
+    setTestResult(null);
+    const result = await api.testPrepareScript(repo.path, script);
+    setTestResult(result);
+    setTesting(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      onDismiss();
+    }
+    if (e.key === "s" && e.metaKey) {
+      e.preventDefault();
+      handleSave();
+    }
+  };
+
+  const isDirty = script !== originalScript;
+  const canTest = script.trim().length > 0 && !testing;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
+      onClick={onDismiss}
+    >
+      <div
+        className="flex flex-col gap-4 rounded-xl p-6 shadow-2xl"
+        style={{
+          backgroundColor: "var(--ctp-base)",
+          border: "1px solid var(--ctp-surface0)",
+          width: 480,
+        }}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={handleKeyDown}
+      >
+        {/* Title */}
+        <div className="text-center">
+          <h2
+            className="text-base font-bold"
+            style={{ color: "var(--ctp-text)" }}
+          >
+            Repository Settings
+          </h2>
+          <p
+            className="text-xs mt-1"
+            style={{ color: "var(--ctp-overlay0)" }}
+          >
+            {repo.name}
+          </p>
+        </div>
+
+        {loading ? (
+          <div
+            className="text-center text-sm py-4"
+            style={{ color: "var(--ctp-overlay1)" }}
+          >
+            Loading...
+          </div>
+        ) : (
+          <>
+            {/* Script editor */}
+            <div className="flex flex-col gap-1.5">
+              <label
+                className="text-[11px] font-semibold"
+                style={{ color: "var(--ctp-subtext0)" }}
+              >
+                Prepare workspace script
+              </label>
+              <p
+                className="text-[11px]"
+                style={{ color: "var(--ctp-overlay0)" }}
+              >
+                Runs in the workspace directory after each new workspace is
+                created.
+              </p>
+              <textarea
+                ref={textareaRef}
+                value={script}
+                onChange={(e) => {
+                  setScript(e.target.value);
+                  setTestResult(null);
+                }}
+                placeholder="e.g. npm install"
+                rows={5}
+                spellCheck={false}
+                className="px-3 py-2 rounded text-sm font-mono outline-none resize-none"
+                style={{
+                  backgroundColor: "var(--ctp-surface0)",
+                  color: "var(--ctp-text)",
+                  border: "1px solid var(--ctp-surface1)",
+                }}
+              />
+            </div>
+
+            {/* Test Run */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleTestRun}
+                  disabled={!canTest}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-semibold transition-opacity"
+                  style={{
+                    backgroundColor: canTest
+                      ? "var(--ctp-surface1)"
+                      : "var(--ctp-surface0)",
+                    color: canTest
+                      ? "var(--ctp-text)"
+                      : "var(--ctp-overlay0)",
+                    cursor: canTest ? "pointer" : "not-allowed",
+                    opacity: canTest ? 1 : 0.5,
+                  }}
+                >
+                  <svg
+                    className="w-3 h-3"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                  >
+                    <path d="M4 2l10 6-10 6V2z" />
+                  </svg>
+                  {testing ? "Running..." : "Test Run"}
+                </button>
+
+                {testResult && !testing && (
+                  <span
+                    className="text-xs font-semibold flex items-center gap-1"
+                    style={{
+                      color:
+                        testResult.exitCode === 0
+                          ? "var(--ctp-green)"
+                          : "var(--ctp-red)",
+                    }}
+                  >
+                    {testResult.exitCode === 0 ? (
+                      <>
+                        <svg
+                          className="w-4 h-4"
+                          viewBox="0 0 16 16"
+                          fill="currentColor"
+                        >
+                          <path d="M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16zm3.78-9.72a.75.75 0 0 0-1.06-1.06L7 8.94 5.28 7.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.06 0l4.25-4.25z" />
+                        </svg>
+                        Success
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          className="w-4 h-4"
+                          viewBox="0 0 16 16"
+                          fill="currentColor"
+                        >
+                          <path d="M2.343 13.657A8 8 0 1 1 13.657 2.343 8 8 0 0 1 2.343 13.657zM6.03 4.97a.75.75 0 0 0-1.06 1.06L6.94 8 4.97 9.97a.75.75 0 1 0 1.06 1.06L8 9.06l1.97 1.97a.75.75 0 1 0 1.06-1.06L9.06 8l1.97-1.97a.75.75 0 1 0-1.06-1.06L8 6.94 6.03 4.97z" />
+                        </svg>
+                        Failed (exit {testResult.exitCode})
+                      </>
+                    )}
+                  </span>
+                )}
+              </div>
+
+              {testResult && testResult.output && (
+                <pre
+                  ref={outputRef}
+                  className="px-3 py-2 rounded text-[11px] font-mono overflow-auto max-h-40 whitespace-pre-wrap"
+                  style={{
+                    backgroundColor: "var(--ctp-surface0)",
+                    color: "var(--ctp-subtext0)",
+                    border: "1px solid var(--ctp-surface1)",
+                  }}
+                >
+                  {testResult.output}
+                </pre>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Buttons */}
+        <div className="flex justify-end gap-2 mt-1">
+          <button
+            onClick={onDismiss}
+            className="px-3 py-1.5 rounded text-sm transition-colors"
+            style={{ color: "var(--ctp-overlay1)" }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || loading}
+            className="px-3 py-1.5 rounded text-sm font-semibold transition-opacity"
+            style={{
+              backgroundColor:
+                isDirty && !saving ? "var(--ctp-blue)" : "var(--ctp-surface1)",
+              color:
+                isDirty && !saving ? "var(--ctp-base)" : "var(--ctp-overlay0)",
+              cursor: saving ? "not-allowed" : "pointer",
+            }}
+          >
+            {saving ? "Saving..." : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

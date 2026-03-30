@@ -6,6 +6,7 @@ import { allPanes } from "../../models/pane-node";
 import { RepoSection } from "./RepoSection";
 import { SidebarToolbar } from "./SidebarToolbar";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
+import { RepoSettingsDialog } from "./RepoSettingsDialog";
 
 export function Sidebar() {
   const repos = useStore((s) => s.repos);
@@ -26,6 +27,7 @@ export function Sidebar() {
   const [addRepoError, setAddRepoError] = useState<string | null>(null);
   const addRepoInputRef = useRef<HTMLInputElement>(null);
   const [newWorkspaceRepo, setNewWorkspaceRepo] = useState<SourceRepo | null>(null);
+  const [settingsRepo, setSettingsRepo] = useState<SourceRepo | null>(null);
 
   // Load repos and their workspaces on mount
   useEffect(() => {
@@ -195,6 +197,7 @@ export function Sidebar() {
               onRemoveRepo={() => {
                 api.removeRepo(repo.id);
               }}
+              onOpenSettings={() => setSettingsRepo(repo)}
               onRefreshSidebarInfo={(workspacePath) => {
                 api.getSidebarInfo(workspacePath).then((info: any) => {
                   if (info) setSidebarInfo(workspacePath, info);
@@ -216,6 +219,13 @@ export function Sidebar() {
             selectWorkspace(workspace.path);
           }}
           onDismiss={() => setNewWorkspaceRepo(null)}
+        />
+      )}
+
+      {settingsRepo && (
+        <RepoSettingsDialog
+          repo={settingsRepo}
+          onDismiss={() => setSettingsRepo(null)}
         />
       )}
     </div>

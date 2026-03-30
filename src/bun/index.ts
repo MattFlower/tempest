@@ -143,6 +143,17 @@ const rpc = BrowserView.defineRPC({
         await workspaceManager.saveConfig(_params);
       },
 
+      // --- Repo Settings ---
+      getRepoSettings: (_params: any) => {
+        return workspaceManager.getRepoSettings(_params.repoPath);
+      },
+      saveRepoSettings: async (_params: any) => {
+        await workspaceManager.saveRepoSettings(_params.repoPath, _params.settings);
+      },
+      testPrepareScript: async (_params: any) => {
+        return await workspaceManager.runPrepareScript(_params.script, _params.repoPath);
+      },
+
       // --- Bookmarks (Stream C) ---
       getBookmarks: async ({ repoPath }: { repoPath: string }) =>
         getBookmarkManager(repoPath).getAll(),

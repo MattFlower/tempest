@@ -243,6 +243,12 @@ export type ToolChangeDetail =
   | { type: "write"; fullContent: string }
   | { type: "unknown"; summary: string };
 
+// --- Repo Settings ---
+
+export interface RepoSettings {
+  prepareScript: string;
+}
+
 // --- PR Feedback ---
 
 export interface PRDraftSummary {

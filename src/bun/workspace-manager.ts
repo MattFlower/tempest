@@ -3,6 +3,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type {
   AppConfig,
+  RepoSettings,
   SourceRepo,
   TempestWorkspace,
   VCSType,
@@ -16,6 +17,10 @@ import {
   saveRepoPaths,
   defaultConfig,
 } from "./config/app-config";
+import {
+  loadAllRepoSettings,
+  saveAllRepoSettings,
+} from "./config/repo-settings";
 import { detectVCS, detectVCSType } from "./vcs/detector";
 import type { VCSProvider } from "./vcs/types";
 
@@ -24,6 +29,7 @@ export class WorkspaceManager {
   private workspacesByRepo = new Map<string, TempestWorkspace[]>();
   private providers = new Map<string, VCSProvider>();
   private sidebarInfoCache = new Map<string, WorkspaceSidebarInfo>();
+  private repoSettings: Record<string, RepoSettings> = {};
   private sidebarRefreshTimer?: ReturnType<typeof setInterval>;
   private config: AppConfig = defaultConfig();
 
@@ -42,6 +48,7 @@ export class WorkspaceManager {
 
   async initialize(): Promise<void> {
     this.config = await loadConfig();
+    this.repoSettings = await loadAllRepoSettings();
     const paths = await loadRepoPaths();
     for (const p of paths) {
       if (existsSync(p)) {
@@ -166,6 +173,24 @@ export class WorkspaceManager {
       this.workspacesByRepo.set(repoId, existing);
 
       this.onWorkspacesChanged?.(repoId, existing);
+
+      // Run prepare script if configured
+      const settings = this.repoSettings[repo.path];
+      if (settings?.prepareScript?.trim()) {
+        const result = await this.runPrepareScript(settings.prepareScript, wsRoot);
+        if (result.exitCode !== 0) {
+          console.warn(
+            `[workspace] Prepare script failed (exit ${result.exitCode}):`,
+            result.output,
+          );
+          return {
+            success: true,
+            workspace,
+            error: `Prepare script failed (exit ${result.exitCode}):\n${result.output}`,
+          };
+        }
+      }
+
       return { success: true, workspace };
     } catch (err: any) {
       return { success: false, error: err.message ?? String(err) };
@@ -237,6 +262,39 @@ export class WorkspaceManager {
     }
 
     this.workspacesByRepo.set(repo.id, workspaces);
+  }
+
+  // --- Repo Settings ---
+
+  getRepoSettings(repoPath: string): RepoSettings {
+    return this.repoSettings[repoPath] ?? { prepareScript: "" };
+  }
+
+  async saveRepoSettings(repoPath: string, settings: RepoSettings): Promise<void> {
+    this.repoSettings[repoPath] = settings;
+    await saveAllRepoSettings(this.repoSettings);
+  }
+
+  async runPrepareScript(
+    script: string,
+    cwd: string,
+  ): Promise<{ exitCode: number; output: string }> {
+    try {
+      const proc = Bun.spawn(["/bin/zsh", "-l", "-c", script], {
+        cwd,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [stdout, stderr] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+      ]);
+      const exitCode = await proc.exited;
+      const output = (stdout + stderr).trim();
+      return { exitCode, output };
+    } catch (err: any) {
+      return { exitCode: 1, output: err.message ?? String(err) };
+    }
   }
 
   // --- Sidebar Info ---

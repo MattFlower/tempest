@@ -132,6 +132,10 @@ export function NewWorkspaceDialog({ repo, existingWorkspaces, onCreated, onDism
             value={workspaceName}
             onChange={(e) => handleWorkspaceNameChange(e.target.value)}
             placeholder="my-feature"
+            autoComplete="off"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
             className="px-3 py-1.5 rounded text-sm outline-none"
             style={{
               backgroundColor: "var(--ctp-surface0)",
@@ -152,6 +156,10 @@ export function NewWorkspaceDialog({ repo, existingWorkspaces, onCreated, onDism
               value={branchName}
               onChange={(e) => handleBranchNameChange(e.target.value)}
               placeholder="feature/my-feature"
+              autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
               className="px-3 py-1.5 rounded text-sm outline-none"
               style={{
                 backgroundColor: "var(--ctp-surface0)",

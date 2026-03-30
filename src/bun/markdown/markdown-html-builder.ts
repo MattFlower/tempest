@@ -114,13 +114,14 @@ export function buildMarkdownHTML(markdown: string): string {
 body {
   margin: 0; padding: 32px 40px 48px;
   background: var(--bg); color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
-  font-size: 15px; line-height: 1.75; -webkit-font-smoothing: antialiased;
+  font-family: Charter, 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+  font-size: 16px; line-height: 1.8; -webkit-font-smoothing: antialiased;
   max-width: 52em; margin-left: auto; margin-right: auto;
 }
 
 /* ── Headings ── */
 h1, h2, h3, h4, h5, h6 {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif;
   font-weight: 700; letter-spacing: -0.01em; margin-bottom: 0.6em;
 }
 h1 {
@@ -181,6 +182,7 @@ table {
   box-shadow: 0 1px 4px var(--shadow-code);
 }
 th {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
   background: var(--table-header-bg); font-weight: 600; font-size: 0.85em;
   text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary);
   padding: 10px 14px; text-align: left;

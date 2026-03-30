@@ -142,10 +142,26 @@ const rpc = Electroview.defineRPC({
             case "open-file":
               store.openCommandPaletteFiles();
               break;
-            case "new-workspace":
-              // Open command palette as a starting point
-              if (!store.commandPaletteVisible) store.toggleCommandPalette();
+            case "new-workspace": {
+              // Find the repo for the currently selected workspace, or use the first repo
+              const selectedPath = store.selectedWorkspacePath;
+              let targetRepoId: string | null = null;
+              if (selectedPath) {
+                for (const [repoId, workspaces] of Object.entries(store.workspacesByRepo)) {
+                  if (workspaces.some((ws: any) => ws.path === selectedPath)) {
+                    targetRepoId = repoId;
+                    break;
+                  }
+                }
+              }
+              if (!targetRepoId && store.repos.length > 0) {
+                targetRepoId = store.repos[0].id;
+              }
+              if (targetRepoId) {
+                store.requestNewWorkspace(targetRepoId);
+              }
               break;
+            }
             case "add-repo":
               // Ensure sidebar is visible so user can use the Add Repository button
               if (!store.sidebarVisible) store.toggleSidebar();

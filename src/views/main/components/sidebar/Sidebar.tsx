@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from "react";
-import type { TempestWorkspace } from "../../../../shared/ipc-types";
+import type { SourceRepo, TempestWorkspace } from "../../../../shared/ipc-types";
 import { useStore } from "../../state/store";
 import { api } from "../../state/rpc-client";
 import { RepoSection } from "./RepoSection";
 import { SidebarToolbar } from "./SidebarToolbar";
+import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 
 export function Sidebar() {
   const repos = useStore((s) => s.repos);
@@ -16,11 +17,14 @@ export function Sidebar() {
   const toggleCommandPalette = useStore((s) => s.toggleCommandPalette);
 
   const setSidebarInfo = useStore((s) => s.setSidebarInfo);
+  const newWorkspaceRepoId = useStore((s) => s.newWorkspaceRepoId);
+  const requestNewWorkspace = useStore((s) => s.requestNewWorkspace);
 
   const [addingRepo, setAddingRepo] = useState(false);
   const [repoPath, setRepoPath] = useState("");
   const [addRepoError, setAddRepoError] = useState<string | null>(null);
   const addRepoInputRef = useRef<HTMLInputElement>(null);
+  const [newWorkspaceRepo, setNewWorkspaceRepo] = useState<SourceRepo | null>(null);
 
   // Load repos and their workspaces on mount
   useEffect(() => {
@@ -33,6 +37,17 @@ export function Sidebar() {
       }
     })();
   }, [setRepos, setWorkspaces]);
+
+  // Handle menu-driven new workspace requests
+  useEffect(() => {
+    if (!newWorkspaceRepoId) return;
+    const repo = repos.find((r) => r.id === newWorkspaceRepoId);
+    if (repo) {
+      setNewWorkspaceRepo(repo);
+      requestNewWorkspace(null);
+    }
+    // Don't clear if repo not found yet — wait for repos to load
+  }, [newWorkspaceRepoId, repos, requestNewWorkspace]);
 
   // Auto-fetch sidebar info when workspace selection changes
   useEffect(() => {
@@ -145,14 +160,17 @@ export function Sidebar() {
               showDivider={index > 0}
               onSelectWorkspace={selectWorkspace}
               onToggleExpanded={() => handleToggleExpanded(index)}
-              onNewWorkspace={() => {
-                api.createWorkspace({ repoId: repo.id, name: "" });
-              }}
+              onNewWorkspace={() => setNewWorkspaceRepo(repo)}
               onRefreshWorkspaces={() => {
                 api.getWorkspaces(repo.id).then((ws: TempestWorkspace[]) => setWorkspaces(repo.id, ws));
               }}
               onRemoveRepo={() => {
                 api.removeRepo(repo.id);
+              }}
+              onRefreshSidebarInfo={(workspacePath) => {
+                api.getSidebarInfo(workspacePath).then((info: any) => {
+                  if (info) setSidebarInfo(workspacePath, info);
+                });
               }}
             />
           ))
@@ -160,6 +178,18 @@ export function Sidebar() {
       </div>
 
       <SidebarToolbar onAddRepo={handleAddRepo} onOpenSettings={toggleCommandPalette} />
+
+      {newWorkspaceRepo && (
+        <NewWorkspaceDialog
+          repo={newWorkspaceRepo}
+          existingWorkspaces={workspacesByRepo[newWorkspaceRepo.id] ?? []}
+          onCreated={(workspace) => {
+            setNewWorkspaceRepo(null);
+            selectWorkspace(workspace.path);
+          }}
+          onDismiss={() => setNewWorkspaceRepo(null)}
+        />
+      )}
     </div>
   );
 }

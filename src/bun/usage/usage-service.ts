@@ -1,8 +1,16 @@
 // ============================================================
 // Usage tracking service — runs ccusage to get token counts.
 // Port of UsageService.swift. Caches results with 5-minute TTL.
+//
+// Pricing strategy: ccusage hits the pricing API only when run
+// without -O. We do a full @latest call (with pricing) once
+// every 3 hours, capture the resolved version, then use the
+// pinned version + -O for all intermediate fetches.
 // ============================================================
 
+import { join } from "path";
+import { homedir } from "os";
+import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import type { UsageTokens, UsageResponse } from "../../shared/ipc-types";
 
 interface CachedResult {
@@ -11,11 +19,48 @@ interface CachedResult {
   sinceDate: string;
 }
 
+interface PersistedState {
+  lastPricingFetchAt: number | null;
+  pinnedVersion: string | null;
+}
+
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const PRICING_REFRESH_MS = 3 * 60 * 60 * 1000; // 3 hours
+const STATE_PATH = join(homedir(), "Library", "Application Support", "Tempest", "ccusage-state.json");
 
 let cached: CachedResult | null = null;
 let lastFetchFailed = false;
 let fetchInProgress = false;
+
+/** Timestamp of last full @latest call (with pricing API). */
+let lastPricingFetchAt: number | null = null;
+/** Pinned version discovered from the last @latest call. */
+let pinnedVersion: string | null = null;
+
+function loadPersistedState(): void {
+  try {
+    const raw = readFileSync(STATE_PATH, "utf-8");
+    const state: PersistedState = JSON.parse(raw);
+    if (typeof state.lastPricingFetchAt === "number") lastPricingFetchAt = state.lastPricingFetchAt;
+    if (typeof state.pinnedVersion === "string") pinnedVersion = state.pinnedVersion;
+    console.log(`[usage] restored state: version=${pinnedVersion}, lastPricing=${lastPricingFetchAt ? new Date(lastPricingFetchAt).toISOString() : "never"}`);
+  } catch {
+    // No persisted state yet — first run
+  }
+}
+
+function savePersistedState(): void {
+  try {
+    const state: PersistedState = { lastPricingFetchAt, pinnedVersion };
+    mkdirSync(join(homedir(), "Library", "Application Support", "Tempest"), { recursive: true });
+    writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
+  } catch (err) {
+    console.error("[usage] Failed to persist state:", err);
+  }
+}
+
+// Load on module init
+loadPersistedState();
 
 export function todayString(): string {
   const d = new Date();
@@ -37,32 +82,78 @@ export function formatTokens(count: number): string {
   return String(count);
 }
 
+/** Whether it's time for a full @latest call with pricing API. */
+function needsPricingRefresh(): boolean {
+  if (lastPricingFetchAt === null) return true;
+  return Date.now() - lastPricingFetchAt >= PRICING_REFRESH_MS;
+}
+
+/** Resolve the current version from a ccusage@latest --version call. */
+async function resolveLatestVersion(bunPath: string): Promise<string | null> {
+  try {
+    const proc = Bun.spawn(
+      [bunPath, "x", "ccusage@latest", "--version"],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const output = await new Response(proc.stdout).text();
+    const exitCode = await proc.exited;
+    if (exitCode === 0) {
+      const version = output.trim();
+      if (version) return version;
+    }
+  } catch {}
+  return null;
+}
+
 async function runCCUsage(since: string): Promise<Omit<UsageResponse, "isStale">> {
   const bunPath = Bun.which("bun") ?? "bun";
+  const fullRefresh = needsPricingRefresh();
 
-  const proc = Bun.spawn(
-    [bunPath, "x", "ccusage@latest", "daily", "--json", "--since", since, "--instances"],
-    { stdout: "pipe", stderr: "pipe" },
-  );
+  // Build the command: @latest for full refresh, @pinnedVersion + -O otherwise
+  const pkg = fullRefresh || !pinnedVersion
+    ? "ccusage@latest"
+    : `ccusage@${pinnedVersion}`;
+  const args = [bunPath, "x", pkg, "daily", "--json", "--since", since, "--instances"];
+  if (!fullRefresh && pinnedVersion) {
+    args.push("-O");
+  }
+
+  console.log(`[usage] running: ${pkg}${fullRefresh ? " (full refresh)" : " -O (cached pricing)"}`);
+
+  const proc = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });
 
   let timedOut = false;
   const timer = setTimeout(() => {
     timedOut = true;
-    console.error("[usage] ccusage timed out after 10s");
+    console.error("[usage] ccusage timed out after 30s");
     try { proc.kill(); } catch {}
-  }, 10_000);
+  }, 30_000);
 
   const output = await new Response(proc.stdout).text();
   clearTimeout(timer);
 
   if (timedOut) {
-    await proc.exited; // reap the killed process
+    await proc.exited;
     return { dailyTotals: null, projectBreakdowns: {} };
   }
 
   const exitCode = await proc.exited;
   if (exitCode !== 0) {
     return { dailyTotals: null, projectBreakdowns: {} };
+  }
+
+  // On successful full refresh, record the timestamp and capture version
+  if (fullRefresh) {
+    lastPricingFetchAt = Date.now();
+    savePersistedState();
+    // Resolve version in background — @latest is already cached by bun so this is fast
+    resolveLatestVersion(bunPath).then((v) => {
+      if (v) {
+        console.log(`[usage] pinned ccusage version: ${v}`);
+        pinnedVersion = v;
+        savePersistedState();
+      }
+    });
   }
 
   return parseResponse(output);

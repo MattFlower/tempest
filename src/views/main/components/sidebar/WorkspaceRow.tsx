@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { TempestWorkspace, WorkspaceSidebarInfo, DiffStats } from "../../../../shared/ipc-types";
 import { WorkspaceStatus, ActivityState } from "../../../../shared/ipc-types";
 import { useStore } from "../../state/store";
@@ -50,6 +51,8 @@ function DiffStatsPill({ stats, onRefresh }: { stats: DiffStats; onRefresh: () =
 }
 
 export function WorkspaceRow({ workspace, sidebarInfo, shortcutIndex, isSelected, onSelect, onArchive, onRefreshDiffStats }: Props) {
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+
   // Hook-driven activity state overrides the workspace status for display
   const activity = useStore((s) => s.workspaceActivity[workspace.path]);
 
@@ -69,7 +72,7 @@ export function WorkspaceRow({ workspace, sidebarInfo, shortcutIndex, isSelected
       onClick={onSelect}
       onContextMenu={(e) => {
         e.preventDefault();
-        // Context menu handled at a higher level if needed
+        setContextMenu({ x: e.clientX, y: e.clientY });
       }}
       className={`group flex flex-col gap-1 rounded-md px-3 pl-4 py-2.5 cursor-pointer ${
         isSelected
@@ -77,6 +80,34 @@ export function WorkspaceRow({ workspace, sidebarInfo, shortcutIndex, isSelected
           : "hover:bg-[var(--ctp-surface0)]/50"
       }`}
     >
+      {/* Context menu */}
+      {contextMenu && (
+        <>
+          <div className="fixed inset-0 z-50" onClick={() => setContextMenu(null)} />
+          <div
+            className="fixed z-50 min-w-[180px] rounded-lg border border-[var(--ctp-surface1)] bg-[var(--ctp-surface0)] py-1 shadow-xl"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <button
+              onClick={() => { setContextMenu(null); onRefreshDiffStats(); }}
+              className="w-full text-left px-3 py-1.5 text-[12px] text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)]"
+            >
+              Refresh
+            </button>
+            {workspace.name !== "default" && (
+              <>
+                <div className="h-px bg-[var(--ctp-surface1)] mx-2 my-1" />
+                <button
+                  onClick={() => { setContextMenu(null); onArchive(); }}
+                  className="w-full text-left px-3 py-1.5 text-[12px] text-[var(--ctp-red)] hover:bg-[var(--ctp-surface1)]"
+                >
+                  Archive Workspace
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
       {/* Line 1: branch icon + name + diff stats */}
       <div className="flex items-center gap-1.5 min-w-0">
         <svg className="w-3.5 h-3.5 flex-shrink-0 text-[var(--ctp-overlay1)]" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

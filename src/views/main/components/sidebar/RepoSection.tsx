@@ -14,6 +14,7 @@ interface Props {
   onNewWorkspace: () => void;
   onRefreshWorkspaces: () => void;
   onRemoveRepo: () => void;
+  onRefreshSidebarInfo: (workspacePath: string) => void;
 }
 
 export function RepoSection({
@@ -27,6 +28,7 @@ export function RepoSection({
   onNewWorkspace,
   onRefreshWorkspaces,
   onRemoveRepo,
+  onRefreshSidebarInfo,
 }: Props) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -100,7 +102,7 @@ export function RepoSection({
               isSelected={ws.path === selectedWorkspacePath}
               onSelect={() => onSelectWorkspace(ws.path)}
               onArchive={() => api.archiveWorkspace(ws.id)}
-              onRefreshDiffStats={() => api.getSidebarInfo(ws.path)}
+              onRefreshDiffStats={() => onRefreshSidebarInfo(ws.path)}
             />
           ))}
         </div>

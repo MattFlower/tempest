@@ -5,13 +5,17 @@
 // ============================================================
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { PaneTabKind } from "../../../../shared/ipc-types";
+import { createTab } from "../../models/pane-node";
+import { addTab } from "../../state/actions";
 import { api, onMarkdownFileChanged } from "../../state/rpc-client";
 
 interface MarkdownViewerProps {
   filePath?: string;
+  paneId?: string;
 }
 
-export function MarkdownViewer({ filePath }: MarkdownViewerProps) {
+export function MarkdownViewer({ filePath, paneId }: MarkdownViewerProps) {
   const [content, setContent] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -182,6 +186,24 @@ export function MarkdownViewer({ filePath }: MarkdownViewerProps) {
         <span className="truncate" title={filePath}>
           {fileName}
         </span>
+        {paneId && filePath && (
+          <button
+            className="ml-auto px-2 py-0.5 rounded text-xs hover:brightness-125"
+            style={{
+              backgroundColor: "var(--ctp-surface0)",
+              color: "var(--ctp-subtext1)",
+            }}
+            onClick={() => {
+              const tab = createTab(PaneTabKind.Editor, fileName, {
+                terminalId: crypto.randomUUID(),
+                editorFilePath: filePath,
+              });
+              addTab(paneId, tab);
+            }}
+          >
+            Edit
+          </button>
+        )}
       </div>
 
       {/* Notification banners */}

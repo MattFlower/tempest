@@ -38,6 +38,15 @@ function addTabToFocusedPane(kind: PaneTabKind, label: string, overrides?: Recor
   addTab(focusedPaneId, tab);
 }
 
+function openFileTab(filePath: string) {
+  const name = filePath.split("/").pop() ?? "File";
+  if (/\.(?:md|markdown)$/i.test(name)) {
+    addTabToFocusedPane(PaneTabKind.MarkdownViewer, name, { markdownFilePath: filePath });
+  } else {
+    addTabToFocusedPane(PaneTabKind.Editor, name, { editorFilePath: filePath });
+  }
+}
+
 function useCommands(): PaletteCommand[] {
   const toggleSidebar = useStore((s) => s.toggleSidebar);
   const setViewMode = useStore((s) => s.setViewMode);
@@ -170,7 +179,7 @@ export function CommandPalette() {
       const filePath = filteredFiles[selectedIndex];
       if (filePath) {
         dismiss();
-        addTabToFocusedPane(PaneTabKind.Editor, filePath.split("/").pop() ?? "Editor", { editorFilePath: filePath });
+        openFileTab(filePath);
       }
     }
   }, [mode, filteredCommands, filteredFiles, selectedIndex, dismiss]);
@@ -189,7 +198,7 @@ export function CommandPalette() {
       if (filePath) {
         dismiss();
         splitPane(direction, true);
-        setTimeout(() => addTabToFocusedPane(PaneTabKind.Editor, filePath.split("/").pop() ?? "Editor", { editorFilePath: filePath }), 0);
+        setTimeout(() => openFileTab(filePath), 0);
       }
     }
   }, [mode, filteredCommands, filteredFiles, selectedIndex, dismiss]);
@@ -321,7 +330,7 @@ export function CommandPalette() {
                 filePath={filePath}
                 workspacePath={selectedWorkspacePath ?? ""}
                 isSelected={index === selectedIndex}
-                onClick={() => { dismiss(); addTabToFocusedPane(PaneTabKind.Editor, filePath.split("/").pop() ?? "Editor", { editorFilePath: filePath }); }}
+                onClick={() => { dismiss(); openFileTab(filePath); }}
                 onHover={() => setSelectedIndex(index)}
               />
             ))

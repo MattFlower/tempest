@@ -7,16 +7,18 @@ import { PaneDivider } from "./PaneDivider";
 
 interface PaneTreeViewProps {
   node: PaneNode; // always a split node (normalized by WorkspaceDetail)
+  workspacePath: string;
 }
 
 export const PaneTreeView = memo(function PaneTreeView({
   node,
+  workspacePath,
 }: PaneTreeViewProps) {
   const maximizedPaneId = useStore((s) => s.maximizedPaneId);
   const isMaximized = maximizedPaneId !== null;
 
   if (node.type === "leaf") {
-    return <PaneView pane={node.pane} />;
+    return <PaneView pane={node.pane} workspacePath={workspacePath} />;
   }
 
   const { children, ratios, id: splitId } = node;
@@ -61,9 +63,9 @@ export const PaneTreeView = memo(function PaneTreeView({
               }}
             >
               {child.type === "leaf" ? (
-                <PaneView pane={child.pane} />
+                <PaneView pane={child.pane} workspacePath={workspacePath} />
               ) : (
-                <PaneTreeView node={child} />
+                <PaneTreeView node={child} workspacePath={workspacePath} />
               )}
             </div>
           </div>

@@ -146,7 +146,7 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
               : "opacity-0 pointer-events-none"
           }`}
         >
-          <PaneTreeView node={normalize(tree)} />
+          <PaneTreeView node={normalize(tree)} workspacePath={workspacePath} />
         </div>
 
         {/* Diff mode */}

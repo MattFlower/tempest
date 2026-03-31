@@ -14,10 +14,10 @@ import { closeTab } from "../../state/actions";
 
 interface PaneViewProps {
   pane: Pane;
+  workspacePath: string;
 }
 
-function TabContent({ tab, paneId, isFocused, isVisible }: { tab: PaneTab; paneId: string; isFocused: boolean; isVisible: boolean }) {
-  const selectedWorkspacePath = useStore((s) => s.selectedWorkspacePath);
+function TabContent({ tab, paneId, isFocused, isVisible, workspacePath }: { tab: PaneTab; paneId: string; isFocused: boolean; isVisible: boolean; workspacePath: string }) {
   const handleCloseRequest = useCallback(() => {
     closeTab(paneId, tab.id);
   }, [paneId, tab.id]);
@@ -36,7 +36,7 @@ function TabContent({ tab, paneId, isFocused, isVisible }: { tab: PaneTab; paneI
         <TerminalPane
           terminalId={tab.terminalId}
           tabKind={tab.kind}
-          cwd={selectedWorkspacePath || "/tmp"}
+          cwd={workspacePath || "/tmp"}
           sessionId={tab.sessionId}
           resume={tab.resume}
           isFocused={isFocused}
@@ -48,7 +48,7 @@ function TabContent({ tab, paneId, isFocused, isVisible }: { tab: PaneTab; paneI
         <BrowserPane
           paneId={paneId}
           tab={tab}
-          repoPath={selectedWorkspacePath || ""}
+          repoPath={workspacePath || ""}
           isFocused={isFocused}
           isVisible={isVisible}
         />
@@ -74,7 +74,7 @@ function TabContent({ tab, paneId, isFocused, isVisible }: { tab: PaneTab; paneI
           terminalId={tab.terminalId}
           filePath={tab.editorFilePath}
           lineNumber={tab.editorLineNumber}
-          cwd={selectedWorkspacePath || "/tmp"}
+          cwd={workspacePath || "/tmp"}
           isFocused={isFocused}
           onCloseRequest={handleCloseRequest}
         />
@@ -84,7 +84,7 @@ function TabContent({ tab, paneId, isFocused, isVisible }: { tab: PaneTab; paneI
   }
 }
 
-export const PaneView = memo(function PaneView({ pane }: PaneViewProps) {
+export const PaneView = memo(function PaneView({ pane, workspacePath }: PaneViewProps) {
   const focusedPaneId = useStore((s) => s.focusedPaneId);
   const setFocusedPaneId = useStore((s) => s.setFocusedPaneId);
   const isFocused = focusedPaneId === pane.id;
@@ -123,6 +123,7 @@ export const PaneView = memo(function PaneView({ pane }: PaneViewProps) {
               paneId={pane.id}
               isFocused={isFocused && tab.id === pane.selectedTabId}
               isVisible={tab.id === pane.selectedTabId}
+              workspacePath={workspacePath}
             />
           </div>
         ))}

@@ -1,6 +1,7 @@
 import { ActivityState, PaneTabKind } from "../../../../shared/ipc-types";
 import type { PaneTab } from "../../models/pane-node";
 import { selectTab, closeTab } from "../../state/actions";
+import { useStore } from "../../state/store";
 
 export interface TabDragData {
   tabId: string;
@@ -43,6 +44,11 @@ export function TabButton({ tab, paneId, isSelected }: TabButtonProps) {
     };
     e.dataTransfer.setData(TAB_DRAG_MIME, JSON.stringify(data));
     e.dataTransfer.effectAllowed = "move";
+    useStore.getState().setTabDragActive(true);
+  };
+
+  const handleDragEnd = () => {
+    useStore.getState().setTabDragActive(false);
   };
 
   const handleSelect = () => {
@@ -67,6 +73,7 @@ export function TabButton({ tab, paneId, isSelected }: TabButtonProps) {
       `}
       draggable
       onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
       onClick={handleSelect}
     >
       {/* Activity indicator dot */}

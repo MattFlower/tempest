@@ -141,6 +141,57 @@ export function moveTab(
   }
 }
 
+export function moveTabToNewPane(
+  tabId: string,
+  fromPaneId: string,
+  targetPaneId: string,
+  direction: "left" | "right",
+) {
+  const ctx = currentTree();
+  if (!ctx) return;
+
+  const sourcePane = findPane(ctx.tree, fromPaneId);
+  if (!sourcePane) return;
+
+  const tab = sourcePane.tabs.find((t) => t.id === tabId);
+  if (!tab) return;
+
+  // Create new pane containing just this tab
+  const newPane = createPane(tab);
+
+  // Remove tab from source pane (or remove entire pane if last tab)
+  let tree = ctx.tree;
+  if (sourcePane.tabs.length <= 1) {
+    const removed = removingPane(tree, fromPaneId);
+    if (!removed) return;
+    tree = removed;
+  } else {
+    tree = updatingPane(tree, fromPaneId, (pane) => {
+      const newTabs = pane.tabs.filter((t) => t.id !== tabId);
+      const newSelectedTabId =
+        pane.selectedTabId === tabId
+          ? newTabs[newTabs.length - 1]?.id
+          : pane.selectedTabId;
+      return { ...pane, tabs: newTabs, selectedTabId: newSelectedTabId };
+    });
+  }
+
+  // Insert new pane adjacent to target
+  if (direction === "right") {
+    tree = addingPane(tree, newPane, targetPaneId);
+  } else {
+    tree = addingPaneBefore(tree, newPane, targetPaneId);
+  }
+
+  commitTree(ctx.workspacePath, tree);
+  useStore.getState().setFocusedPaneId(newPane.id);
+
+  const { maximizedPaneId } = useStore.getState();
+  if (maximizedPaneId && !findPane(tree, maximizedPaneId)) {
+    useStore.getState().setMaximizedPaneId(null);
+  }
+}
+
 // --- Split / Pane Actions ---
 
 export function splitPane(direction: "right" | "left" = "right", emptyPane = false) {

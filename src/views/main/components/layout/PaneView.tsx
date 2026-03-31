@@ -3,6 +3,7 @@ import { PaneTabKind } from "../../../../shared/ipc-types";
 import type { Pane, PaneTab } from "../../models/pane-node";
 import { useStore } from "../../state/store";
 import { TabBar } from "./TabBar";
+import { PaneDropZone } from "./PaneDropZone";
 import { TerminalPane } from "../terminal/TerminalPane";
 import { BrowserPane } from "../browser/BrowserPane";
 import { HistoryViewer } from "../history/HistoryViewer";
@@ -109,6 +110,7 @@ export const PaneView = memo(function PaneView({ pane, workspacePath }: PaneView
 
       {/* Content area — ZStack with opacity pattern */}
       <div className="relative flex-1 overflow-hidden">
+        <PaneDropZone paneId={pane.id} tabCount={pane.tabs.length} />
         {pane.tabs.map((tab) => (
           <div
             key={tab.id}

@@ -29,6 +29,10 @@ export interface TempestStore {
   // --- Activity state (from hook events) ---
   workspaceActivity: Record<string, ActivityState>; // keyed by workspace path
 
+  // --- Drag state ---
+  isTabDragActive: boolean;
+  setTabDragActive: (active: boolean) => void;
+
   // --- UI state ---
   sidebarWidth: number;
   sidebarVisible: boolean;
@@ -73,6 +77,9 @@ export const useStore = create<TempestStore>((set) => ({
   workspaceViewMode: {},
 
   workspaceActivity: {},
+
+  isTabDragActive: false,
+  setTabDragActive: (active) => set({ isTabDragActive: active }),
 
   sidebarWidth: 240,
   sidebarVisible: true,

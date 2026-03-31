@@ -161,6 +161,20 @@ export function TerminalPane({
     }
   }, [isFocused]);
 
+  // Re-focus terminal when the window regains focus (e.g. after Cmd+Tab away and back).
+  // The isFocused prop doesn't change while the app is backgrounded, so the effect
+  // above won't re-fire — we need to listen for the window focus event explicitly.
+  useEffect(() => {
+    if (!isFocused) return;
+
+    const handleWindowFocus = () => {
+      instanceRef.current?.focus();
+    };
+
+    window.addEventListener("focus", handleWindowFocus);
+    return () => window.removeEventListener("focus", handleWindowFocus);
+  }, [isFocused]);
+
   return (
     <div
       ref={containerRef}

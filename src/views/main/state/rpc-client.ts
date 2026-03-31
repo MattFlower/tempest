@@ -19,6 +19,11 @@ export function onTerminalOutput(handler: TerminalOutputHandler) {
   terminalOutputHandler = handler;
 }
 
+// If a sequence number is missed (e.g. message lost while app was backgrounded),
+// waiting forever would deadlock all output for that terminal. After this many
+// out-of-order messages queue up, skip ahead to unblock.
+const SEQ_GAP_THRESHOLD = 10;
+
 function processTerminalOutput(id: string, data: string, seq: number) {
   const expected = nextExpectedSeq.get(id) ?? 1;
 
@@ -38,7 +43,20 @@ function processTerminalOutput(id: string, data: string, seq: number) {
     }
   } else if (seq > expected) {
     if (!pendingOutputs.has(id)) pendingOutputs.set(id, new Map());
-    pendingOutputs.get(id)!.set(seq, data);
+    const pending = pendingOutputs.get(id)!;
+    pending.set(seq, data);
+
+    // If too many messages are buffered, a sequence number was likely lost.
+    // Flush everything we have in order starting from the lowest buffered seq.
+    if (pending.size >= SEQ_GAP_THRESHOLD) {
+      console.warn(`[rpc] Terminal ${id}: seq gap detected (expected ${expected}, have ${pending.size} buffered). Flushing.`);
+      const sorted = Array.from(pending.keys()).sort((a, b) => a - b);
+      for (const s of sorted) {
+        terminalOutputHandler?.(id, pending.get(s)!);
+      }
+      pending.clear();
+      nextExpectedSeq.set(id, sorted[sorted.length - 1] + 1);
+    }
   }
 }
 

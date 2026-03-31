@@ -9,6 +9,7 @@ import { PaneTabKind } from "../../../../shared/ipc-types";
 import { createTab } from "../../models/pane-node";
 import { addTab } from "../../state/actions";
 import { api, onMarkdownFileChanged } from "../../state/rpc-client";
+import { askClaudeAboutSelection } from "../../state/actions";
 
 interface MarkdownViewerProps {
   filePath?: string;
@@ -33,6 +34,7 @@ export function MarkdownViewer({ filePath, paneId }: MarkdownViewerProps) {
     y: number;
     width: number;
     height: number;
+    sourceLine: number | null;
   } | null>(null);
 
   /** Save the current scroll position from the iframe */
@@ -127,12 +129,22 @@ export function MarkdownViewer({ filePath, paneId }: MarkdownViewerProps) {
           y: event.data.y,
           width: event.data.width,
           height: event.data.height,
+          sourceLine: event.data.sourceLine ?? null,
         });
+      } else if (event.data?.type === "annotation-clear") {
+        setAnnotation(null);
       }
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
   }, []);
+
+  const handleAskClaude = useCallback(() => {
+    if (annotation && filePath) {
+      askClaudeAboutSelection(annotation.text, filePath, annotation.sourceLine);
+      setAnnotation(null);
+    }
+  }, [annotation, filePath]);
 
   // content is pre-rendered HTML from the backend
   const srcdoc = content;
@@ -186,9 +198,22 @@ export function MarkdownViewer({ filePath, paneId }: MarkdownViewerProps) {
         <span className="truncate" title={filePath}>
           {fileName}
         </span>
-        {paneId && filePath && (
+        {filePath && (
           <button
             className="ml-auto px-2 py-0.5 rounded text-xs hover:brightness-125"
+            style={{
+              backgroundColor: "var(--ctp-surface0)",
+              color: "var(--ctp-subtext1)",
+            }}
+            onClick={loadFile}
+            title="Reload markdown"
+          >
+            ↻
+          </button>
+        )}
+        {paneId && filePath && (
+          <button
+            className="ml-2 px-2 py-0.5 rounded text-xs hover:brightness-125"
             style={{
               backgroundColor: "var(--ctp-surface0)",
               color: "var(--ctp-subtext1)",
@@ -255,16 +280,35 @@ export function MarkdownViewer({ filePath, paneId }: MarkdownViewerProps) {
         </div>
       )}
 
-      {/* Markdown content iframe */}
-      <iframe
-        ref={iframeRef}
-        srcDoc={srcdoc ?? ""}
-        sandbox="allow-scripts allow-same-origin"
-        className="flex-1 w-full border-0"
-        style={{ backgroundColor: "var(--ctp-base)" }}
-        title={`Markdown: ${fileName}`}
-        onLoad={handleIframeLoad}
-      />
+      {/* Markdown content iframe + Ask Claude tooltip */}
+      <div className="relative flex-1 overflow-hidden">
+        <iframe
+          ref={iframeRef}
+          srcDoc={srcdoc ?? ""}
+          sandbox="allow-scripts allow-same-origin"
+          className="h-full w-full border-0"
+          style={{ backgroundColor: "var(--ctp-base)" }}
+          title={`Markdown: ${fileName}`}
+          onLoad={handleIframeLoad}
+        />
+        {annotation && (
+          <button
+            className="absolute z-50 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium shadow-lg transition-opacity hover:opacity-90"
+            style={{
+              left: Math.max(8, Math.min(annotation.x + annotation.width / 2 - 40, (iframeRef.current?.clientWidth ?? 300) - 100)),
+              top: Math.max(4, annotation.y - 32),
+              backgroundColor: "var(--ctp-mauve)",
+              color: "var(--ctp-base)",
+            }}
+            onClick={handleAskClaude}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            Ask Claude
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import {
   registerTerminal,
   unregisterTerminal,
 } from "../../state/terminal-dispatch";
+import { consumePendingInput } from "../../state/pending-terminal-input";
 
 interface TerminalPaneProps {
   terminalId: string;
@@ -125,6 +126,16 @@ export function TerminalPane({
         instance.terminal.writeln(
           `\x1b[31mFailed to create terminal: ${createResult.error}\x1b[0m`,
         );
+        return;
+      }
+
+      // Flush pending input queued by "Ask Claude about selection".
+      // Delay lets the CLI process start and be ready for input.
+      const pendingInput = consumePendingInput(terminalId);
+      if (pendingInput) {
+        setTimeout(() => {
+          api.writeToTerminal(terminalId, pendingInput);
+        }, 2000);
       }
     };
 

@@ -23,6 +23,7 @@ import {
 } from "../models/pane-node";
 import { useStore } from "./store";
 import { api } from "./rpc-client";
+import { queueTerminalInput } from "./pending-terminal-input";
 
 // --- Helpers ---
 
@@ -336,4 +337,46 @@ function findSplit(
 export function containsPane(node: PaneNode, paneId: string): boolean {
   if (node.type === "leaf") return node.pane.id === paneId;
   return node.children.some((child) => containsPane(child, paneId));
+}
+
+// --- Ask Claude about selection ---
+
+export function askClaudeAboutSelection(selectedText: string, filePath: string, sourceLine?: number | null) {
+  const ctx = currentTree();
+  if (!ctx) return;
+
+  const { focusedPaneId } = useStore.getState();
+
+  // Format prompt — use bracketed paste for multi-line support, then \r to submit
+  const fileName = filePath.split("/").pop() ?? filePath;
+  const lineRef = sourceLine ? ` (line ${sourceLine})` : "";
+  const prompt = `Regarding this excerpt from \`${fileName}\`${lineRef}:\n\n"""\n${selectedText}\n"""\n\n`;
+  const terminalInput = `\x1b[200~${prompt}\x1b[201~\r`;
+
+  // Find the first alive Claude tab in the workspace
+  const panes = allPanes(ctx.tree);
+  for (const pane of panes) {
+    for (const tab of pane.tabs) {
+      if (tab.kind === PaneTabKind.Claude && tab.isAlive && tab.terminalId) {
+        // Write to existing session and focus it
+        api.writeToTerminal(tab.terminalId, terminalInput);
+        selectTab(pane.id, tab.id);
+        return;
+      }
+    }
+  }
+
+  // No Claude session — create one with continue mode (claude -c)
+  const terminalId = crypto.randomUUID();
+  const newTab = createTab(PaneTabKind.Claude, "Claude", {
+    terminalId,
+    resume: true,
+  });
+
+  queueTerminalInput(terminalId, terminalInput);
+
+  const targetPaneId = focusedPaneId ?? panes[0]?.id;
+  if (targetPaneId) {
+    addTab(targetPaneId, newTab);
+  }
 }

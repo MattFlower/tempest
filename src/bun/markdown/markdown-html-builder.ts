@@ -39,6 +39,16 @@ const md = markdownit({
 
 md.use(frontmatterPlugin);
 
+// Tag block-level HTML elements with their source line number (1-based).
+// Used by the "Ask Claude" feature to cite the original markdown location.
+md.core.ruler.push('source_lines', (state) => {
+  for (const token of state.tokens) {
+    if (token.map && token.nesting === 1) {
+      token.attrSet('data-source-line', String(token.map[0] + 1));
+    }
+  }
+});
+
 /**
  * Build a complete self-contained HTML page from markdown.
  * Markdown is rendered server-side; only mermaid (which needs DOM) runs client-side.
@@ -250,14 +260,27 @@ document.addEventListener('mouseup', function() {
   var text = sel ? sel.toString().trim() : '';
   if (text && sel.rangeCount > 0) {
     var rect = sel.getRangeAt(0).getBoundingClientRect();
+    // Walk up from selection to find the nearest data-source-line attribute
+    var sourceLine = null;
+    var node = sel.anchorNode;
+    while (node && node !== document.body) {
+      if (node.nodeType === 1 && node.getAttribute('data-source-line')) {
+        sourceLine = parseInt(node.getAttribute('data-source-line'), 10);
+        break;
+      }
+      node = node.parentElement || node.parentNode;
+    }
     window.parent.postMessage({
       type: 'annotation',
       text: text,
       x: rect.x,
       y: rect.y,
       width: rect.width,
-      height: rect.height
+      height: rect.height,
+      sourceLine: sourceLine
     }, '*');
+  } else {
+    window.parent.postMessage({ type: 'annotation-clear' }, '*');
   }
 });
 </script>

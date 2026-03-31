@@ -155,11 +155,8 @@ export class TerminalInstance {
         }
       }
 
-      // Cmd+V: paste
+      // Cmd+V: let the browser handle it so the 'paste' event fires
       if (event.metaKey && event.key === "v") {
-        navigator.clipboard.readText().then((text) => {
-          this.onInput(text);
-        });
         return false;
       }
 
@@ -191,6 +188,13 @@ export class TerminalInstance {
       }
 
       return true;
+    });
+
+    // Handle paste via DOM event instead of navigator.clipboard.readText()
+    // to avoid WKWebView's paste confirmation popup.
+    this.terminal.textarea?.addEventListener("paste", (e) => {
+      const text = e.clipboardData?.getData("text");
+      if (text) this.onInput(text);
     });
 
     this.setupResizeObserver();

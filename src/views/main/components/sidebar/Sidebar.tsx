@@ -111,11 +111,16 @@ export function Sidebar() {
     // Archive via backend (VCS-level operation)
     await api.archiveWorkspace(workspace.id);
 
-    // If the archived workspace was selected, switch to another
+    // If the archived workspace was focused, switch to the default workspace
     if (selectedWorkspacePath === workspace.path) {
-      const allWorkspaces = Object.values(useStore.getState().workspacesByRepo).flat();
-      const other = allWorkspaces.find((w) => w.path !== workspace.path);
-      select(other?.path ?? null);
+      const { workspacesByRepo } = useStore.getState();
+      const repoId = Object.keys(workspacesByRepo).find((id) =>
+        workspacesByRepo[id].some((w) => w.path === workspace.path)
+      );
+      const defaultWs = repoId
+        ? workspacesByRepo[repoId].find((w) => w.name === "default")
+        : undefined;
+      select(defaultWs?.path ?? null);
     }
   }, []);
 

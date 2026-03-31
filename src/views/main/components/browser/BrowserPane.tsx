@@ -1,5 +1,5 @@
 // ============================================================
-// BrowserPane — CEF webview wrapper for browser tabs.
+// BrowserPane — Electrobun webview wrapper for browser tabs.
 // Port of Tempest/Browser/BrowserWebView.swift + BrowserTabState.swift.
 // Wraps <electrobun-webview> with toolbar and find bar.
 // ============================================================
@@ -11,7 +11,7 @@ import { useStore } from "../../state/store";
 import { ViewMode } from "../../../../shared/ipc-types";
 import { BrowserToolbar, FindBar } from "./BrowserToolbar";
 
-// Electrobun webview element type (CEF-backed custom element)
+// Electrobun webview element type (system webview custom element)
 interface ElectrobunWebview extends HTMLElement {
   loadURL(url: string): void;
   goBack(): void;
@@ -39,7 +39,7 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
 
   // True visibility: combines all four hiding layers (tab selection, pane
   // maximization, workspace selection, view mode) so we can tell the native
-  // CEF overlay to hide — CSS opacity/display have no effect on it.
+  // webview overlay to hide — CSS opacity/display have no effect on it.
   const isTrulyVisible = useStore((s) => {
     if (!isVisible) return false;
     if (s.maximizedPaneId !== null && s.maximizedPaneId !== paneId) return false;
@@ -120,7 +120,7 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isFocused]);
 
-  // Show/hide the native CEF overlay when visibility changes
+  // Show/hide the native webview overlay when visibility changes
   useEffect(() => {
     const el = webviewRef.current;
     if (!el) return;
@@ -155,12 +155,10 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
     try { webviewRef.current?.reload(); } catch {}
   }, []);
   const stop = useCallback(() => {
-    // CEF doesn't have a direct stop — reload suffices as toggle
     setIsLoading(false);
   }, []);
 
   // Find actions
-  // TODO: CEF doesn't expose match count yet — findHasMatch is always true
   const handleFindTextChange = useCallback((text: string) => {
     setFindText(text);
     const el = webviewRef.current;
@@ -221,7 +219,6 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
       <electrobun-webview
         id={webviewId}
         src={tab.browserURL || "about:blank"}
-        renderer="cef"
         style={{ flex: 1, width: "100%", minHeight: 0, display: isVisible ? "block" : "none" }}
       />
     </div>

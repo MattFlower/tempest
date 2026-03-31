@@ -5,10 +5,10 @@ Tempest is a macOS developer tool rewritten from Swift/SwiftUI to Electrobun/Typ
 Two-process architecture: Bun backend + React webview frontend, communicating via typed RPC.
 
 ## Tech Stack
-- **Framework:** Electrobun 1.16.0 (Bun + native WebView + CEF)
+- **Framework:** Electrobun 1.16.0 (Bun + native WebView)
 - **UI:** React 19 + Tailwind CSS 4 + Zustand
 - **Terminal:** xterm.js 6 with WebGL renderer + Bun.Terminal PTY
-- **Browser:** CEF via `<electrobun-webview renderer="cef">`
+- **Browser:** System webview (WKWebView on macOS) via `<electrobun-webview>`
 
 ## Key Architectural Rules
 1. **Terminal lifecycle:** Never unmount terminal components on tab switch. Use opacity-0 + pointer-events-none.

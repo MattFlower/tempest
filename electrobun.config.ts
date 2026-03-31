@@ -27,7 +27,6 @@ export default {
     },
     mac: {
       icons: "icon.iconset",
-      bundleCEF: true,
       codesign: true,
       notarize: false,
     },

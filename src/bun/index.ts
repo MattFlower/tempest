@@ -124,7 +124,9 @@ const rpc = BrowserView.defineRPC({
         );
       },
       archiveWorkspace: async (_params: any) => {
-        return await workspaceManager.archiveWorkspace(_params.workspaceId);
+        const result = await workspaceManager.archiveWorkspace(_params.workspaceId);
+        if (result.success) await sessionStateManager.flush();
+        return result;
       },
       refreshWorkspaces: async (_params: any) => {
         return await workspaceManager.refreshWorkspaces(_params.repoId);
@@ -497,6 +499,6 @@ async function shutdown() {
 
 process.on("SIGINT", () => { shutdown().then(() => process.exit(0)); });
 process.on("SIGTERM", () => { shutdown().then(() => process.exit(0)); });
-process.on("beforeExit", () => { shutdown(); });
+process.on("beforeExit", async () => { await shutdown(); });
 
 console.log("[main] Tempest started");

@@ -1,3 +1,5 @@
+import { statSync } from "node:fs";
+
 interface PtyInstance {
   id: string;
   proc: ReturnType<typeof Bun.spawn>;
@@ -80,6 +82,14 @@ export class PtyManager {
     }
 
     try {
+      try {
+        const stat = statSync(params.cwd);
+        if (!stat.isDirectory()) {
+          return { success: false, error: `cwd is not a directory: ${params.cwd}` };
+        }
+      } catch {
+        return { success: false, error: `cwd does not exist: ${params.cwd}` };
+      }
       const id = params.id;
       this.seqCounters.set(id, 0);
 

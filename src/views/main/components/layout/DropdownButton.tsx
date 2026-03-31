@@ -9,9 +9,11 @@ interface DropdownButtonProps {
   label: string;
   icon?: React.ReactNode;
   items: DropdownItem[];
+  /** Action fired when clicking the main button area (not the chevron). If omitted, the whole button toggles the dropdown. */
+  onDefaultAction?: () => void;
 }
 
-export function DropdownButton({ label, icon, items }: DropdownButtonProps) {
+export function DropdownButton({ label, icon, items, onDefaultAction }: DropdownButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -42,15 +44,35 @@ export function DropdownButton({ label, icon, items }: DropdownButtonProps) {
   return (
     <div ref={containerRef} className="relative">
       <button
-        onClick={() => setIsOpen((o) => !o)}
+        onClick={() => {
+          if (!onDefaultAction) {
+            setIsOpen((o) => !o);
+          }
+        }}
         className="flex items-center gap-0 px-0 py-0 text-xs font-medium rounded-md border border-[var(--ctp-surface1)] text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)] transition-colors"
         style={{ backgroundColor: isOpen ? "var(--ctp-surface1)" : "var(--ctp-surface0)" }}
       >
-        <span className="flex items-center gap-1 px-2.5 py-1">
+        <span
+          className="flex items-center gap-1 px-2.5 py-1"
+          onClick={(e) => {
+            if (onDefaultAction) {
+              e.stopPropagation();
+              onDefaultAction();
+            }
+          }}
+        >
           {icon}
           {label}
         </span>
-        <span className="border-l border-[var(--ctp-surface1)] px-1.5 py-1 flex items-center">
+        <span
+          className="border-l border-[var(--ctp-surface1)] px-1.5 py-1 flex items-center"
+          onClick={(e) => {
+            if (onDefaultAction) {
+              e.stopPropagation();
+              setIsOpen((o) => !o);
+            }
+          }}
+        >
           <svg className="w-3 h-3 text-[var(--ctp-overlay1)]" viewBox="0 0 12 12" fill="currentColor">
             <path d="M3 5l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>

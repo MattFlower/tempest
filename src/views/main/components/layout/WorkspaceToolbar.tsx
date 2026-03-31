@@ -112,8 +112,8 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
       <span className="flex-1" />
 
       <div className="flex items-center gap-1">
-        <DropdownButton label="New" items={newItems} />
-        <DropdownButton label="Split" items={splitItems} />
+        <DropdownButton label="New" items={newItems} onDefaultAction={() => addTabToFocusedPane(PaneTabKind.Shell, "Shell")} />
+        <DropdownButton label="Split" items={splitItems} onDefaultAction={() => splitWithTab(PaneTabKind.Shell, "Shell")} />
         <DropdownButton label="PR" icon={PRIcon} items={prItems} />
       </div>
     </div>

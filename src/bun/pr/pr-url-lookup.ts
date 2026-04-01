@@ -3,6 +3,10 @@
 // Port of OpenPRCoordinator.lookupPRURL from Swift.
 // ============================================================
 
+import { PathResolver } from "../config/path-resolver";
+
+const pathResolver = new PathResolver();
+
 /**
  * Parse a GitHub remote URL (HTTPS or SSH) into "owner/repo".
  * Returns null if the remote is not a GitHub URL.
@@ -50,8 +54,12 @@ export async function lookupPRUrl(
   branch: string,
 ): Promise<{ url: string } | { error: string }> {
   // 1. Get remote URL
-  const gitPath = Bun.which("git");
-  if (!gitPath) return { error: "git not found" };
+  let gitPath: string;
+  try {
+    gitPath = pathResolver.resolve("git");
+  } catch {
+    return { error: "git not found" };
+  }
 
   const remoteProc = Bun.spawn([gitPath, "remote", "get-url", "origin"], {
     cwd: repoPath,
@@ -73,8 +81,12 @@ export async function lookupPRUrl(
   }
 
   // 3. Look up PR via gh CLI
-  const ghPath = Bun.which("gh");
-  if (!ghPath) return { error: "gh CLI not found. Install it with: brew install gh" };
+  let ghPath: string;
+  try {
+    ghPath = pathResolver.resolve("gh");
+  } catch {
+    return { error: "gh CLI not found. Install it with: brew install gh" };
+  }
 
   const ghProc = Bun.spawn(
     [ghPath, "pr", "view", branch, "--repo", ownerRepo, "--json", "url"],

@@ -14,6 +14,7 @@ import { HookEventListener } from "./hooks/hook-event-listener";
 import { SessionActivityTracker } from "./hooks/session-activity-tracker";
 
 import { loadConfig, saveConfig as saveConfigFile, defaultConfig } from "./config/app-config";
+import { PathResolver } from "./config/path-resolver";
 import { getUsageData } from "./usage/usage-service";
 import { HistoryStore } from "./history/history-store";
 import {
@@ -220,13 +221,20 @@ const rpc = BrowserView.defineRPC({
       // --- Onboarding (Stream F) ---
       checkBinaries: () => {
         const config = workspaceManager.getConfig();
-        const resolve = (name: string, configuredPath?: string) =>
-          configuredPath ? Bun.which(configuredPath) !== null : Bun.which(name) !== null;
+        const resolver = new PathResolver();
+        const canResolve = (name: string, configuredPath?: string) => {
+          try {
+            resolver.resolve(name, configuredPath);
+            return true;
+          } catch {
+            return false;
+          }
+        };
         return {
-          git: resolve("git", config.gitPath),
-          jj: resolve("jj", config.jjPath),
-          claude: resolve("claude", config.claudePath),
-          gh: resolve("gh", config.ghPath),
+          git: canResolve("git", config.gitPath),
+          jj: canResolve("jj", config.jjPath),
+          claude: canResolve("claude", config.claudePath),
+          gh: canResolve("gh", config.ghPath),
         };
       },
       setWorkspaceRoot: async (_params: any) => {

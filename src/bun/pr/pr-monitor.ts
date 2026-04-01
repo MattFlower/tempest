@@ -8,6 +8,7 @@ import { PRPoller } from "./pr-poller";
 import { PRSocketServer } from "./pr-socket-server";
 import { DraftManager } from "./draft-manager";
 import { HookSettingsBuilder } from "../hooks/hook-settings-builder";
+import { PathResolver } from "../config/path-resolver";
 
 interface MonitorState {
   config: PRMonitorConfig;
@@ -227,8 +228,7 @@ export class PRMonitor {
       throw new Error("Original comment not found in stored comments");
     }
 
-    const ghPath = Bun.which("gh");
-    if (!ghPath) throw new Error("gh CLI not found");
+    const ghPath = new PathResolver().resolve("gh");
 
     const repo = `${monitor.config.owner}/${monitor.config.repo}`;
 

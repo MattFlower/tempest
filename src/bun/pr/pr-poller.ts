@@ -9,6 +9,9 @@ import type {
   GitHubReviewComment,
   GraphQLReviewThreadsResponse,
 } from "./pr-models";
+import { PathResolver } from "../config/path-resolver";
+
+const pathResolver = new PathResolver();
 
 export class PRPoller {
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -209,9 +212,7 @@ export class PRPoller {
   }
 
   private resolveGh(): string {
-    const gh = Bun.which("gh");
-    if (!gh) throw new Error("gh CLI not found in PATH");
-    return gh;
+    return pathResolver.resolve("gh");
   }
 
   private async runGh(ghPath: string, args: string[]): Promise<string> {

@@ -112,7 +112,7 @@ async function resolveLatestVersion(bunPath: string): Promise<string | null> {
 }
 
 async function runCCUsage(since: string): Promise<Omit<UsageResponse, "isStale">> {
-  const bunPath = Bun.which("bun") ?? "bun";
+  const bunPath = process.execPath;
   const fullRefresh = needsPricingRefresh();
 
   // Build the command: @latest for full refresh, @pinnedVersion + -O otherwise

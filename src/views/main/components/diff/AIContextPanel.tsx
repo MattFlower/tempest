@@ -64,13 +64,13 @@ export function AIContextPanel({
           borderBottom: "1px solid var(--ctp-surface0)",
         }}
       >
-        <span className="font-semibold text-xs" style={{ color: "var(--ctp-mauve)" }}>
+        <span className="font-semibold text-sm" style={{ color: "var(--ctp-mauve)" }}>
           AI Context
         </span>
 
         {context && context.sessions.length > 0 && (
           <span
-            className="text-xs truncate"
+            className="text-sm truncate"
             style={{ color: "var(--ctp-subtext0)" }}
           >
             {context.sessions[0]!.sessionSummary}
@@ -81,11 +81,11 @@ export function AIContextPanel({
 
         {timeline && timeline.changes.length > 1 && (
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium" style={{ color: "var(--ctp-mauve)" }}>
+            <span className="text-sm font-medium" style={{ color: "var(--ctp-mauve)" }}>
               Change {currentChangeIndex + 1} of {timeline.changes.length}
             </span>
             <button
-              className="px-2 py-0.5 text-xs rounded"
+              className="px-2 py-0.5 text-sm rounded"
               style={{
                 background: "var(--ctp-surface0)",
                 color: "var(--ctp-text)",
@@ -97,7 +97,7 @@ export function AIContextPanel({
               Prev
             </button>
             <button
-              className="px-2 py-0.5 text-xs rounded"
+              className="px-2 py-0.5 text-sm rounded"
               style={{
                 background: "var(--ctp-surface0)",
                 color: "var(--ctp-text)",
@@ -114,8 +114,8 @@ export function AIContextPanel({
 
       {/* Content */}
       {context ? (
-        <div ref={scrollContainerRef} className="flex-1 overflow-auto p-4">
-          <div className="flex flex-col gap-2">
+        <div ref={scrollContainerRef} className="flex-1 overflow-auto px-3 py-1.5">
+          <div className="flex flex-col gap-0.5">
             {context.sessions.map((session) =>
               session.messages.map((msg, msgIdx) => {
                 const eventsForMessage = session.fileChanges.filter(
@@ -155,8 +155,8 @@ export function AIContextPanel({
           className="flex-1 flex flex-col items-center justify-center gap-1"
           style={{ color: "var(--ctp-subtext0)" }}
         >
-          <span className="text-sm">No AI context for this file</span>
-          <span className="text-xs opacity-60">
+          <span className="text-base">No AI context for this file</span>
+          <span className="text-sm opacity-60">
             This file was not modified by Claude
           </span>
         </div>
@@ -174,14 +174,21 @@ function MessageBubble({ message }: { message: SessionMessage }) {
 
   return (
     <div className="flex flex-col gap-0.5">
-      <span
-        className="text-[10px] font-medium"
-        style={{ color: isUser ? "var(--ctp-teal)" : "var(--ctp-blue)" }}
-      >
-        {isUser ? "You" : "Claude"}
-      </span>
+      <div className="flex items-baseline gap-2">
+        <span
+          className="text-xs font-medium"
+          style={{ color: isUser ? "var(--ctp-teal)" : "var(--ctp-blue)" }}
+        >
+          {isUser ? "You" : "Claude"}
+        </span>
+        {message.timestamp && (
+          <span className="text-xs" style={{ color: "var(--ctp-subtext0)" }}>
+            {formatTimestamp(message.timestamp)}
+          </span>
+        )}
+      </div>
       <div
-        className="px-2 py-1.5 rounded text-xs"
+        className="px-2 py-1.5 rounded text-sm"
         style={{
           background: isUser ? "rgba(148, 226, 213, 0.1)" : "transparent",
           border: isUser ? "1px solid rgba(148, 226, 213, 0.3)" : "none",
@@ -194,7 +201,7 @@ function MessageBubble({ message }: { message: SessionMessage }) {
               /{parsed.name}
             </span>
             {parsed.args && (
-              <span className="text-xs">
+              <span className="text-sm">
                 {truncate(parsed.args, 250)}
               </span>
             )}
@@ -219,7 +226,7 @@ function ToolCallWaypoint({
   return (
     <div
       data-waypoint-index={globalIndex}
-      className="flex items-center gap-1.5 px-2 py-1.5 rounded text-xs"
+      className="flex items-center gap-1.5 px-2 py-1.5 rounded text-sm"
       style={{
         background: isCurrent
           ? "rgba(203, 166, 247, 0.15)"
@@ -237,9 +244,14 @@ function ToolCallWaypoint({
       >
         {event.inputSummary}
       </span>
+      {event.timestamp && (
+        <span className="text-xs flex-shrink-0" style={{ color: "var(--ctp-subtext0)" }}>
+          {formatTimestamp(event.timestamp)}
+        </span>
+      )}
       {isCurrent && (
         <span
-          className="px-1.5 py-0.5 text-[10px] font-bold rounded-full"
+          className="px-1.5 py-0.5 text-xs font-bold rounded-full flex-shrink-0"
           style={{
             background: "var(--ctp-mauve)",
             color: "var(--ctp-base)",
@@ -269,4 +281,14 @@ function stripTags(text: string): string {
 
 function truncate(text: string, limit: number): string {
   return text.length > limit ? text.slice(0, limit) + "..." : text;
+}
+
+function formatTimestamp(iso: string): string {
+  const date = new Date(iso);
+  if (isNaN(date.getTime())) return iso;
+  const now = new Date();
+  const time = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (date.toDateString() === now.toDateString()) return time;
+  const dateStr = date.toLocaleDateString([], { month: "short", day: "numeric" });
+  return `${dateStr} ${time}`;
 }

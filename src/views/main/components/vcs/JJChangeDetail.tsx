@@ -4,39 +4,19 @@
 // ============================================================
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { JJRevision, JJChangedFile } from "../../../../shared/ipc-types";
+import type { JJRevision } from "../../../../shared/ipc-types";
 
 interface JJChangeDetailProps {
   revision: JJRevision | null;
-  changedFiles: JJChangedFile[];
-  selectedFilePath: string | null;
   onDescriptionSave: (description: string) => void;
   onAbandon: () => void;
-  onSelectFile: (path: string) => void;
   isSaving: boolean;
 }
 
-const CHANGE_TYPE_COLORS: Record<string, string> = {
-  modified: "var(--ctp-blue)",
-  added: "var(--ctp-green)",
-  deleted: "var(--ctp-red)",
-  renamed: "var(--ctp-peach)",
-};
-
-const CHANGE_TYPE_LABELS: Record<string, string> = {
-  modified: "M",
-  added: "A",
-  deleted: "D",
-  renamed: "R",
-};
-
 export function JJChangeDetail({
   revision,
-  changedFiles,
-  selectedFilePath,
   onDescriptionSave,
   onAbandon,
-  onSelectFile,
   isSaving,
 }: JJChangeDetailProps) {
   const [description, setDescription] = useState("");
@@ -140,7 +120,7 @@ export function JJChangeDetail({
         <div className="flex items-center justify-between mb-1">
           <span
             className="text-[10px] font-semibold uppercase tracking-wider"
-            style={{ color: "var(--ctp-overlay0)" }}
+            style={{ color: "var(--ctp-text)" }}
           >
             Description
           </span>
@@ -184,86 +164,6 @@ export function JJChangeDetail({
         />
       </div>
 
-      {/* Changed files list */}
-      <div className="flex flex-col flex-shrink-0 min-h-0" style={{ maxHeight: "40%" }}>
-        <div
-          className="flex items-center gap-2 px-3 py-1.5 flex-shrink-0"
-          style={{
-            backgroundColor: "var(--ctp-mantle)",
-            borderBottom: "1px solid var(--ctp-surface0)",
-          }}
-        >
-          <span
-            className="text-[10px] font-semibold uppercase tracking-wider"
-            style={{ color: "var(--ctp-overlay0)" }}
-          >
-            Files ({changedFiles.length})
-          </span>
-        </div>
-        <div className="overflow-y-auto flex-1 min-h-0">
-          {changedFiles.length === 0 ? (
-            <div
-              className="px-3 py-2 text-[10px]"
-              style={{ color: "var(--ctp-overlay0)" }}
-            >
-              No changed files
-            </div>
-          ) : (
-            changedFiles.map((file) => {
-              const fileName = file.path.split("/").pop() ?? file.path;
-              const dirPath = file.path.includes("/")
-                ? file.path.slice(0, file.path.lastIndexOf("/"))
-                : "";
-              const isSelected = selectedFilePath === file.path;
-
-              return (
-                <div
-                  key={file.path}
-                  className="flex items-center gap-1.5 px-3 py-1 cursor-pointer text-xs"
-                  style={{
-                    backgroundColor: isSelected
-                      ? "var(--ctp-surface0)"
-                      : "transparent",
-                  }}
-                  onClick={() => onSelectFile(file.path)}
-                  onMouseEnter={(e) => {
-                    if (!isSelected)
-                      (e.currentTarget as HTMLElement).style.backgroundColor =
-                        "var(--ctp-surface0)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isSelected)
-                      (e.currentTarget as HTMLElement).style.backgroundColor =
-                        "transparent";
-                  }}
-                >
-                  <span
-                    className="font-mono font-bold flex-shrink-0"
-                    style={{
-                      color:
-                        CHANGE_TYPE_COLORS[file.changeType] ?? "var(--ctp-text)",
-                      minWidth: 12,
-                    }}
-                  >
-                    {CHANGE_TYPE_LABELS[file.changeType] ?? "?"}
-                  </span>
-                  <span className="truncate" style={{ color: "var(--ctp-text)" }}>
-                    {fileName}
-                  </span>
-                  {dirPath && (
-                    <span
-                      className="truncate ml-auto flex-shrink-0"
-                      style={{ color: "var(--ctp-overlay0)", fontSize: 10 }}
-                    >
-                      {dirPath}
-                    </span>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
     </div>
   );
 }

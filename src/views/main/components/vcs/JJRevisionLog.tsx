@@ -197,7 +197,7 @@ function RevisionEntry({
             className="text-xs truncate"
             style={{
               color: isDescriptionEmpty
-                ? "var(--ctp-overlay0)"
+                ? "var(--ctp-subtext0)"
                 : "var(--ctp-text)",
               fontStyle: isDescriptionEmpty ? "italic" : "normal",
             }}
@@ -216,19 +216,19 @@ function RevisionEntry({
         <div className="flex items-baseline gap-1.5 min-w-0 flex-1">
           <span
             className="font-mono text-[10px] flex-shrink-0"
-            style={{ color: "var(--ctp-overlay1)" }}
+            style={{ color: "var(--ctp-subtext0)" }}
           >
             {revision.commitId}
           </span>
           <span
             className="text-[10px] truncate"
-            style={{ color: "var(--ctp-overlay0)" }}
+            style={{ color: "var(--ctp-subtext0)" }}
           >
             {revision.author}
           </span>
           <span
             className="text-[10px] flex-shrink-0 ml-auto pr-1"
-            style={{ color: "var(--ctp-overlay0)" }}
+            style={{ color: "var(--ctp-subtext0)" }}
           >
             {revision.timestamp}
           </span>
@@ -282,7 +282,7 @@ function RevisionEntry({
             {revision.isEmpty && (
               <span
                 className="text-[9px]"
-                style={{ color: "var(--ctp-overlay0)" }}
+                style={{ color: "var(--ctp-subtext0)" }}
               >
                 (empty)
               </span>
@@ -290,7 +290,7 @@ function RevisionEntry({
             {revision.isImmutable && (
               <span
                 className="text-[9px]"
-                style={{ color: "var(--ctp-overlay0)" }}
+                style={{ color: "var(--ctp-subtext0)" }}
               >
                 (immutable)
               </span>
@@ -336,7 +336,7 @@ export function JJRevisionLog({
       {revisions.length === 0 ? (
         <div
           className="flex items-center justify-center h-full text-xs"
-          style={{ color: "var(--ctp-overlay0)" }}
+          style={{ color: "var(--ctp-subtext0)" }}
         >
           No revisions found
         </div>

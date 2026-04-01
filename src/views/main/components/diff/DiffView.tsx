@@ -123,6 +123,8 @@ export function DiffView() {
         if (!cancelled) {
           setAiContext(ctx);
           setAiTimeline(tl);
+          const lastIdx = tl?.changes?.length ? tl.changes.length - 1 : 0;
+          setCurrentChangeIndex(lastIdx);
         }
       } catch {
         if (!cancelled) {

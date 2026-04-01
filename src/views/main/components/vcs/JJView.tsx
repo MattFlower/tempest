@@ -11,6 +11,8 @@ import type {
   JJChangedFile,
   JJBookmark,
   VCSFileDiffResult,
+  FileAIContext,
+  FileChangeTimeline,
 } from "../../../../shared/ipc-types";
 import { api } from "../../state/rpc-client";
 import { JJRevisionLog } from "./JJRevisionLog";
@@ -24,6 +26,7 @@ import {
 import { JJContextMenu } from "./JJContextMenu";
 import { JJBookmarkDialog } from "./JJBookmarkDialog";
 import { JJRebaseDialog } from "./JJRebaseDialog";
+import { AIContextPanel } from "../diff/AIContextPanel";
 
 interface JJViewProps {
   workspacePath: string;
@@ -46,6 +49,13 @@ export function JJView({ workspacePath }: JJViewProps) {
 
   // Diff viewer ref for navigation
   const diffViewerRef = useRef<MonacoDiffViewerHandle>(null);
+
+  // AI Context state
+  const [aiContext, setAiContext] = useState<FileAIContext | null>(null);
+  const [aiTimeline, setAiTimeline] = useState<FileChangeTimeline | null>(null);
+  const [currentChangeIndex, setCurrentChangeIndex] = useState(0);
+  const [aiPanelRatio, setAiPanelRatio] = useState(0.3);
+  const [fileListWidth, setFileListWidth] = useState(200);
 
   // UI state
   const [isLoading, setIsLoading] = useState(true);
@@ -165,6 +175,41 @@ export function JJView({ workspacePath }: JJViewProps) {
       cancelled = true;
     };
   }, [selectedFilePath, selectedChangeId, workspacePath]);
+
+  // Load AI context when file changes
+  useEffect(() => {
+    setCurrentChangeIndex(0);
+    if (!selectedFilePath || !workspacePath) {
+      setAiContext(null);
+      setAiTimeline(null);
+      return;
+    }
+
+    const fullPath = `${workspacePath}/${selectedFilePath}`;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const [ctx, tl] = await Promise.all([
+          api.getAIContextForFile(fullPath),
+          api.getAITimelineForFile(fullPath),
+        ]);
+        if (!cancelled) {
+          setAiContext(ctx);
+          setAiTimeline(tl);
+          const lastIdx = tl?.changes?.length ? tl.changes.length - 1 : 0;
+          setCurrentChangeIndex(lastIdx);
+        }
+      } catch {
+        if (!cancelled) {
+          setAiContext(null);
+          setAiTimeline(null);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [selectedFilePath, workspacePath]);
 
   // --- Action handlers ---
 
@@ -341,6 +386,68 @@ export function JJView({ workspacePath }: JJViewProps) {
     [leftPanelWidth],
   );
 
+  // File list divider drag
+  const handleFileListDividerDrag = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startWidth = fileListWidth;
+
+      const onMove = (ev: MouseEvent) => {
+        const delta = ev.clientX - startX;
+        setFileListWidth(Math.max(120, Math.min(400, startWidth + delta)));
+      };
+      const onUp = () => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    },
+    [fileListWidth],
+  );
+
+  // AI panel divider drag
+  const aiDragRef = useRef<{ move: (e: MouseEvent) => void; up: () => void } | null>(null);
+
+  const cleanupAiDrag = useCallback(() => {
+    if (aiDragRef.current) {
+      document.removeEventListener("mousemove", aiDragRef.current.move);
+      document.removeEventListener("mouseup", aiDragRef.current.up);
+      aiDragRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("blur", cleanupAiDrag);
+    return () => {
+      window.removeEventListener("blur", cleanupAiDrag);
+      cleanupAiDrag();
+    };
+  }, [cleanupAiDrag]);
+
+  const handleAiDividerDrag = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const startY = e.clientY;
+      const startRatio = aiPanelRatio;
+      const container = (e.target as HTMLElement).closest("[data-jj-content-panel]");
+      if (!container) return;
+      const containerHeight = container.getBoundingClientRect().height;
+
+      const move = (ev: MouseEvent) => {
+        const delta = startY - ev.clientY;
+        setAiPanelRatio(Math.min(0.6, Math.max(0.1, startRatio + delta / containerHeight)));
+      };
+      const up = () => cleanupAiDrag();
+
+      aiDragRef.current = { move, up };
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", up);
+    },
+    [aiPanelRatio, cleanupAiDrag],
+  );
+
   // --- Get selected revision ---
   const selectedRevision =
     revisions.find((r) => r.changeId === selectedChangeId) ?? null;
@@ -444,80 +551,195 @@ export function JJView({ workspacePath }: JJViewProps) {
         onMouseDown={handleDividerDrag}
       />
 
-      {/* Right panel — change detail + diff */}
+      {/* Right panel — change detail + files sidebar + diff + AI context */}
       <div className="flex-1 h-full min-w-0 flex flex-col">
         {selectedRevision ? (
           <>
-            {/* Top: change detail + description + files */}
+            {/* Top: change detail (header + description) */}
             <div
               className="flex-shrink-0"
-              style={{
-                borderBottom: "1px solid var(--ctp-surface0)",
-                maxHeight: "50%",
-                overflow: "auto",
-              }}
+              style={{ borderBottom: "1px solid var(--ctp-surface0)" }}
             >
               <JJChangeDetail
                 revision={selectedRevision}
-                changedFiles={changedFiles}
-                selectedFilePath={selectedFilePath}
                 onDescriptionSave={handleDescriptionSave}
                 onAbandon={handleAbandon}
-                onSelectFile={setSelectedFilePath}
                 isSaving={isSaving}
               />
             </div>
 
-            {/* Bottom: diff viewer */}
-            <div className="flex-1 min-h-0 flex flex-col">
-              {selectedFilePath && diffData ? (
-                <>
-                  <VCSDiffHeader
-                    filePath={selectedFilePath}
-                    displayMode={displayMode}
-                    onDisplayModeChange={setDisplayMode}
-                    onNextDiff={() => diffViewerRef.current?.goToNextDiff()}
-                    onPrevDiff={() => diffViewerRef.current?.goToPrevDiff()}
-                  />
-                  <div className="flex-1 min-h-0">
-                    <MonacoDiffViewer
-                      ref={diffViewerRef}
-                      originalContent={diffData.originalContent}
-                      modifiedContent={diffData.modifiedContent}
-                      language={diffData.language}
-                      filePath={diffData.filePath}
-                      displayMode={displayMode}
-                    />
-                  </div>
-                </>
-              ) : (
+            {/* Content area: files sidebar + diff + AI panel */}
+            <div className="flex-1 min-h-0 flex flex-col" data-jj-content-panel>
+              {/* Files + Diff row */}
+              <div style={{ flex: `${1 - aiPanelRatio}` }} className="min-h-0 flex">
+                {/* File list sidebar */}
                 <div
-                  className="flex flex-col items-center justify-center h-full gap-2"
-                  style={{ color: "var(--ctp-subtext0)" }}
+                  className="flex-shrink-0 h-full flex flex-col"
+                  style={{ width: fileListWidth, borderRight: "1px solid var(--ctp-surface0)" }}
                 >
-                  {changedFiles.length === 0 ? (
+                  <div
+                    className="flex items-center gap-2 px-3 py-1.5 flex-shrink-0"
+                    style={{
+                      backgroundColor: "var(--ctp-mantle)",
+                      borderBottom: "1px solid var(--ctp-surface0)",
+                    }}
+                  >
+                    <span
+                      className="text-[10px] font-semibold uppercase tracking-wider"
+                      style={{ color: "var(--ctp-text)" }}
+                    >
+                      Files ({changedFiles.length})
+                    </span>
+                  </div>
+                  <div className="overflow-y-auto flex-1 min-h-0">
+                    {changedFiles.length === 0 ? (
+                      <div
+                        className="px-3 py-2 text-[10px]"
+                        style={{ color: "var(--ctp-overlay0)" }}
+                      >
+                        No changed files
+                      </div>
+                    ) : (
+                      changedFiles.map((file) => {
+                        const fileName = file.path.split("/").pop() ?? file.path;
+                        const dirPath = file.path.includes("/")
+                          ? file.path.slice(0, file.path.lastIndexOf("/"))
+                          : "";
+                        const isSelected = selectedFilePath === file.path;
+
+                        return (
+                          <div
+                            key={file.path}
+                            title={file.path}
+                            className="flex items-center gap-1.5 px-3 py-1 cursor-pointer text-xs"
+                            style={{
+                              backgroundColor: isSelected
+                                ? "var(--ctp-surface0)"
+                                : "transparent",
+                            }}
+                            onClick={() => setSelectedFilePath(file.path)}
+                            onMouseEnter={(e) => {
+                              if (!isSelected)
+                                (e.currentTarget as HTMLElement).style.backgroundColor =
+                                  "var(--ctp-surface0)";
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isSelected)
+                                (e.currentTarget as HTMLElement).style.backgroundColor =
+                                  "transparent";
+                            }}
+                          >
+                            <span
+                              className="font-mono font-bold flex-shrink-0"
+                              style={{
+                                color:
+                                  ({
+                                    modified: "var(--ctp-blue)",
+                                    added: "var(--ctp-green)",
+                                    deleted: "var(--ctp-red)",
+                                    renamed: "var(--ctp-peach)",
+                                    copied: "var(--ctp-peach)",
+                                    untracked: "var(--ctp-yellow)",
+                                  } as Record<string, string>)[file.changeType] ?? "var(--ctp-text)",
+                                minWidth: 12,
+                              }}
+                            >
+                              {({ modified: "M", added: "A", deleted: "D", renamed: "R", copied: "C", untracked: "?" } as Record<string, string>)[file.changeType] ?? "?"}
+                            </span>
+                            <span className="truncate" style={{ color: "var(--ctp-text)" }}>
+                              {fileName}
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* File list resizable divider */}
+                <div
+                  className="flex-shrink-0 cursor-col-resize hover:opacity-100 transition-opacity"
+                  style={{
+                    width: 3,
+                    backgroundColor: "var(--ctp-surface0)",
+                    opacity: 0.6,
+                  }}
+                  onMouseDown={handleFileListDividerDrag}
+                />
+
+                {/* Diff viewer */}
+                <div className="flex-1 min-w-0 flex flex-col">
+                  {selectedFilePath && diffData ? (
                     <>
-                      <span className="text-sm">
-                        {selectedRevision.isEmpty
-                          ? "Empty Change"
-                          : "No Changed Files"}
-                      </span>
-                      <span className="text-xs opacity-60">
-                        {selectedRevision.isEmpty
-                          ? "This change has no modifications."
-                          : "Select a different revision to view changes."}
-                      </span>
+                      <VCSDiffHeader
+                        filePath={selectedFilePath}
+                        displayMode={displayMode}
+                        onDisplayModeChange={setDisplayMode}
+                        onNextDiff={() => diffViewerRef.current?.goToNextDiff()}
+                        onPrevDiff={() => diffViewerRef.current?.goToPrevDiff()}
+                      />
+                      <div className="flex-1 min-h-0">
+                        <MonacoDiffViewer
+                          ref={diffViewerRef}
+                          originalContent={diffData.originalContent}
+                          modifiedContent={diffData.modifiedContent}
+                          language={diffData.language}
+                          filePath={diffData.filePath}
+                          displayMode={displayMode}
+                        />
+                      </div>
                     </>
                   ) : (
-                    <>
-                      <span className="text-sm">Select a File</span>
-                      <span className="text-xs opacity-60">
-                        Click a file above to view its diff.
-                      </span>
-                    </>
+                    <div
+                      className="flex flex-col items-center justify-center h-full gap-2"
+                      style={{ color: "var(--ctp-subtext0)" }}
+                    >
+                      {changedFiles.length === 0 ? (
+                        <>
+                          <span className="text-sm">
+                            {selectedRevision.isEmpty
+                              ? "Empty Change"
+                              : "No Changed Files"}
+                          </span>
+                          <span className="text-xs opacity-60">
+                            {selectedRevision.isEmpty
+                              ? "This change has no modifications."
+                              : "Select a different revision to view changes."}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-sm">Select a File</span>
+                          <span className="text-xs opacity-60">
+                            Click a file in the sidebar to view its diff.
+                          </span>
+                        </>
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
+              </div>
+
+              {/* Draggable horizontal divider for AI panel */}
+              <div
+                className="flex-shrink-0 cursor-row-resize"
+                style={{
+                  height: 3,
+                  background: "var(--ctp-mauve)",
+                  opacity: 0.6,
+                }}
+                onMouseDown={handleAiDividerDrag}
+              />
+
+              {/* AI Context Panel */}
+              <div style={{ flex: `${aiPanelRatio}` }} className="min-h-0">
+                <AIContextPanel
+                  context={aiContext}
+                  timeline={aiTimeline}
+                  currentChangeIndex={currentChangeIndex}
+                  onChangeIndex={setCurrentChangeIndex}
+                />
+              </div>
             </div>
           </>
         ) : (

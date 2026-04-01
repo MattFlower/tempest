@@ -22,6 +22,8 @@ interface CachedResult {
 interface PersistedState {
   lastPricingFetchAt: number | null;
   pinnedVersion: string | null;
+  /** Persisted usage cache so data survives app restarts. */
+  cachedResult?: CachedResult | null;
 }
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -43,6 +45,10 @@ function loadPersistedState(): void {
     const state: PersistedState = JSON.parse(raw);
     if (typeof state.lastPricingFetchAt === "number") lastPricingFetchAt = state.lastPricingFetchAt;
     if (typeof state.pinnedVersion === "string") pinnedVersion = state.pinnedVersion;
+    if (state.cachedResult?.data?.dailyTotals) {
+      cached = state.cachedResult;
+      console.log(`[usage] restored cached data from disk (fetched ${new Date(cached.fetchedAt).toISOString()})`);
+    }
     console.log(`[usage] restored state: version=${pinnedVersion}, lastPricing=${lastPricingFetchAt ? new Date(lastPricingFetchAt).toISOString() : "never"}`);
   } catch {
     // No persisted state yet — first run
@@ -51,7 +57,7 @@ function loadPersistedState(): void {
 
 function savePersistedState(): void {
   try {
-    const state: PersistedState = { lastPricingFetchAt, pinnedVersion };
+    const state: PersistedState = { lastPricingFetchAt, pinnedVersion, cachedResult: cached };
     mkdirSync(join(homedir(), "Library", "Application Support", "Tempest"), { recursive: true });
     writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
   } catch (err) {
@@ -234,8 +240,16 @@ export async function getUsageData(since?: string): Promise<UsageResponse> {
     lastFetchFailed = false;
     runCCUsage(sinceDate)
       .then((data) => {
-        cached = { data, fetchedAt: Date.now(), sinceDate };
-        lastFetchFailed = false;
+        if (data.dailyTotals) {
+          cached = { data, fetchedAt: Date.now(), sinceDate };
+          lastFetchFailed = false;
+          savePersistedState();
+        } else {
+          // ccusage returned empty data (timeout, non-zero exit, parse error).
+          // Don't overwrite a good cache with empty results.
+          console.warn("[usage] ccusage returned no data, keeping previous cache");
+          lastFetchFailed = true;
+        }
       })
       .catch((err) => {
         console.error("[usage] Background fetch failed:", err);

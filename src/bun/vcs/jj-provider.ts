@@ -73,6 +73,18 @@ export class JJProvider implements VCSProvider {
     return trimmed.split(/\s+/)[0];
   }
 
+  async listBranches(): Promise<string[]> {
+    const output = await this.runJJ(
+      ["bookmark", "list", "--template", 'name ++ "\\n"'],
+      this.repoPath,
+    );
+    return output
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((name) => name.length > 0)
+      .sort((a, b) => a.localeCompare(b));
+  }
+
   async diffStats(workspace: TempestWorkspace): Promise<DiffStats> {
     const output = await this.runJJ(
       ["diff", "--stat", "--from", "roots(trunk()..@)-"],

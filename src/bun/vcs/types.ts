@@ -22,4 +22,6 @@ export interface VCSProvider {
   bookmarkName(workspace: TempestWorkspace): Promise<string | undefined>;
 
   diffStats(workspace: TempestWorkspace): Promise<DiffStats>;
+
+  listBranches(): Promise<string[]>;
 }

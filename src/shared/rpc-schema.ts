@@ -89,6 +89,10 @@ export interface BunRequests {
   };
 
   // Workspaces
+  getBranches: {
+    params: { repoId: string };
+    response: string[];
+  };
   getWorkspaces: {
     params: { repoId: string };
     response: TempestWorkspace[];

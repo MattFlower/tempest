@@ -254,11 +254,13 @@ export const api = {
   removeRepo: (repoId: string) => rpcRequest.removeRepo({ repoId }),
 
   // Workspaces
+  getBranches: (repoId: string) => rpcRequest.getBranches({ repoId }),
   getWorkspaces: (repoId: string) => rpcRequest.getWorkspaces({ repoId }),
   createWorkspace: (params: {
     repoId: string;
     name: string;
     branch?: string;
+    useExistingBranch?: boolean;
   }) => rpcRequest.createWorkspace(params),
   archiveWorkspace: (workspaceId: string) =>
     rpcRequest.archiveWorkspace({ workspaceId }),

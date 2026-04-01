@@ -135,6 +135,16 @@ export class WorkspaceManager {
     return all;
   }
 
+  async getBranches(repoId: string): Promise<string[]> {
+    const provider = this.providers.get(repoId);
+    if (!provider) return [];
+    try {
+      return await provider.listBranches();
+    } catch {
+      return [];
+    }
+  }
+
   async createWorkspace(
     repoId: string,
     name: string,

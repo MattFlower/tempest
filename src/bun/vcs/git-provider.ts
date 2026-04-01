@@ -66,6 +66,44 @@ export class GitProvider implements VCSProvider {
     return trimmed === "HEAD" ? undefined : trimmed;
   }
 
+  async listBranches(): Promise<string[]> {
+    // Get all local and remote branch names
+    const output = await this.runGit(
+      ["for-each-ref", "--format=%(refname:short)", "refs/heads/", "refs/remotes/"],
+      this.repoPath,
+    );
+
+    // Get branches already checked out in worktrees so we can exclude them
+    const worktreeOutput = await this.runGit(
+      ["worktree", "list", "--porcelain"],
+      this.repoPath,
+    );
+    const worktreeNames = new Set(parseWorktreeList(worktreeOutput));
+
+    const seen = new Set<string>();
+    const branches: string[] = [];
+
+    for (const line of output.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      // Skip HEAD pointers like origin/HEAD
+      if (trimmed.endsWith("/HEAD")) continue;
+
+      // Normalize remote branches: strip origin/ prefix
+      const name = trimmed.startsWith("origin/")
+        ? trimmed.slice("origin/".length)
+        : trimmed;
+
+      if (!name || seen.has(name) || worktreeNames.has(name)) continue;
+      seen.add(name);
+      branches.push(name);
+    }
+
+    branches.sort((a, b) => a.localeCompare(b));
+    return branches;
+  }
+
   async diffStats(workspace: TempestWorkspace): Promise<DiffStats> {
     const baseBranch = await this.detectBaseBranch(workspace.path);
     const output = await this.runGit(

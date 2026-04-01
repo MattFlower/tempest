@@ -370,6 +370,24 @@ export class WorkspaceManager {
     return detectVCSType(repoPath);
   }
 
+  /**
+   * Resolve the VCS bookmark/branch name and repo path for a workspace.
+   * Uses the VCS provider (jj or git) so jj bookmarks are handled correctly.
+   */
+  async getWorkspaceVCSInfo(
+    workspacePath: string,
+  ): Promise<{ repoPath: string; branch: string } | null> {
+    const ws = this.findWorkspaceByPath(workspacePath);
+    if (!ws) return null;
+    const repo = this.repos.find((r) => r.path === ws.repoPath);
+    if (!repo) return null;
+    const provider = this.providers.get(repo.id);
+    if (!provider) return null;
+    const branch = await provider.bookmarkName(ws);
+    if (!branch) return null;
+    return { repoPath: repo.path, branch };
+  }
+
   // --- Helpers ---
 
   private findWorkspaceByPath(path: string): TempestWorkspace | undefined {

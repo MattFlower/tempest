@@ -281,7 +281,11 @@ const rpc = BrowserView.defineRPC({
 
       // --- PR URL Lookup ---
       lookupPRUrl: async (params: any) => {
-        return await lookupPRUrl(params.workspacePath);
+        const vcsInfo = await workspaceManager.getWorkspaceVCSInfo(params.workspacePath);
+        if (!vcsInfo) {
+          return { error: "No branch or bookmark found for the current workspace." };
+        }
+        return await lookupPRUrl(vcsInfo.repoPath, vcsInfo.branch);
       },
 
       // --- PR Feedback (Feature 3) ---

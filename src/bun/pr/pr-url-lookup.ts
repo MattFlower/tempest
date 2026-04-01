@@ -36,18 +36,25 @@ export function parseGitHubRemote(remote: string): string | null {
 }
 
 /**
- * Look up the PR URL for the current branch in a workspace directory.
- * Uses `git` to determine the remote and branch, then `gh pr view` to find the PR.
+ * Look up the PR URL for the given branch in a repository.
+ *
+ * @param repoPath  Path to the repo root (must contain .git). Used for
+ *                  `git remote` and `gh pr view` — important because jj
+ *                  workspaces don't have their own .git directory.
+ * @param branch    The branch or bookmark name to look up. For jj repos
+ *                  this is the bookmark name (resolved by the VCS provider),
+ *                  for git repos it's the branch name.
  */
 export async function lookupPRUrl(
-  workspacePath: string,
+  repoPath: string,
+  branch: string,
 ): Promise<{ url: string } | { error: string }> {
   // 1. Get remote URL
   const gitPath = Bun.which("git");
   if (!gitPath) return { error: "git not found" };
 
   const remoteProc = Bun.spawn([gitPath, "remote", "get-url", "origin"], {
-    cwd: workspacePath,
+    cwd: repoPath,
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -65,31 +72,13 @@ export async function lookupPRUrl(
     return { error: `Could not parse GitHub remote from '${remoteOut.trim()}'` };
   }
 
-  // 3. Get current branch name
-  const branchProc = Bun.spawn(
-    [gitPath, "rev-parse", "--abbrev-ref", "HEAD"],
-    { cwd: workspacePath, stdout: "pipe", stderr: "pipe" },
-  );
-  const branchOut = await new Response(branchProc.stdout).text();
-  const branchErr = await new Response(branchProc.stderr).text();
-  await branchProc.exited;
-
-  if (branchProc.exitCode !== 0) {
-    return { error: `Could not determine current branch: ${branchErr.trim()}` };
-  }
-
-  const branch = branchOut.trim();
-  if (!branch || branch === "HEAD") {
-    return { error: "No branch found for the current workspace (detached HEAD)." };
-  }
-
-  // 4. Look up PR via gh CLI
+  // 3. Look up PR via gh CLI
   const ghPath = Bun.which("gh");
   if (!ghPath) return { error: "gh CLI not found. Install it with: brew install gh" };
 
   const ghProc = Bun.spawn(
     [ghPath, "pr", "view", branch, "--repo", ownerRepo, "--json", "url"],
-    { cwd: workspacePath, stdout: "pipe", stderr: "pipe" },
+    { cwd: repoPath, stdout: "pipe", stderr: "pipe" },
   );
   const ghOut = await new Response(ghProc.stdout).text();
   const ghErr = await new Response(ghProc.stderr).text();
@@ -99,7 +88,7 @@ export async function lookupPRUrl(
     return { error: ghErr.trim() || "No pull request found for this branch." };
   }
 
-  // 5. Parse the JSON response
+  // 4. Parse the JSON response
   try {
     const parsed = JSON.parse(ghOut);
     if (typeof parsed.url === "string") {

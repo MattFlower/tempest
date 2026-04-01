@@ -32,7 +32,27 @@ export class SessionStateManager {
         );
         return null;
       }
+      // Remove workspaces whose directories no longer exist on disk
+      let cleaned = false;
+      for (const wsPath of Object.keys(state.workspaces)) {
+        if (!existsSync(wsPath)) {
+          console.log(`[SessionStateManager] Removing stale workspace (directory gone): ${wsPath}`);
+          delete state.workspaces[wsPath];
+          cleaned = true;
+        }
+      }
+
+      // Clear selected workspace if its directory is gone
+      if (state.selectedWorkspacePath && !existsSync(state.selectedWorkspacePath)) {
+        console.log(`[SessionStateManager] Clearing stale selected workspace: ${state.selectedWorkspacePath}`);
+        state.selectedWorkspacePath = undefined;
+        cleaned = true;
+      }
+
       this.state = state;
+      if (cleaned) {
+        this.dirty = true;
+      }
       return state;
     } catch (err) {
       console.log(

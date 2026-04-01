@@ -30,12 +30,22 @@ function detectLanguage(rawDiff: string): string {
   return "";
 }
 
+export interface DiffSelection {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  lineNumber: number | null;
+}
+
 interface DiffContentProps {
   rawDiff: string;
   displayMode: "unified" | "side-by-side";
   hunkIndex: number;
   filePath?: string;
   onContextMenuLine?: (lineNumber: number | null, filePath: string, x: number, y: number) => void;
+  onTextSelection?: (selection: DiffSelection | null) => void;
 }
 
 /**
@@ -154,6 +164,7 @@ export function DiffContent({
   hunkIndex,
   filePath,
   onContextMenuLine,
+  onTextSelection,
 }: DiffContentProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const prevHunkIndex = useRef(hunkIndex);
@@ -167,24 +178,27 @@ export function DiffContent({
     return detectLanguage(rawDiff);
   }, [filePath, rawDiff]);
 
-  // Generate diff HTML
+  // Generate diff HTML with syntax highlighting baked in.
+  // Highlighting is applied inside the memo (via a temporary DOM element)
+  // so the highlighted HTML is what React manages — this prevents re-renders
+  // from replacing highlighted content with the original unhighlighted HTML.
   const diffHtml = useMemo(() => {
     if (!rawDiff.trim()) {
       return '<div style="color: var(--ctp-subtext0); padding: 40px; text-align: center;">No changes</div>';
     }
 
-    return diff2htmlHtml(rawDiff, {
+    const html = diff2htmlHtml(rawDiff, {
       drawFileList: false,
       matching: "lines",
       outputFormat: displayMode === "side-by-side" ? "side-by-side" : "line-by-line",
       renderNothingWhenEmpty: false,
     });
-  }, [rawDiff, displayMode]);
 
-  // Apply syntax highlighting after diff HTML is rendered
-  useEffect(() => {
-    if (!containerRef.current) return;
-    containerRef.current.querySelectorAll(".d2h-code-line-ctn").forEach((el) => {
+    // Apply syntax highlighting to a temporary DOM element so the
+    // highlighted spans become part of the memoized HTML string.
+    const temp = document.createElement("div");
+    temp.innerHTML = html;
+    temp.querySelectorAll(".d2h-code-line-ctn").forEach((el) => {
       const text = el.textContent;
       if (!text || !text.trim()) return;
       try {
@@ -196,7 +210,8 @@ export function DiffContent({
         // Leave unhighlighted on error
       }
     });
-  }, [diffHtml, lang]);
+    return temp.innerHTML;
+  }, [rawDiff, displayMode, lang]);
 
   // Right-click context menu — extract new-file line number from diff2html DOM
   const handleContextMenu = useCallback(
@@ -253,6 +268,58 @@ export function DiffContent({
     [onContextMenuLine, filePath],
   );
 
+  // Extract line number from a DOM element within the diff
+  const extractLineNumber = useCallback((el: HTMLElement): number | null => {
+    const tr = el.closest("tr");
+    if (!tr) return null;
+    // Side-by-side: check .d2h-code-side-linenumber
+    const sideCell = tr.querySelector(".d2h-code-side-linenumber");
+    if (sideCell) {
+      const num = parseInt(sideCell.textContent?.trim() ?? "", 10);
+      if (!isNaN(num)) return num;
+    }
+    // Unified: check .line-num2 (new-file line number)
+    const lineNumCell = tr.querySelector(".d2h-code-linenumber");
+    if (lineNumCell) {
+      const newNumDiv = lineNumCell.querySelector(".line-num2");
+      if (newNumDiv) {
+        const num = parseInt(newNumDiv.textContent?.trim() ?? "", 10);
+        if (!isNaN(num)) return num;
+      }
+    }
+    return null;
+  }, []);
+
+  // Text selection handler
+  const handleMouseUp = useCallback(() => {
+    if (!onTextSelection) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) {
+      onTextSelection(null);
+      return;
+    }
+    const text = sel.toString();
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const containerRect = containerRef.current?.getBoundingClientRect();
+    if (!containerRect) return;
+
+    // Get line number from the anchor node
+    const anchorEl = sel.anchorNode instanceof HTMLElement
+      ? sel.anchorNode
+      : sel.anchorNode?.parentElement;
+    const lineNumber = anchorEl ? extractLineNumber(anchorEl) : null;
+
+    onTextSelection({
+      text,
+      x: rect.x - containerRect.x,
+      y: rect.y - containerRect.y,
+      width: rect.width,
+      height: rect.height,
+      lineNumber,
+    });
+  }, [onTextSelection, extractLineNumber]);
+
   // Scroll to hunk when hunkIndex changes
   useEffect(() => {
     if (!containerRef.current) return;
@@ -278,6 +345,7 @@ export function DiffContent({
       ref={containerRef}
       className="h-full overflow-auto"
       onContextMenu={handleContextMenu}
+      onMouseUp={handleMouseUp}
       style={{ background: "var(--ctp-base)" }}
     >
       <style>{CUSTOM_CSS}</style>

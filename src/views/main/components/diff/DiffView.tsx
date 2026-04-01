@@ -12,10 +12,12 @@ import type {
 } from "../../../../shared/ipc-types";
 import { DiffScope, PaneTabKind, ViewMode } from "../../../../shared/ipc-types";
 import { api } from "../../state/rpc-client";
+import { askClaudeAboutSelection } from "../../state/actions";
 import { useStore } from "../../state/store";
 import { createTab, createPane, allPanes, addingPane, toNodeState } from "../../models/pane-node";
 import { FileTreeView } from "./FileTreeView";
 import { DiffContent } from "./DiffContent";
+import type { DiffSelection } from "./DiffContent";
 import { DiffHeader } from "./DiffHeader";
 import { DiffContextMenu } from "./DiffContextMenu";
 import { AIContextPanel } from "./AIContextPanel";
@@ -49,6 +51,10 @@ export function DiffView() {
     lineNumber: number | null;
     filePath: string;
   } | null>(null);
+
+  // Text selection state for "Ask Claude" button
+  const [diffSelection, setDiffSelection] = useState<DiffSelection | null>(null);
+  const diffContentWrapperRef = useRef<HTMLDivElement>(null);
 
   const paneTrees = useStore((s) => s.paneTrees);
   const setViewMode = useStore((s) => s.setViewMode);
@@ -248,6 +254,19 @@ export function DiffView() {
     setViewMode(selectedWorkspacePath, ViewMode.Terminal);
   }, [contextMenu, selectedWorkspacePath, paneTrees, setViewMode]);
 
+  const handleAskClaude = useCallback(() => {
+    if (!diffSelection || !selectedPath || !selectedWorkspacePath) return;
+    const fullPath = `${selectedWorkspacePath}/${selectedPath}`;
+    askClaudeAboutSelection(diffSelection.text, fullPath, diffSelection.lineNumber);
+    setDiffSelection(null);
+    setViewMode(selectedWorkspacePath, ViewMode.Terminal);
+  }, [diffSelection, selectedPath, selectedWorkspacePath, setViewMode]);
+
+  // Clear selection when switching files
+  useEffect(() => {
+    setDiffSelection(null);
+  }, [selectedPath]);
+
   if (!selectedWorkspacePath) {
     return (
       <div
@@ -336,7 +355,7 @@ export function DiffView() {
   }
 
   return (
-    <div className="flex h-full w-full">
+    <div className="flex h-full w-full" onMouseDown={() => setDiffSelection(null)}>
       {/* Left panel — file tree */}
       <div
         className="flex-shrink-0 h-full"
@@ -372,14 +391,33 @@ export function DiffView() {
             />
             <div className="flex-1 min-h-0 flex flex-col">
               {/* Diff content area */}
-              <div style={{ flex: `${1 - aiPanelRatio}` }} className="min-h-0">
+              <div ref={diffContentWrapperRef} style={{ flex: `${1 - aiPanelRatio}` }} className="min-h-0 relative overflow-hidden">
                 <DiffContent
                   rawDiff={selectedFileDiff}
                   displayMode={displayMode}
                   hunkIndex={hunkIndex}
                   filePath={selectedPath}
                   onContextMenuLine={handleContextMenuLine}
+                  onTextSelection={setDiffSelection}
                 />
+                {diffSelection && (
+                  <button
+                    className="absolute z-50 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium shadow-lg transition-opacity hover:opacity-90"
+                    style={{
+                      left: Math.max(8, Math.min(diffSelection.x + diffSelection.width / 2 - 40, (diffContentWrapperRef.current?.clientWidth ?? 300) - 100)),
+                      top: Math.max(4, diffSelection.y - 32),
+                      backgroundColor: "var(--ctp-mauve)",
+                      color: "var(--ctp-base)",
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={handleAskClaude}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    Ask Claude
+                  </button>
+                )}
               </div>
               {/* Draggable divider */}
               <div

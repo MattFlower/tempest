@@ -162,6 +162,10 @@ export interface BunRequests {
     params: { repoPath: string; bookmarkId: string };
     response: void;
   };
+  updateBookmark: {
+    params: { repoPath: string; bookmarkId: string; label: string; url?: string };
+    response: void;
+  };
 
   // Session state persistence
   loadSessionState: {

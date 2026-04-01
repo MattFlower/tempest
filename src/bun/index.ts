@@ -174,6 +174,9 @@ const rpc = BrowserView.defineRPC({
       removeBookmark: async ({ repoPath, bookmarkId }: { repoPath: string; bookmarkId: string }) => {
         await getBookmarkManager(repoPath).remove(bookmarkId);
       },
+      updateBookmark: async ({ repoPath, bookmarkId, label, url }: { repoPath: string; bookmarkId: string; label: string; url?: string }) => {
+        await getBookmarkManager(repoPath).update(bookmarkId, label, url);
+      },
 
       // --- Session State (Stream D) ---
       loadSessionState: async () => {

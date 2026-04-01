@@ -290,6 +290,8 @@ export const api = {
     rpcRequest.addBookmark({ repoPath, url, label }),
   removeBookmark: (repoPath: string, bookmarkId: string) =>
     rpcRequest.removeBookmark({ repoPath, bookmarkId }),
+  updateBookmark: (repoPath: string, bookmarkId: string, label: string, url?: string) =>
+    rpcRequest.updateBookmark({ repoPath, bookmarkId, label, url }),
 
   // Session state
   loadSessionState: () => rpcRequest.loadSessionState(),

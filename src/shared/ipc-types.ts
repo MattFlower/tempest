@@ -93,6 +93,8 @@ export interface Bookmark {
   id: string;
   url: string;
   label: string;
+  createdAt: string; // ISO8601
+  position: number;
 }
 
 export interface AppConfig {

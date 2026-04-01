@@ -23,6 +23,7 @@ interface ElectrobunWebview extends HTMLElement {
   stopFindInPage(): void;
   toggleHidden(value?: boolean): void;
   togglePassthrough(value?: boolean): void;
+  executeJavascript(js: string): void;
   on(event: string, handler: (...args: any[]) => void): void;
 }
 
@@ -73,6 +74,7 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
 
   // Navigation state
   const [currentUrl, setCurrentUrl] = useState(tab.browserURL || "");
+  const [pageTitle, setPageTitle] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
@@ -81,6 +83,10 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
   const [isFindBarVisible, setIsFindBarVisible] = useState(false);
   const [findText, setFindText] = useState("");
   const [findHasMatch, setFindHasMatch] = useState(true);
+
+  // Hide native webview when a toolbar popover is open (the native WKWebView
+  // overlay sits on top of all DOM content, so popovers are invisible otherwise).
+  const [popoverOpen, setPopoverOpen] = useState(false);
 
   // Attach webview event listeners once the element is in the DOM.
   useEffect(() => {
@@ -112,12 +118,29 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
       if (url) setCurrentUrl(url);
       setIsLoading(false);
       updateNavState();
+      // Ask the content page to send its title back via host-message
+      try {
+        el.executeJavascript(
+          `if(window.__electrobunSendToHost){window.__electrobunSendToHost({type:"page-title",title:document.title})}`
+        );
+      } catch {}
     });
 
     el.on("did-commit-navigation", (event: any) => {
       const url = extractUrl(event);
       if (url) setCurrentUrl(url);
       updateNavState();
+    });
+
+    // Listen for host messages from the content page (e.g. page title)
+    el.on("host-message", (event: any) => {
+      try {
+        const raw = event?.detail ?? event;
+        const data = typeof raw === "string" ? JSON.parse(raw) : raw;
+        if (data?.type === "page-title" && typeof data.title === "string") {
+          setPageTitle(data.title);
+        }
+      } catch {}
     });
 
     updateNavState();
@@ -163,7 +186,7 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isFocused]);
 
-  // Show/hide the native webview overlay when visibility changes.
+  // Show/hide the native webview overlay when visibility changes or a popover is open.
   // Three layers to work around Electrobun's OverlaySyncController which sends
   // webviewTagResize every 100ms (even when hidden) and can re-activate the
   // overlay on the native side, overriding toggleHidden:
@@ -175,7 +198,8 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
     const el = webviewRef.current;
     if (!el) return;
     try {
-      if (isTrulyVisible) {
+      const shouldShow = isTrulyVisible && !popoverOpen;
+      if (shouldShow) {
         el.style.display = "";
         el.toggleHidden(false);
         el.togglePassthrough(false);
@@ -187,7 +211,7 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
     } catch {
       // Methods may not be available during initialization
     }
-  }, [isTrulyVisible]);
+  }, [isTrulyVisible, popoverOpen]);
 
   // Navigation actions — wrapped in try-catch for resilience against
   // webview methods being unavailable during initialization or teardown.
@@ -251,6 +275,7 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
     <div className="flex flex-col" style={{ height: "100%", width: "100%" }}>
       <BrowserToolbar
         currentUrl={currentUrl}
+        pageTitle={pageTitle}
         isLoading={isLoading}
         canGoBack={canGoBack}
         canGoForward={canGoForward}
@@ -260,6 +285,7 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
         onGoForward={goForward}
         onReload={reload}
         onStop={stop}
+        onPopoverChange={setPopoverOpen}
       />
 
       {isFindBarVisible && (

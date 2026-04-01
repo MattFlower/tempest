@@ -1,7 +1,8 @@
 // ============================================================
 // BookmarkManager — Per-repo bookmark CRUD with JSON persistence.
 // Port of Tempest/Browser/BookmarkManager.swift.
-// Storage: ~/.config/Tempest/bookmarks/{sha256(repoPath)}.json
+// Storage: ~/.config/tempest/bookmarks/{sha256(repoPath)}.json
+// Uses lowercase "tempest" to share files with Tempest 1 (Swift).
 // ============================================================
 
 import { join } from "path";
@@ -15,7 +16,7 @@ interface RepoBookmarks {
   bookmarks: Bookmark[];
 }
 
-const BOOKMARKS_DIR = join(homedir(), ".config", "Tempest", "bookmarks");
+const BOOKMARKS_DIR = join(homedir(), ".config", "tempest", "bookmarks");
 
 function sha256Hex(input: string): string {
   const hasher = new Bun.CryptoHasher("sha256");
@@ -40,7 +41,11 @@ export class BookmarkManager {
       const file = Bun.file(this.filePath);
       if (await file.exists()) {
         const data: RepoBookmarks = await file.json();
-        this.bookmarks = data.bookmarks ?? [];
+        const bookmarks = data.bookmarks ?? [];
+        // Sort by position, filling in missing positions
+        this.bookmarks = bookmarks.sort(
+          (a, b) => (a.position ?? 0) - (b.position ?? 0),
+        );
       }
     } catch {
       this.bookmarks = [];
@@ -57,6 +62,21 @@ export class BookmarkManager {
     }
   }
 
+  private async updateIndex(hash: string, repoPath: string): Promise<void> {
+    try {
+      const indexPath = join(BOOKMARKS_DIR, "index.json");
+      let index: Record<string, string> = {};
+      const indexFile = Bun.file(indexPath);
+      if (await indexFile.exists()) {
+        index = await indexFile.json();
+      }
+      index[hash] = repoPath;
+      await Bun.write(indexPath, JSON.stringify(index, null, 2));
+    } catch {
+      // Non-critical
+    }
+  }
+
   async getAll(): Promise<Bookmark[]> {
     await this.ensureLoaded();
     return this.bookmarks;
@@ -66,10 +86,16 @@ export class BookmarkManager {
     await this.ensureLoaded();
     const normalized = normalizeURL(url);
     if (this.bookmarks.some((b) => normalizeURL(b.url) === normalized)) return;
+    const maxPos = this.bookmarks.reduce(
+      (max, b) => Math.max(max, b.position ?? 0),
+      -1,
+    );
     this.bookmarks.push({
       id: crypto.randomUUID(),
       url: normalized,
       label,
+      createdAt: new Date().toISOString(),
+      position: maxPos + 1,
     });
     await this.save();
   }
@@ -78,6 +104,16 @@ export class BookmarkManager {
     await this.ensureLoaded();
     this.bookmarks = this.bookmarks.filter((b) => b.id !== id);
     await this.save();
+  }
+
+  async update(id: string, label: string, url?: string): Promise<void> {
+    await this.ensureLoaded();
+    const bookmark = this.bookmarks.find((b) => b.id === id);
+    if (bookmark) {
+      bookmark.label = label;
+      if (url) bookmark.url = normalizeURL(url);
+      await this.save();
+    }
   }
 
   async contains(url: string): Promise<boolean> {

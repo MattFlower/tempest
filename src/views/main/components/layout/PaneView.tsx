@@ -13,6 +13,17 @@ import { PRDashboard } from "../pr/PRDashboard";
 import { EditorPane } from "../editor/EditorPane";
 import { closeTab } from "../../state/actions";
 
+/** Resolve the source repo path for a workspace (for per-repo bookmarks). */
+function useRepoPath(workspacePath: string): string {
+  return useStore((s) => {
+    for (const workspaces of Object.values(s.workspacesByRepo)) {
+      const ws = workspaces.find((w) => w.path === workspacePath);
+      if (ws) return ws.repoPath;
+    }
+    return workspacePath; // fallback
+  });
+}
+
 interface PaneViewProps {
   pane: Pane;
   workspacePath: string;
@@ -20,6 +31,7 @@ interface PaneViewProps {
 
 function TabContent({ tab, paneId, isFocused, isVisible, workspacePath }: { tab: PaneTab; paneId: string; isFocused: boolean; isVisible: boolean; workspacePath: string }) {
   const config = useStore((s) => s.config);
+  const repoPath = useRepoPath(workspacePath);
   const handleCloseRequest = useCallback(() => {
     closeTab(paneId, tab.id);
   }, [paneId, tab.id]);
@@ -50,7 +62,7 @@ function TabContent({ tab, paneId, isFocused, isVisible, workspacePath }: { tab:
         <BrowserPane
           paneId={paneId}
           tab={tab}
-          repoPath={workspacePath || ""}
+          repoPath={repoPath}
           isFocused={isFocused}
           isVisible={isVisible}
         />

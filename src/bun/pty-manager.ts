@@ -101,10 +101,22 @@ export class PtyManager {
           COLORTERM: "truecolor",
           TERM_PROGRAM: "tempest",
           TERM_PROGRAM_VERSION: "0.1.0",
-          // Clear Ghostty env so Claude Code doesn't detect Ghostty
+          // Clear terminal-specific env vars so shells and CLI tools don't
+          // activate integrations for features xterm.js doesn't support.
+          // These cause OSC/DCS sequences that leak as stray characters.
           GHOSTTY_RESOURCES_DIR: "",
           GHOSTTY_SHELL_INTEGRATION_NO_SUDO: "",
           GHOSTTY_BIN_DIR: "",
+          ITERM_SESSION_ID: "",
+          ITERM_PROFILE: "",
+          TERM_SESSION_ID: "",
+          LC_TERMINAL: "",
+          LC_TERMINAL_VERSION: "",
+          VTE_VERSION: "",
+          WT_SESSION: "",
+          WT_PROFILE_ID: "",
+          KONSOLE_DBUS_SESSION: "",
+          KONSOLE_VERSION: "",
           ...params.env,
         },
         terminal: {

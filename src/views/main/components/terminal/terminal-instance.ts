@@ -122,6 +122,50 @@ export class TerminalInstance {
       console.warn(`[${this.id}] Failed to register kitty protocol handlers:`, e);
     }
 
+    // ─── Consume escape sequences not natively handled by xterm.js ───
+    // CLI tools (Claude Code, shell integrations, etc.) emit OSC and DCS
+    // sequences for features xterm.js doesn't support. Without explicit
+    // handlers, payloads from these sequences can leak as visible "stray
+    // characters" — especially on the right side of the screen where
+    // normal output never overwrites them.
+    try {
+      // OSC (Operating System Command) sequences to silently consume:
+      for (const id of [
+        7,    // Working directory notification (CWD)
+        9,    // Desktop notification (ConEmu/mintty)
+        22,   // Set mouse pointer shape
+        52,   // Clipboard manipulation
+        99,   // Kitty notification protocol
+        133,  // FinalTerm shell integration (prompt/command markers)
+        633,  // VS Code shell integration
+        1337, // iTerm2 proprietary (inline images, marks, badges, etc.)
+      ]) {
+        this.terminal.parser.registerOscHandler(id, () => true);
+      }
+
+      // DCS (Device Control String) sequences — prevent binary payloads
+      // from sixel graphics, tmux passthrough, etc. from rendering as text.
+      const nullDcs = {
+        hook() {},
+        put() {},
+        unhook() {},
+      };
+      // Sixel graphics (DCS Ps;Ps;Ps q ...)
+      this.terminal.parser.registerDcsHandler({ final: "q" }, { ...nullDcs });
+      // Request terminfo string (DCS + q ...)
+      this.terminal.parser.registerDcsHandler(
+        { intermediates: "+", final: "q" },
+        { ...nullDcs },
+      );
+      // Set terminfo string (DCS + p ...)
+      this.terminal.parser.registerDcsHandler(
+        { intermediates: "+", final: "p" },
+        { ...nullDcs },
+      );
+    } catch (e) {
+      console.warn(`[${this.id}] Failed to register escape sequence handlers:`, e);
+    }
+
     // Track keys handled by our custom handler so we can suppress duplicate
     // data from onData (Electrobun WebView may not fully respect preventDefault).
     let suppressNextData: string | null = null;
@@ -209,16 +253,26 @@ export class TerminalInstance {
   }
 
   private setupResizeObserver() {
+    let lastCols = 0;
+    let lastRows = 0;
     this.resizeObserver = new ResizeObserver(() => {
       if (this.resizeDebounceTimer !== null) {
-        clearTimeout(this.resizeDebounceTimer);
+        cancelAnimationFrame(this.resizeDebounceTimer);
       }
-      this.resizeDebounceTimer = window.setTimeout(() => {
+      this.resizeDebounceTimer = requestAnimationFrame(() => {
+        this.resizeDebounceTimer = null;
         const rect = this.container.getBoundingClientRect();
-        if (rect.width >= 50 && rect.height >= 50) {
-          this.fitAddon.fit();
-        }
-      }, 16);
+        if (rect.width < 50 || rect.height < 50) return;
+
+        const dims = this.fitAddon.proposeDimensions();
+        if (!dims) return;
+        // Skip if dimensions haven't actually changed — avoids
+        // redundant reflows that can split positioned content.
+        if (dims.cols === lastCols && dims.rows === lastRows) return;
+        lastCols = dims.cols;
+        lastRows = dims.rows;
+        this.fitAddon.fit();
+      });
     });
     this.resizeObserver.observe(this.container);
   }
@@ -322,7 +376,7 @@ export class TerminalInstance {
 
   dispose() {
     if (this.resizeDebounceTimer !== null) {
-      clearTimeout(this.resizeDebounceTimer);
+      cancelAnimationFrame(this.resizeDebounceTimer);
     }
     this.resizeObserver?.disconnect();
     this.webglAddon?.dispose();

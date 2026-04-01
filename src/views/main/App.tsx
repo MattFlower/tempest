@@ -77,6 +77,25 @@ export function App() {
   const [isDragging, setIsDragging] = useState(false);
   const startX = useRef(0);
   const startWidth = useRef(0);
+  const sidebarDragRef = useRef<{ move: (e: MouseEvent) => void; up: () => void } | null>(null);
+
+  const cleanupSidebarDrag = useCallback(() => {
+    if (sidebarDragRef.current) {
+      document.removeEventListener("mousemove", sidebarDragRef.current.move);
+      document.removeEventListener("mouseup", sidebarDragRef.current.up);
+      sidebarDragRef.current = null;
+    }
+    setIsDragging(false);
+  }, []);
+
+  // Safety: clean up on window blur or component unmount
+  useEffect(() => {
+    window.addEventListener("blur", cleanupSidebarDrag);
+    return () => {
+      window.removeEventListener("blur", cleanupSidebarDrag);
+      cleanupSidebarDrag();
+    };
+  }, [cleanupSidebarDrag]);
 
   const onDividerMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -85,19 +104,17 @@ export function App() {
       startX.current = e.clientX;
       startWidth.current = sidebarWidth;
 
-      const onMouseMove = (ev: MouseEvent) => {
+      const move = (ev: MouseEvent) => {
         const newWidth = startWidth.current + (ev.clientX - startX.current);
         setSidebarWidth(Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, newWidth)));
       };
-      const onMouseUp = () => {
-        setIsDragging(false);
-        document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("mouseup", onMouseUp);
-      };
-      document.addEventListener("mousemove", onMouseMove);
-      document.addEventListener("mouseup", onMouseUp);
+      const up = () => cleanupSidebarDrag();
+
+      sidebarDragRef.current = { move, up };
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", up);
     },
-    [sidebarWidth, setSidebarWidth]
+    [sidebarWidth, setSidebarWidth, cleanupSidebarDrag]
   );
 
   return (

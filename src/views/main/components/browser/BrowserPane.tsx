@@ -22,6 +22,7 @@ interface ElectrobunWebview extends HTMLElement {
   findInPage(text: string, opts?: { forward?: boolean; matchCase?: boolean }): void;
   stopFindInPage(): void;
   toggleHidden(value?: boolean): void;
+  togglePassthrough(value?: boolean): void;
   on(event: string, handler: (...args: any[]) => void): void;
 }
 
@@ -36,6 +37,8 @@ export interface BrowserPaneProps {
 export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: BrowserPaneProps) {
   const webviewRef = useRef<ElectrobunWebview | null>(null);
   const webviewId = `browser-${tab.id}`;
+  // Ref tracks latest visibility for use in async callbacks (avoids stale closures).
+  const isTrulyVisibleRef = useRef(false);
 
   // True visibility: combines all four hiding layers (tab selection, pane
   // maximization, workspace selection, view mode) so we can tell the native
@@ -53,6 +56,8 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
     }
     return false;
   });
+
+  isTrulyVisibleRef.current = isTrulyVisible;
 
   // Defer mounting the <electrobun-webview> element until it has been truly
   // visible at least once. Electrobun's native WKWebView overlay is created in
@@ -116,6 +121,31 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
     });
 
     updateNavState();
+
+    // Guard against the race between React effects and Electrobun's async
+    // overlay creation. toggleHidden() is a no-op when called before
+    // initWebview sets webviewId (connectedCallback → rAF → initWebview).
+    // A double-rAF ensures we re-apply visibility AFTER the overlay exists.
+    let cancelled = false;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        const visible = isTrulyVisibleRef.current;
+        try {
+          if (visible) {
+            el.style.display = "";
+            el.toggleHidden(false);
+            el.togglePassthrough(false);
+          } else {
+            el.toggleHidden(true);
+            el.togglePassthrough(true);
+            el.style.display = "none";
+          }
+        } catch {}
+      });
+    });
+
+    return () => { cancelled = true; };
   }, [webviewId, mounted]);
 
   // Keyboard shortcut: Cmd+F for find
@@ -134,13 +164,28 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
   }, [isFocused]);
 
   // Show/hide the native webview overlay when visibility changes.
+  // Three layers to work around Electrobun's OverlaySyncController which sends
+  // webviewTagResize every 100ms (even when hidden) and can re-activate the
+  // overlay on the native side, overriding toggleHidden:
+  //   1. toggleHidden — tells native side to hide/show
+  //   2. togglePassthrough — prevents click interception even if overlay re-shows
+  //   3. display:none — makes getBoundingClientRect() return 0×0, causing the
+  //      sync loop to skip resize messages (overlaySync.ts:87-89)
   useEffect(() => {
     const el = webviewRef.current;
     if (!el) return;
     try {
-      el.toggleHidden(!isTrulyVisible);
+      if (isTrulyVisible) {
+        el.style.display = "";
+        el.toggleHidden(false);
+        el.togglePassthrough(false);
+      } else {
+        el.toggleHidden(true);
+        el.togglePassthrough(true);
+        el.style.display = "none";
+      }
     } catch {
-      // Method may not be available during initialization
+      // Methods may not be available during initialization
     }
   }, [isTrulyVisible]);
 

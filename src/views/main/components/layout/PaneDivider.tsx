@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect } from "react";
 import { handleDividerDrag } from "../../state/actions";
 
 interface PaneDividerProps {
@@ -10,25 +10,26 @@ interface PaneDividerProps {
 export function PaneDivider({ splitId, index, hidden }: PaneDividerProps) {
   const startXRef = useRef(0);
   const containerWidthRef = useRef(0);
+  const listenersRef = useRef<{ move: (e: MouseEvent) => void; up: () => void } | null>(null);
 
-  const onMouseMove = useCallback(
-    (e: MouseEvent) => {
-      const deltaX = e.clientX - startXRef.current;
-      const deltaRatio = deltaX / containerWidthRef.current;
-      if (deltaRatio !== 0) {
-        handleDividerDrag(splitId, index, deltaRatio);
-        startXRef.current = e.clientX;
-      }
-    },
-    [splitId, index],
-  );
-
-  const onMouseUp = useCallback(() => {
-    document.removeEventListener("mousemove", onMouseMove);
-    document.removeEventListener("mouseup", onMouseUp);
+  const cleanup = useCallback(() => {
+    if (listenersRef.current) {
+      document.removeEventListener("mousemove", listenersRef.current.move);
+      document.removeEventListener("mouseup", listenersRef.current.up);
+      listenersRef.current = null;
+    }
     document.body.style.cursor = "";
     document.body.style.userSelect = "";
-  }, [onMouseMove]);
+  }, []);
+
+  // Safety: clean up on window blur or component unmount
+  useEffect(() => {
+    window.addEventListener("blur", cleanup);
+    return () => {
+      window.removeEventListener("blur", cleanup);
+      cleanup();
+    };
+  }, [cleanup]);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -41,12 +42,23 @@ export function PaneDivider({ splitId, index, hidden }: PaneDividerProps) {
       }
       containerWidthRef.current = parent?.getBoundingClientRect().width ?? 1;
 
-      document.addEventListener("mousemove", onMouseMove);
-      document.addEventListener("mouseup", onMouseUp);
+      const move = (ev: MouseEvent) => {
+        const deltaX = ev.clientX - startXRef.current;
+        const deltaRatio = deltaX / containerWidthRef.current;
+        if (deltaRatio !== 0) {
+          handleDividerDrag(splitId, index, deltaRatio);
+          startXRef.current = ev.clientX;
+        }
+      };
+      const up = () => cleanup();
+
+      listenersRef.current = { move, up };
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", up);
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
     },
-    [onMouseMove, onMouseUp],
+    [splitId, index, cleanup],
   );
 
   if (hidden) return null;

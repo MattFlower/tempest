@@ -194,6 +194,25 @@ export function DiffView() {
     [],
   );
 
+  const diffDragRef = useRef<{ move: (e: MouseEvent) => void; up: () => void } | null>(null);
+
+  const cleanupDiffDrag = useCallback(() => {
+    if (diffDragRef.current) {
+      document.removeEventListener("mousemove", diffDragRef.current.move);
+      document.removeEventListener("mouseup", diffDragRef.current.up);
+      diffDragRef.current = null;
+    }
+  }, []);
+
+  // Safety: clean up on window blur or component unmount
+  useEffect(() => {
+    window.addEventListener("blur", cleanupDiffDrag);
+    return () => {
+      window.removeEventListener("blur", cleanupDiffDrag);
+      cleanupDiffDrag();
+    };
+  }, [cleanupDiffDrag]);
+
   const handleDividerDrag = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
@@ -205,7 +224,7 @@ export function DiffView() {
       if (!container) return;
       const containerHeight = container.getBoundingClientRect().height;
 
-      const onMove = (ev: MouseEvent) => {
+      const move = (ev: MouseEvent) => {
         const delta = startY - ev.clientY;
         const newRatio = Math.min(
           0.6,
@@ -213,14 +232,13 @@ export function DiffView() {
         );
         setAiPanelRatio(newRatio);
       };
-      const onUp = () => {
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
-      };
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
+      const up = () => cleanupDiffDrag();
+
+      diffDragRef.current = { move, up };
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", up);
     },
-    [aiPanelRatio],
+    [aiPanelRatio, cleanupDiffDrag],
   );
 
   const handleOpenInEditor = useCallback(() => {

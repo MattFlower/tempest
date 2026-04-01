@@ -40,6 +40,7 @@ export interface TempestStore {
   commandPaletteInitialMode: "commands" | "files";
   settingsDialogVisible: boolean;
   newWorkspaceRepoId: string | null;
+  overlayCount: number;
 
   // --- Actions (set by action creators) ---
   setRepos: (repos: SourceRepo[]) => void;
@@ -62,6 +63,8 @@ export interface TempestStore {
   openCommandPaletteFiles: () => void;
   toggleSettingsDialog: () => void;
   requestNewWorkspace: (repoId: string | null) => void;
+  pushOverlay: () => void;
+  popOverlay: () => void;
 }
 
 export const useStore = create<TempestStore>((set) => ({
@@ -89,6 +92,7 @@ export const useStore = create<TempestStore>((set) => ({
   commandPaletteInitialMode: "commands" as const,
   settingsDialogVisible: false,
   newWorkspaceRepoId: null,
+  overlayCount: 0,
 
   // Actions
   setRepos: (repos) => set({ repos }),
@@ -125,4 +129,6 @@ export const useStore = create<TempestStore>((set) => ({
   toggleSettingsDialog: () =>
     set((s) => ({ settingsDialogVisible: !s.settingsDialogVisible })),
   requestNewWorkspace: (repoId) => set({ newWorkspaceRepoId: repoId }),
+  pushOverlay: () => set((s) => ({ overlayCount: s.overlayCount + 1 })),
+  popOverlay: () => set((s) => ({ overlayCount: Math.max(0, s.overlayCount - 1) })),
 }));

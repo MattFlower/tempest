@@ -46,6 +46,7 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
   // webview overlay to hide — CSS opacity/display have no effect on it.
   const isTrulyVisible = useStore((s) => {
     if (!isVisible) return false;
+    if (s.overlayCount > 0) return false;
     if (s.maximizedPaneId !== null && s.maximizedPaneId !== paneId) return false;
     for (const [wsPath, tree] of Object.entries(s.paneTrees)) {
       if (findPane(tree, paneId)) {

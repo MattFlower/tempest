@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { TempestWorkspace, WorkspaceSidebarInfo, DiffStats } from "../../../../shared/ipc-types";
 import { WorkspaceStatus, ActivityState } from "../../../../shared/ipc-types";
 import { useStore } from "../../state/store";
+import { OverlayWrapper } from "../../state/useOverlay";
 
 interface Props {
   workspace: TempestWorkspace;
@@ -82,7 +83,7 @@ export function WorkspaceRow({ workspace, sidebarInfo, shortcutIndex, isSelected
     >
       {/* Context menu */}
       {contextMenu && (
-        <>
+        <OverlayWrapper>
           <div className="fixed inset-0 z-50" onClick={() => setContextMenu(null)} />
           <div
             className="fixed z-50 min-w-[180px] rounded-lg border border-[var(--ctp-surface1)] bg-[var(--ctp-surface0)] py-1 shadow-xl"
@@ -106,7 +107,7 @@ export function WorkspaceRow({ workspace, sidebarInfo, shortcutIndex, isSelected
               </>
             )}
           </div>
-        </>
+        </OverlayWrapper>
       )}
       {/* Line 1: branch icon + name + diff stats */}
       <div className="flex items-center gap-1.5 min-w-0">

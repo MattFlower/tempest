@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import type { SourceRepo, TempestWorkspace } from "../../../../shared/ipc-types";
 import { VCSType } from "../../../../shared/ipc-types";
 import { api } from "../../state/rpc-client";
+import { useOverlay } from "../../state/useOverlay";
 import { fuzzyMatch } from "../palette/fuzzy-match";
 
 interface Props {
@@ -37,6 +38,7 @@ function branchToWorkspaceName(branch: string): string {
 const MAX_DROPDOWN_ITEMS = 50;
 
 export function NewWorkspaceDialog({ repo, existingWorkspaces, onCreated, onDismiss }: Props) {
+  useOverlay();
   const [workspaceName, setWorkspaceName] = useState("");
   const [branchName, setBranchName] = useState("");
   const [branchManuallyEdited, setBranchManuallyEdited] = useState(false);

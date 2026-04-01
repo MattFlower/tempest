@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../../state/rpc-client";
 import { useStore } from "../../state/store";
+import { useOverlay } from "../../state/useOverlay";
 import type { BinaryStatus } from "../../../../shared/ipc-types";
 
 interface OnboardingDialogProps {
@@ -48,6 +49,7 @@ function BinaryCheckRow({
 }
 
 export function OnboardingDialog({ defaultRoot, onComplete }: OnboardingDialogProps) {
+  useOverlay();
   const [workspaceRoot, setWorkspaceRoot] = useState(defaultRoot);
   const [binaries, setBinaries] = useState<BinaryStatus | null>(null);
   const [checking, setChecking] = useState(true);

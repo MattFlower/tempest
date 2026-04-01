@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { PaneTabKind, EditorType, ViewMode } from "../../../../shared/ipc-types";
 import { createTab } from "../../models/pane-node";
 import { useStore } from "../../state/store";
+import { OverlayWrapper } from "../../state/useOverlay";
 import { api } from "../../state/rpc-client";
 import { fuzzyMatch } from "./fuzzy-match";
 import {
@@ -339,6 +340,7 @@ export function CommandPalette() {
       : "Files";
 
   return (
+    <OverlayWrapper>
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15%]" onClick={dismiss}>
       <div
         className="w-[450px] flex flex-col rounded-xl border border-[var(--ctp-surface1)] bg-[var(--ctp-surface0)] shadow-2xl overflow-hidden"
@@ -426,6 +428,7 @@ export function CommandPalette() {
         </div>
       </div>
     </div>
+    </OverlayWrapper>
   );
 }
 

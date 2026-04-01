@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { SourceRepo, TempestWorkspace, WorkspaceSidebarInfo } from "../../../../shared/ipc-types";
+import { OverlayWrapper } from "../../state/useOverlay";
 import { WorkspaceRow } from "./WorkspaceRow";
 
 interface Props {
@@ -80,7 +81,7 @@ export function RepoSection({
 
       {/* Context menu */}
       {contextMenu && (
-        <>
+        <OverlayWrapper>
           <div className="fixed inset-0 z-50" onClick={() => setContextMenu(null)} />
           <div
             className="fixed z-50 min-w-[180px] rounded-lg border border-[var(--ctp-surface1)] bg-[var(--ctp-surface0)] py-1 shadow-xl"
@@ -93,7 +94,7 @@ export function RepoSection({
             <div className="h-px bg-[var(--ctp-surface1)] mx-2 my-1" />
             <ContextMenuItem label="Remove Repository" onClick={() => { setContextMenu(null); onRemoveRepo(); }} destructive />
           </div>
-        </>
+        </OverlayWrapper>
       )}
 
       {/* Workspace list */}

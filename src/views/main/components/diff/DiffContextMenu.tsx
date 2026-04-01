@@ -6,6 +6,7 @@
 // ============================================================
 
 import { createPortal } from "react-dom";
+import { useOverlay } from "../../state/useOverlay";
 
 interface DiffContextMenuProps {
   x: number;
@@ -22,6 +23,7 @@ export function DiffContextMenu({
   onOpenInEditor,
   onDismiss,
 }: DiffContextMenuProps) {
+  useOverlay();
   const label =
     lineNumber != null
       ? `Open in Editor at Line ${lineNumber}`

@@ -8,8 +8,10 @@ import { useState, useEffect } from "react";
 import type { AppConfig } from "../../../../shared/ipc-types";
 import { api } from "../../state/rpc-client";
 import { useStore } from "../../state/store";
+import { useOverlay } from "../../state/useOverlay";
 
 export function SettingsDialog() {
+  useOverlay();
   const toggleSettingsDialog = useStore((s) => s.toggleSettingsDialog);
 
   const [config, setConfig] = useState<AppConfig | null>(null);

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import type { SourceRepo } from "../../../../shared/ipc-types";
 import { api } from "../../state/rpc-client";
+import { useOverlay } from "../../state/useOverlay";
 
 interface Props {
   repo: SourceRepo;
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export function RepoSettingsDialog({ repo, onDismiss }: Props) {
+  useOverlay();
   const [script, setScript] = useState("");
   const [originalScript, setOriginalScript] = useState("");
   const [loading, setLoading] = useState(true);

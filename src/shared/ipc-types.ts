@@ -44,6 +44,7 @@ export enum ViewMode {
   Terminal = "terminal",
   Diff = "diff",
   Dashboard = "dashboard",
+  VCS = "vcs",
 }
 
 // --- VCS ---
@@ -291,4 +292,76 @@ export interface LatencyStats {
   p99: number;
   throughputBytesPerSec: number;
   renderFrameAvgMs: number;
+}
+
+// --- VCS Commit View ---
+
+export type VCSFileChangeType =
+  | "modified"
+  | "added"
+  | "deleted"
+  | "renamed"
+  | "copied"
+  | "untracked";
+
+export interface VCSFileEntry {
+  path: string;
+  oldPath?: string; // for renames
+  changeType: VCSFileChangeType;
+  staged: boolean;
+}
+
+export interface VCSStatusResult {
+  branch: string;
+  files: VCSFileEntry[];
+  ahead: number;
+  behind: number;
+}
+
+export interface VCSCommitResult {
+  success: boolean;
+  error?: string;
+  commitHash?: string;
+}
+
+export interface VCSFileDiffResult {
+  originalContent: string;
+  modifiedContent: string;
+  filePath: string;
+  language: string;
+}
+
+// --- JJ (Jujutsu) VCS View ---
+
+export interface JJRevision {
+  changeId: string;
+  commitId: string;
+  description: string;
+  author: string;
+  email: string;
+  timestamp: string;
+  bookmarks: string[];
+  workingCopies: string[];  // workspace names, e.g. ["vcs-view", "default"]
+  isWorkingCopy: boolean;
+  isEmpty: boolean;
+  isImmutable: boolean;
+  // Graph rendering data (from jj log with graph)
+  nodeGraphPrefix: string;       // graph prefix for the node line (e.g. "@  ", "│ ○  ")
+  trailingGraphLines: string[];  // graph-only lines between this rev and the next
+}
+
+export interface JJLogResult {
+  revisions: JJRevision[];
+  currentChangeId: string;
+}
+
+export interface JJChangedFile {
+  path: string;
+  changeType: VCSFileChangeType;
+}
+
+export interface JJBookmark {
+  name: string;
+  remote?: string;
+  isTracked: boolean;
 }

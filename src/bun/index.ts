@@ -28,6 +28,31 @@ import { readFileForEditor, writeFileForEditor, resolveModulePath } from "./edit
 import { AIContextProvider } from "./diff/ai-context-provider";
 import { PRMonitor } from "./pr/pr-monitor";
 import { lookupPRUrl } from "./pr/pr-url-lookup";
+import {
+  getVCSStatus,
+  vcsStageFiles,
+  vcsUnstageFiles,
+  vcsStageAll,
+  vcsUnstageAll,
+  vcsCommit,
+  vcsPush,
+  vcsGetFileDiff,
+} from "./vcs/git-commit-provider";
+import {
+  jjLog,
+  jjNew,
+  jjFetch,
+  jjPush,
+  jjUndo,
+  jjDescribe,
+  jjAbandon,
+  jjGetChangedFiles,
+  jjGetFileDiff,
+  jjGetBookmarks,
+  jjEdit,
+  jjBookmarkSet,
+  jjRebase,
+} from "./vcs/jj-commit-provider";
 
 // --- Stream A: Terminal + Session ---
 const ptyManager = new PtyManager();
@@ -330,6 +355,73 @@ const rpc = BrowserView.defineRPC({
       updateDraftText: (params: any) => {
         prMonitor.updateDraftText(params.draftId, params.text);
       },
+
+      // --- VCS Commit View ---
+      getVCSStatus: async (params: any) => {
+        return await getVCSStatus(params.workspacePath);
+      },
+      vcsStageFiles: async (params: any) => {
+        await vcsStageFiles(params.workspacePath, params.paths);
+      },
+      vcsUnstageFiles: async (params: any) => {
+        await vcsUnstageFiles(params.workspacePath, params.paths);
+      },
+      vcsStageAll: async (params: any) => {
+        await vcsStageAll(params.workspacePath);
+      },
+      vcsUnstageAll: async (params: any) => {
+        await vcsUnstageAll(params.workspacePath);
+      },
+      vcsCommit: async (params: any) => {
+        return await vcsCommit(params.workspacePath, params.message, params.amend);
+      },
+      vcsPush: async (params: any) => {
+        return await vcsPush(params.workspacePath);
+      },
+      vcsGetFileDiff: async (params: any) => {
+        return await vcsGetFileDiff(params.workspacePath, params.filePath, params.staged);
+      },
+
+      // --- JJ (Jujutsu) VCS View ---
+      jjLog: async (params: any) => {
+        return await jjLog(params.workspacePath, params.revset);
+      },
+      jjNew: async (params: any) => {
+        return await jjNew(params.workspacePath, params.revisions);
+      },
+      jjFetch: async (params: any) => {
+        return await jjFetch(params.workspacePath, params.remote, params.allRemotes);
+      },
+      jjPush: async (params: any) => {
+        return await jjPush(params.workspacePath, params.bookmark, params.allTracked);
+      },
+      jjUndo: async (params: any) => {
+        return await jjUndo(params.workspacePath);
+      },
+      jjDescribe: async (params: any) => {
+        return await jjDescribe(params.workspacePath, params.revision, params.description);
+      },
+      jjAbandon: async (params: any) => {
+        return await jjAbandon(params.workspacePath, params.revision);
+      },
+      jjGetChangedFiles: async (params: any) => {
+        return await jjGetChangedFiles(params.workspacePath, params.revision);
+      },
+      jjGetFileDiff: async (params: any) => {
+        return await jjGetFileDiff(params.workspacePath, params.revision, params.filePath);
+      },
+      jjGetBookmarks: async (params: any) => {
+        return await jjGetBookmarks(params.workspacePath);
+      },
+      jjEdit: async (params: any) => {
+        return await jjEdit(params.workspacePath, params.revision);
+      },
+      jjBookmarkSet: async (params: any) => {
+        return await jjBookmarkSet(params.workspacePath, params.revision, params.name, params.track);
+      },
+      jjRebase: async (params: any) => {
+        return await jjRebase(params.workspacePath, params.revision, params.destination);
+      },
     },
     messages: {
       // --- Terminal I/O (Stream A) ---
@@ -438,6 +530,7 @@ ApplicationMenu.setApplicationMenu([
       { label: "Terminal", action: "view-terminal", accelerator: "Cmd+1" },
       { label: "Diff", action: "view-diff", accelerator: "Cmd+2" },
       { label: "Dashboard", action: "view-dashboard", accelerator: "Cmd+3" },
+      { label: "VCS", action: "view-vcs", accelerator: "Cmd+4" },
     ],
   },
   {

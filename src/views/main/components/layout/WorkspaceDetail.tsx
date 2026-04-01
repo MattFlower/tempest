@@ -8,6 +8,7 @@ import { ViewModeBar } from "./ViewModeBar";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
 import { DiffView } from "../diff/DiffView";
 import { PRDashboard } from "../pr/PRDashboard";
+import { VCSView } from "../vcs/VCSView";
 import { initTerminalDispatch } from "../../state/terminal-dispatch";
 import { addTab, splitPane, focusNextPane, focusPreviousPane, toggleMaximize, closeTab } from "../../state/actions";
 import { findPane } from "../../models/pane-node";
@@ -100,6 +101,10 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
           e.preventDefault();
           setViewMode(workspacePath, ViewMode.Dashboard);
         }
+        if (e.key === "4") {
+          e.preventDefault();
+          setViewMode(workspacePath, ViewMode.VCS);
+        }
       }
     };
     document.addEventListener("keydown", handler);
@@ -169,6 +174,17 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
           }`}
         >
           <PRDashboard />
+        </div>
+
+        {/* VCS mode */}
+        <div
+          className={`absolute inset-0 ${
+            viewMode === ViewMode.VCS
+              ? "opacity-100"
+              : "opacity-0 pointer-events-none"
+          }`}
+        >
+          {viewMode === ViewMode.VCS && <VCSView />}
         </div>
       </div>
     </div>

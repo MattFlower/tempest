@@ -203,6 +203,11 @@ const rpc = Electroview.defineRPC({
                 store.setViewMode(store.selectedWorkspacePath, ViewMode.Dashboard);
               }
               break;
+            case "view-vcs":
+              if (store.selectedWorkspacePath) {
+                store.setViewMode(store.selectedWorkspacePath, ViewMode.VCS);
+              }
+              break;
           }
         });
       },
@@ -376,4 +381,50 @@ export const api = {
     rpcRequest.getLastPoll({ workspacePath }),
   updateDraftText: (draftId: string, text: string) =>
     rpcRequest.updateDraftText({ draftId, text }),
+
+  // VCS Commit View
+  getVCSStatus: (workspacePath: string) =>
+    rpcRequest.getVCSStatus({ workspacePath }),
+  vcsStageFiles: (workspacePath: string, paths: string[]) =>
+    rpcRequest.vcsStageFiles({ workspacePath, paths }),
+  vcsUnstageFiles: (workspacePath: string, paths: string[]) =>
+    rpcRequest.vcsUnstageFiles({ workspacePath, paths }),
+  vcsStageAll: (workspacePath: string) =>
+    rpcRequest.vcsStageAll({ workspacePath }),
+  vcsUnstageAll: (workspacePath: string) =>
+    rpcRequest.vcsUnstageAll({ workspacePath }),
+  vcsCommit: (workspacePath: string, message: string, amend: boolean) =>
+    rpcRequest.vcsCommit({ workspacePath, message, amend }),
+  vcsPush: (workspacePath: string) =>
+    rpcRequest.vcsPush({ workspacePath }),
+  vcsGetFileDiff: (workspacePath: string, filePath: string, staged: boolean) =>
+    rpcRequest.vcsGetFileDiff({ workspacePath, filePath, staged }),
+
+  // JJ (Jujutsu) VCS View
+  jjLog: (workspacePath: string, revset?: string) =>
+    rpcRequest.jjLog({ workspacePath, revset }),
+  jjNew: (workspacePath: string, revisions?: string[]) =>
+    rpcRequest.jjNew({ workspacePath, revisions }),
+  jjFetch: (workspacePath: string, remote?: string, allRemotes?: boolean) =>
+    rpcRequest.jjFetch({ workspacePath, remote, allRemotes }),
+  jjPush: (workspacePath: string, bookmark?: string, allTracked?: boolean) =>
+    rpcRequest.jjPush({ workspacePath, bookmark, allTracked }),
+  jjUndo: (workspacePath: string) =>
+    rpcRequest.jjUndo({ workspacePath }),
+  jjDescribe: (workspacePath: string, revision: string, description: string) =>
+    rpcRequest.jjDescribe({ workspacePath, revision, description }),
+  jjAbandon: (workspacePath: string, revision: string) =>
+    rpcRequest.jjAbandon({ workspacePath, revision }),
+  jjGetChangedFiles: (workspacePath: string, revision: string) =>
+    rpcRequest.jjGetChangedFiles({ workspacePath, revision }),
+  jjGetFileDiff: (workspacePath: string, revision: string, filePath: string) =>
+    rpcRequest.jjGetFileDiff({ workspacePath, revision, filePath }),
+  jjGetBookmarks: (workspacePath: string) =>
+    rpcRequest.jjGetBookmarks({ workspacePath }),
+  jjEdit: (workspacePath: string, revision: string) =>
+    rpcRequest.jjEdit({ workspacePath, revision }),
+  jjBookmarkSet: (workspacePath: string, revision: string, name: string, track: boolean) =>
+    rpcRequest.jjBookmarkSet({ workspacePath, revision, name, track }),
+  jjRebase: (workspacePath: string, revision: string, destination: string) =>
+    rpcRequest.jjRebase({ workspacePath, revision, destination }),
 };

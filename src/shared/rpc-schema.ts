@@ -9,6 +9,9 @@ import type {
   Bookmark,
   DiffFile,
   HookEvent,
+  JJBookmark,
+  JJChangedFile,
+  JJLogResult,
   LatencyStats,
   PaneNodeState,
   RepoSettings,
@@ -19,6 +22,9 @@ import type {
   TempestWorkspace,
   UsageResponse,
   VCSType,
+  VCSStatusResult,
+  VCSCommitResult,
+  VCSFileDiffResult,
   WorkspaceSidebarInfo,
 } from "./ipc-types";
 
@@ -305,6 +311,94 @@ export interface BunRequests {
   updateDraftText: {
     params: { draftId: string; text: string };
     response: void;
+  };
+
+  // --- VCS Commit View ---
+  getVCSStatus: {
+    params: { workspacePath: string };
+    response: VCSStatusResult;
+  };
+  vcsStageFiles: {
+    params: { workspacePath: string; paths: string[] };
+    response: void;
+  };
+  vcsUnstageFiles: {
+    params: { workspacePath: string; paths: string[] };
+    response: void;
+  };
+  vcsStageAll: {
+    params: { workspacePath: string };
+    response: void;
+  };
+  vcsUnstageAll: {
+    params: { workspacePath: string };
+    response: void;
+  };
+  vcsCommit: {
+    params: { workspacePath: string; message: string; amend: boolean };
+    response: VCSCommitResult;
+  };
+  vcsPush: {
+    params: { workspacePath: string };
+    response: { success: boolean; error?: string };
+  };
+  vcsGetFileDiff: {
+    params: { workspacePath: string; filePath: string; staged: boolean };
+    response: VCSFileDiffResult;
+  };
+
+  // --- JJ (Jujutsu) VCS View ---
+  jjLog: {
+    params: { workspacePath: string; revset?: string };
+    response: JJLogResult;
+  };
+  jjNew: {
+    params: { workspacePath: string; revisions?: string[] };
+    response: { success: boolean; error?: string };
+  };
+  jjFetch: {
+    params: { workspacePath: string; remote?: string; allRemotes?: boolean };
+    response: { success: boolean; error?: string };
+  };
+  jjPush: {
+    params: { workspacePath: string; bookmark?: string; allTracked?: boolean };
+    response: { success: boolean; error?: string };
+  };
+  jjUndo: {
+    params: { workspacePath: string };
+    response: { success: boolean; error?: string };
+  };
+  jjDescribe: {
+    params: { workspacePath: string; revision: string; description: string };
+    response: { success: boolean; error?: string };
+  };
+  jjAbandon: {
+    params: { workspacePath: string; revision: string };
+    response: { success: boolean; error?: string };
+  };
+  jjGetChangedFiles: {
+    params: { workspacePath: string; revision: string };
+    response: JJChangedFile[];
+  };
+  jjGetFileDiff: {
+    params: { workspacePath: string; revision: string; filePath: string };
+    response: VCSFileDiffResult;
+  };
+  jjGetBookmarks: {
+    params: { workspacePath: string };
+    response: JJBookmark[];
+  };
+  jjEdit: {
+    params: { workspacePath: string; revision: string };
+    response: { success: boolean; error?: string };
+  };
+  jjBookmarkSet: {
+    params: { workspacePath: string; revision: string; name: string; track: boolean };
+    response: { success: boolean; error?: string };
+  };
+  jjRebase: {
+    params: { workspacePath: string; revision: string; destination: string };
+    response: { success: boolean; error?: string };
   };
 }
 

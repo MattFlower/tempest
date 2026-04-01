@@ -24,6 +24,8 @@ export default {
       "src/views/main/index.html": "views/main/index.html",
       "src/bun/hooks/tempest-hook.ts": "bun/tempest-hook.ts",
       "src/bun/hooks/tempest-channel.ts": "bun/tempest-channel.ts",
+      "node_modules/monaco-editor/min/vs": "views/main/monaco-editor/min/vs",
+      "src/vendor/monaco-vim.bundle.js": "views/main/monaco-vim.bundle.js",
     },
     mac: {
       icons: "icon.iconset",

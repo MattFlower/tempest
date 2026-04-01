@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { PaneTabKind, ViewMode } from "../../../../shared/ipc-types";
+import { PaneTabKind, EditorType, ViewMode } from "../../../../shared/ipc-types";
 import { createTab } from "../../models/pane-node";
 import { useStore } from "../../state/store";
 import { api } from "../../state/rpc-client";
@@ -22,29 +22,32 @@ interface PaletteCommand {
   label: string;
   shortcutHint?: string;
   canOpenAsPane: boolean;
+  /** If true, executing this command keeps the palette open. */
+  staysOpen?: boolean;
   action: () => void;
+}
+
+function isMonacoDefault(): boolean {
+  return useStore.getState().config?.editor === "monaco";
 }
 
 function addTabToFocusedPane(kind: PaneTabKind, label: string, overrides?: Record<string, any>) {
   const { focusedPaneId } = useStore.getState();
   if (!focusedPaneId) return;
+
+  const needsTerminalId =
+    kind === PaneTabKind.Claude ||
+    kind === PaneTabKind.Shell ||
+    (kind === PaneTabKind.Editor &&
+      overrides?.editorType !== EditorType.Monaco &&
+      !(overrides?.editorType === undefined && isMonacoDefault()));
+
   const tab = createTab(kind, label, {
-    ...(kind === PaneTabKind.Claude || kind === PaneTabKind.Shell || kind === PaneTabKind.Editor
-      ? { terminalId: crypto.randomUUID() }
-      : {}),
+    ...(needsTerminalId ? { terminalId: crypto.randomUUID() } : {}),
     ...(kind === PaneTabKind.Browser ? { browserURL: "https://google.com" } : {}),
     ...overrides,
   });
   addTab(focusedPaneId, tab);
-}
-
-function openFileTab(filePath: string) {
-  const name = filePath.split("/").pop() ?? "File";
-  if (/\.(?:md|markdown)$/i.test(name)) {
-    addTabToFocusedPane(PaneTabKind.MarkdownViewer, name, { markdownFilePath: filePath });
-  } else {
-    addTabToFocusedPane(PaneTabKind.Editor, name, { editorFilePath: filePath });
-  }
 }
 
 function useCommands(): PaletteCommand[] {
@@ -122,7 +125,40 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const commands = useCommands();
+  // Tracks editor type override from "Open with Neovim/Monaco" commands
+  const pendingEditorTypeRef = useRef<EditorType | null>(null);
+
+  const baseCommands = useCommands();
+
+  // "Open with" commands — these stay open and switch to files mode
+  const openWithCommands: PaletteCommand[] = [
+    {
+      id: "open-with-neovim",
+      label: "Open with Neovim",
+      canOpenAsPane: false,
+      staysOpen: true,
+      action: () => {
+        pendingEditorTypeRef.current = EditorType.Neovim;
+        setMode("files");
+        setQuery("");
+        setSelectedIndex(0);
+      },
+    },
+    {
+      id: "open-with-monaco",
+      label: "Open with Monaco",
+      canOpenAsPane: false,
+      staysOpen: true,
+      action: () => {
+        pendingEditorTypeRef.current = EditorType.Monaco;
+        setMode("files");
+        setQuery("");
+        setSelectedIndex(0);
+      },
+    },
+  ];
+
+  const commands = [...baseCommands, ...openWithCommands];
 
   // Filter commands
   const filteredCommands = query
@@ -149,6 +185,7 @@ export function CommandPalette() {
       setQuery("");
       setSelectedIndex(0);
       setMode(commandPaletteInitialMode);
+      pendingEditorTypeRef.current = null;
       setTimeout(() => inputRef.current?.focus(), 0);
     }
   }, [visible, commandPaletteInitialMode]);
@@ -178,24 +215,42 @@ export function CommandPalette() {
   }, [selectedIndex]);
 
   const dismiss = useCallback(() => {
+    pendingEditorTypeRef.current = null;
     toggleCommandPalette();
   }, [toggleCommandPalette]);
+
+  const openFileAsEditor = useCallback((filePath: string, overrides?: Record<string, any>) => {
+    const editorType = pendingEditorTypeRef.current ?? undefined;
+    const name = filePath.split("/").pop() ?? "File";
+
+    // Markdown files open in the MarkdownViewer unless an explicit editor override was requested
+    if (!editorType && /\.(?:md|markdown)$/i.test(name)) {
+      addTabToFocusedPane(PaneTabKind.MarkdownViewer, name, { markdownFilePath: filePath });
+    } else {
+      addTabToFocusedPane(PaneTabKind.Editor, name, {
+        editorFilePath: filePath,
+        ...(editorType ? { editorType } : {}),
+        ...overrides,
+      });
+    }
+    pendingEditorTypeRef.current = null;
+  }, []);
 
   const executeSelected = useCallback(() => {
     if (mode === "commands") {
       const item = filteredCommands[selectedIndex];
       if (item) {
-        dismiss();
+        if (!item.cmd.staysOpen) dismiss();
         item.cmd.action();
       }
     } else if (mode === "files") {
       const filePath = filteredFiles[selectedIndex];
       if (filePath) {
         dismiss();
-        openFileTab(filePath);
+        openFileAsEditor(filePath);
       }
     }
-  }, [mode, filteredCommands, filteredFiles, selectedIndex, dismiss]);
+  }, [mode, filteredCommands, filteredFiles, selectedIndex, dismiss, openFileAsEditor]);
 
   const executeInPane = useCallback((direction: "left" | "right") => {
     if (mode === "commands") {
@@ -211,10 +266,10 @@ export function CommandPalette() {
       if (filePath) {
         dismiss();
         splitPane(direction, true);
-        setTimeout(() => openFileTab(filePath), 0);
+        setTimeout(() => openFileAsEditor(filePath), 0);
       }
     }
-  }, [mode, filteredCommands, filteredFiles, selectedIndex, dismiss]);
+  }, [mode, filteredCommands, filteredFiles, selectedIndex, dismiss, openFileAsEditor]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -245,6 +300,7 @@ export function CommandPalette() {
           break;
         case "Tab":
           e.preventDefault();
+          pendingEditorTypeRef.current = null;
           setMode((m) => (m === "commands" ? "files" : "commands"));
           setQuery("");
           setSelectedIndex(0);
@@ -275,6 +331,13 @@ export function CommandPalette() {
 
   if (!visible) return null;
 
+  // Build mode label for files mode when an editor override is active
+  const filesLabel = pendingEditorTypeRef.current === EditorType.Neovim
+    ? "Files (Neovim)"
+    : pendingEditorTypeRef.current === EditorType.Monaco
+      ? "Files (Monaco)"
+      : "Files";
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15%]" onClick={dismiss}>
       <div
@@ -299,7 +362,7 @@ export function CommandPalette() {
           {/* Mode tabs */}
           <div className="flex gap-0.5 text-[10px]">
             <button
-              onClick={() => { setMode("commands"); setQuery(""); setSelectedIndex(0); }}
+              onClick={() => { pendingEditorTypeRef.current = null; setMode("commands"); setQuery(""); setSelectedIndex(0); }}
               className={`px-2 py-0.5 rounded ${mode === "commands" ? "bg-[var(--ctp-surface1)] text-[var(--ctp-text)]" : "text-[var(--ctp-overlay0)]"}`}
             >
               Commands
@@ -308,7 +371,7 @@ export function CommandPalette() {
               onClick={() => { setMode("files"); setQuery(""); setSelectedIndex(0); }}
               className={`px-2 py-0.5 rounded ${mode === "files" ? "bg-[var(--ctp-surface1)] text-[var(--ctp-text)]" : "text-[var(--ctp-overlay0)]"}`}
             >
-              Files
+              {filesLabel}
             </button>
           </div>
         </div>
@@ -327,7 +390,7 @@ export function CommandPalette() {
                   command={item.cmd}
                   matchIndices={item.match?.indices ?? []}
                   isSelected={index === selectedIndex}
-                  onClick={() => { dismiss(); item.cmd.action(); }}
+                  onClick={() => { if (!item.cmd.staysOpen) dismiss(); item.cmd.action(); }}
                   onHover={() => setSelectedIndex(index)}
                 />
               ))
@@ -343,7 +406,7 @@ export function CommandPalette() {
                 filePath={filePath}
                 workspacePath={selectedWorkspacePath ?? ""}
                 isSelected={index === selectedIndex}
-                onClick={() => { dismiss(); openFileTab(filePath); }}
+                onClick={() => { dismiss(); openFileAsEditor(filePath); }}
                 onHover={() => setSelectedIndex(index)}
               />
             ))

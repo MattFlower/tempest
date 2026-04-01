@@ -24,6 +24,7 @@ import {
 } from "./markdown/markdown-service";
 import { getDiff } from "./diff/diff-provider";
 import { buildEditorCommand } from "./editor/editor-command";
+import { readFileForEditor, writeFileForEditor, resolveModulePath } from "./editor/file-service";
 import { AIContextProvider } from "./diff/ai-context-provider";
 import { PRMonitor } from "./pr/pr-monitor";
 import { lookupPRUrl } from "./pr/pr-url-lookup";
@@ -101,7 +102,11 @@ const rpc = BrowserView.defineRPC({
       buildShellCommand: (params: any) => sessionManager.buildShellCommand(params),
       buildEditorCommand: async (params: any) => {
         const config = await loadConfig();
-        return buildEditorCommand(config.editor ?? "nvim", params.filePath, params.lineNumber);
+        const editor = config.editor ?? "nvim";
+        if (editor === "monaco") {
+          throw new Error("Monaco editor is handled in the webview — buildEditorCommand should not be called");
+        }
+        return buildEditorCommand(editor, params.filePath, params.lineNumber);
       },
 
       // --- Repos & Workspaces (Stream D) ---
@@ -249,6 +254,17 @@ const rpc = BrowserView.defineRPC({
         unwatchMarkdownFile(params.filePath);
       },
 
+      // --- File operations (for Monaco editor) ---
+      readFileForEditor: async (params: any) => {
+        return await readFileForEditor(params.filePath);
+      },
+      writeFileForEditor: async (params: any) => {
+        await writeFileForEditor(params.filePath, params.content);
+      },
+      resolveModulePath: (params: any) => {
+        return resolveModulePath(params.specifier, params.fromFilePath);
+      },
+
       // --- Diff Viewer (Feature 1) ---
       getDiff: async (params: any) => {
         return await getDiff(params.workspacePath, params.scope, params.contextLines, params.commitRef);
@@ -375,6 +391,7 @@ ApplicationMenu.setApplicationMenu([
     label: "Tempest",
     submenu: [
       { role: "about" },
+      { label: "Settings...", action: "settings", accelerator: "Cmd+," },
       { type: "separator" },
       { role: "hide" },
       { role: "hideOthers" },

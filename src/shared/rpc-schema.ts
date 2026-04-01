@@ -231,6 +231,20 @@ export interface BunRequests {
     response: void;
   };
 
+  // File operations (for Monaco editor)
+  readFileForEditor: {
+    params: { filePath: string };
+    response: { content: string; language: string };
+  };
+  writeFileForEditor: {
+    params: { filePath: string; content: string };
+    response: void;
+  };
+  resolveModulePath: {
+    params: { specifier: string; fromFilePath: string };
+    response: { resolvedPath: string | null };
+  };
+
   // Diff viewer
   getDiff: {
     params: { workspacePath: string; scope: DiffScope; contextLines?: number; commitRef?: string };

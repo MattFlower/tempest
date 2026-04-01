@@ -9,6 +9,7 @@ import { PaneTabKind } from "../../../../shared/ipc-types";
 import { createTab } from "../../models/pane-node";
 import { addTab } from "../../state/actions";
 import { api, onMarkdownFileChanged } from "../../state/rpc-client";
+import { useStore } from "../../state/store";
 import { askClaudeAboutSelection } from "../../state/actions";
 
 interface MarkdownViewerProps {
@@ -219,8 +220,10 @@ export function MarkdownViewer({ filePath, paneId }: MarkdownViewerProps) {
               color: "var(--ctp-subtext1)",
             }}
             onClick={() => {
+              const config = useStore.getState().config;
+              const isMonaco = config?.editor === "monaco";
               const tab = createTab(PaneTabKind.Editor, fileName, {
-                terminalId: crypto.randomUUID(),
+                ...(isMonaco ? {} : { terminalId: crypto.randomUUID() }),
                 editorFilePath: filePath,
               });
               addTab(paneId, tab);

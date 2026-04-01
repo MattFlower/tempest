@@ -1,5 +1,5 @@
 import { memo, useCallback } from "react";
-import { PaneTabKind } from "../../../../shared/ipc-types";
+import { PaneTabKind, EditorType } from "../../../../shared/ipc-types";
 import type { Pane, PaneTab } from "../../models/pane-node";
 import { useStore } from "../../state/store";
 import { TabBar } from "./TabBar";
@@ -19,6 +19,7 @@ interface PaneViewProps {
 }
 
 function TabContent({ tab, paneId, isFocused, isVisible, workspacePath }: { tab: PaneTab; paneId: string; isFocused: boolean; isVisible: boolean; workspacePath: string }) {
+  const config = useStore((s) => s.config);
   const handleCloseRequest = useCallback(() => {
     closeTab(paneId, tab.id);
   }, [paneId, tab.id]);
@@ -63,10 +64,19 @@ function TabContent({ tab, paneId, isFocused, isVisible, workspacePath }: { tab:
     case PaneTabKind.PRDashboard:
       return <PRDashboard />;
     case PaneTabKind.Editor:
-      if (!tab.terminalId || !tab.editorFilePath) {
+      if (!tab.editorFilePath) {
         return (
           <div className="flex h-full items-center justify-center text-[var(--ctp-overlay0)] text-xs">
             Editor tab not initialized
+          </div>
+        );
+      }
+      const isMonacoEditor = tab.editorType === EditorType.Monaco ||
+        (tab.editorType === undefined && config?.editor === "monaco");
+      if (!tab.terminalId && !isMonacoEditor) {
+        return (
+          <div className="flex h-full items-center justify-center text-[var(--ctp-overlay0)] text-xs">
+            Editor tab not initialized (missing terminal ID)
           </div>
         );
       }
@@ -75,6 +85,7 @@ function TabContent({ tab, paneId, isFocused, isVisible, workspacePath }: { tab:
           terminalId={tab.terminalId}
           filePath={tab.editorFilePath}
           lineNumber={tab.editorLineNumber}
+          editorType={tab.editorType}
           cwd={workspacePath || "/tmp"}
           isFocused={isFocused}
           onCloseRequest={handleCloseRequest}

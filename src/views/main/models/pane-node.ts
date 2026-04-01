@@ -5,7 +5,7 @@
 // Full implementation in Stream B.
 // ============================================================
 
-import { PaneTabKind, type ActivityState, type DiffScope } from "../../../shared/ipc-types";
+import { PaneTabKind, EditorType, type ActivityState, type DiffScope } from "../../../shared/ipc-types";
 
 export interface PaneTab {
   id: string;
@@ -20,6 +20,7 @@ export interface PaneTab {
   markdownFilePath?: string;
   editorFilePath?: string;
   editorLineNumber?: number;
+  editorType?: EditorType;
   diffScope?: DiffScope;
   resume?: boolean; // Transient: launch Claude with -c (continue). Not persisted.
 }
@@ -85,6 +86,7 @@ export function toNodeState(node: PaneNode): PaneNodeState {
           markdownViewerState: tab.markdownFilePath ? { filePath: tab.markdownFilePath } : undefined,
           editorFilePath: tab.editorFilePath,
           editorLineNumber: tab.editorLineNumber,
+          editorType: tab.editorType,
           diffScope: tab.diffScope,
         })),
         selectedTabIndex: Math.max(
@@ -117,10 +119,13 @@ export function fromNodeState(state: PaneNodeState): PaneNode {
       markdownFilePath: ts.markdownFilePath ?? ts.markdownViewerState?.filePath,
       editorFilePath: ts.editorFilePath,
       editorLineNumber: ts.editorLineNumber,
+      editorType: ts.editorType,
       diffScope: ts.diffScope,
-      // Terminal/Claude/Editor tabs get fresh terminalIds so new PTYs are created
+      // Terminal/Claude/Shell tabs get fresh terminalIds so new PTYs are created.
+      // Editor tabs only need a terminalId for terminal-based editors (not Monaco).
       terminalId:
-        ts.kind === PaneTabKind.Claude || ts.kind === PaneTabKind.Shell || ts.kind === PaneTabKind.Editor
+        ts.kind === PaneTabKind.Claude || ts.kind === PaneTabKind.Shell ||
+        (ts.kind === PaneTabKind.Editor && ts.editorType !== EditorType.Monaco)
           ? crypto.randomUUID()
           : undefined,
     }));

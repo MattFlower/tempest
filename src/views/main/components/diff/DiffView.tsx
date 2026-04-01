@@ -10,7 +10,7 @@ import type {
   FileAIContext,
   FileChangeTimeline,
 } from "../../../../shared/ipc-types";
-import { DiffScope, PaneTabKind, ViewMode } from "../../../../shared/ipc-types";
+import { DiffScope, EditorType, PaneTabKind, ViewMode } from "../../../../shared/ipc-types";
 import { api } from "../../state/rpc-client";
 import { askClaudeAboutSelection } from "../../state/actions";
 import { useStore } from "../../state/store";
@@ -254,8 +254,10 @@ export function DiffView() {
 
     const fullPath = `${selectedWorkspacePath}/${contextMenu.filePath}`;
     const label = contextMenu.filePath.split("/").pop() ?? "Editor";
+    const config = useStore.getState().config;
+    const isMonaco = config?.editor === "monaco";
     const tab = createTab(PaneTabKind.Editor, label, {
-      terminalId: crypto.randomUUID(),
+      ...(isMonaco ? {} : { terminalId: crypto.randomUUID() }),
       editorFilePath: fullPath,
       editorLineNumber: contextMenu.lineNumber ?? undefined,
     });

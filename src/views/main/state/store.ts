@@ -38,6 +38,7 @@ export interface TempestStore {
   sidebarVisible: boolean;
   commandPaletteVisible: boolean;
   commandPaletteInitialMode: "commands" | "files";
+  settingsDialogVisible: boolean;
   newWorkspaceRepoId: string | null;
 
   // --- Actions (set by action creators) ---
@@ -59,6 +60,7 @@ export interface TempestStore {
   toggleSidebar: () => void;
   toggleCommandPalette: () => void;
   openCommandPaletteFiles: () => void;
+  toggleSettingsDialog: () => void;
   requestNewWorkspace: (repoId: string | null) => void;
 }
 
@@ -85,6 +87,7 @@ export const useStore = create<TempestStore>((set) => ({
   sidebarVisible: true,
   commandPaletteVisible: false,
   commandPaletteInitialMode: "commands" as const,
+  settingsDialogVisible: false,
   newWorkspaceRepoId: null,
 
   // Actions
@@ -119,5 +122,7 @@ export const useStore = create<TempestStore>((set) => ({
     })),
   openCommandPaletteFiles: () =>
     set({ commandPaletteVisible: true, commandPaletteInitialMode: "files" as const }),
+  toggleSettingsDialog: () =>
+    set((s) => ({ settingsDialogVisible: !s.settingsDialogVisible })),
   requestNewWorkspace: (repoId) => set({ newWorkspaceRepoId: repoId }),
 }));

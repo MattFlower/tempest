@@ -155,6 +155,9 @@ const rpc = Electroview.defineRPC({
             case "toggle-sidebar":
               store.toggleSidebar();
               break;
+            case "settings":
+              store.toggleSettingsDialog();
+              break;
             case "command-palette":
               store.toggleCommandPalette();
               break;
@@ -326,6 +329,14 @@ export const api = {
     rpcRequest.watchMarkdownFile({ filePath }),
   unwatchMarkdownFile: (filePath: string) =>
     rpcRequest.unwatchMarkdownFile({ filePath }),
+
+  // File operations (for Monaco editor)
+  readFileForEditor: (filePath: string) =>
+    rpcRequest.readFileForEditor({ filePath }),
+  writeFileForEditor: (filePath: string, content: string) =>
+    rpcRequest.writeFileForEditor({ filePath, content }),
+  resolveModulePath: (specifier: string, fromFilePath: string) =>
+    rpcRequest.resolveModulePath({ specifier, fromFilePath }),
 
   // Diff viewer
   getDiff: (workspacePath: string, scope: string, contextLines?: number, commitRef?: string) =>

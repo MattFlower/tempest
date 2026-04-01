@@ -18,6 +18,13 @@ export enum WorkspaceStatus {
   Error = "error",
 }
 
+// --- Editor Type ---
+
+export enum EditorType {
+  Neovim = "neovim",
+  Monaco = "monaco",
+}
+
 // --- Pane Tab Kinds ---
 
 export enum PaneTabKind {
@@ -96,6 +103,7 @@ export interface AppConfig {
   ghPath?: string;
   claudeArgs: string[];
   editor?: string; // e.g. "nvim", "hx", "vim", "code". Defaults to "nvim".
+  monacoVimMode?: boolean; // Enable vim keybindings in Monaco editor. Defaults to false.
 }
 
 // --- Hook Events ---
@@ -141,6 +149,7 @@ export interface PaneTabState {
   markdownFilePath?: string;
   editorFilePath?: string;
   editorLineNumber?: number;
+  editorType?: EditorType;
   diffScope?: DiffScope;
 }
 

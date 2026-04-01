@@ -4,6 +4,7 @@ import { Sidebar } from "./components/sidebar/Sidebar";
 import { CommandPalette } from "./components/palette/CommandPalette";
 import { WorkspaceDetail } from "./components/layout";
 import { OnboardingDialog } from "./components/onboarding/OnboardingDialog";
+import { SettingsDialog } from "./components/settings/SettingsDialog";
 import { UsageFooter } from "./components/usage/UsageFooter";
 import { api } from "./state/rpc-client";
 import { fromNodeState } from "./models/pane-node";
@@ -19,6 +20,7 @@ export function App() {
   const selectedWorkspacePath = useStore((s) => s.selectedWorkspacePath);
   const paneTrees = useStore((s) => s.paneTrees);
   const config = useStore((s) => s.config);
+  const settingsDialogVisible = useStore((s) => s.settingsDialogVisible);
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [configLoaded, setConfigLoaded] = useState(false);
@@ -190,6 +192,9 @@ export function App() {
 
       {/* Command Palette overlay */}
       <CommandPalette />
+
+      {/* Settings dialog */}
+      {settingsDialogVisible && <SettingsDialog />}
     </div>
   );
 }

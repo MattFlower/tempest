@@ -201,8 +201,10 @@ const rpc = BrowserView.defineRPC({
       },
       browseDirectory: async (_params: any) => {
         const { startingFolder } = (_params ?? {}) as { startingFolder?: string };
+        const home = Bun.env.HOME ?? "/";
+        const resolved = (startingFolder || "~/").replace(/^~(?=\/|$)/, home);
         const paths = await Utils.openFileDialog({
-          startingFolder: startingFolder || "~/",
+          startingFolder: resolved,
           canChooseFiles: false,
           canChooseDirectory: true,
           allowsMultipleSelection: false,

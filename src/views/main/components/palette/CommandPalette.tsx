@@ -89,6 +89,19 @@ function useCommands(): PaletteCommand[] {
     { id: "diff-view", label: "Diff View", shortcutHint: "⌘2", canOpenAsPane: false, action: () => setMode(ViewMode.Diff) },
     { id: "dashboard-view", label: "Dashboard View", shortcutHint: "⌘3", canOpenAsPane: false, action: () => setMode(ViewMode.Dashboard) },
 
+    // Repos
+    { id: "add-repo", label: "Add Repository", canOpenAsPane: false, action: async () => {
+      const result = await api.browseDirectory("~/");
+      if (!result.path) return;
+      await api.addRepo(result.path);
+      const repos = await api.getRepos();
+      useStore.getState().setRepos(repos);
+      for (const repo of repos) {
+        const ws = await api.getWorkspaces(repo.id);
+        useStore.getState().setWorkspaces(repo.id, ws);
+      }
+    }},
+
     // App
     { id: "toggle-sidebar", label: "Toggle Sidebar", shortcutHint: "⌘\\", canOpenAsPane: false, action: toggleSidebar },
   ];

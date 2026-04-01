@@ -94,6 +94,7 @@ export function offPRDraftsChanged() {
 
 // Initialize RPC and Electroview
 const rpc = Electroview.defineRPC({
+  maxRequestTime: 120_000, // native file dialogs block until user selects
   handlers: {
     requests: {},
     messages: {

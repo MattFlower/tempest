@@ -28,11 +28,11 @@ export function ViewModeBar({ workspacePath }: ViewModeBarProps) {
 
   return (
     <div
-      className="titlebar-drag flex items-center justify-center pt-2.5 pb-1.5 flex-shrink-0"
+      className="electrobun-webkit-app-region-drag flex items-center justify-center pt-2.5 pb-1.5 flex-shrink-0"
       style={{ backgroundColor: "var(--ctp-mantle)" }}
     >
       <div
-        className="flex items-center rounded-full overflow-hidden border border-[var(--ctp-surface0)]"
+        className="electrobun-webkit-app-region-no-drag flex items-center rounded-full overflow-hidden border border-[var(--ctp-surface0)]"
         style={{ backgroundColor: "var(--ctp-crust)" }}
       >
         {modes.map(({ mode, label }) => {

@@ -54,6 +54,18 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
     return false;
   });
 
+  // Defer mounting the <electrobun-webview> element until it has been truly
+  // visible at least once. Electrobun's native WKWebView overlay is created in
+  // connectedCallback (via rAF → initWebview) and ignores CSS display/opacity,
+  // so the only way to prevent the overlay from appearing for non-visible
+  // workspaces on startup is to keep the element out of the DOM entirely.
+  // Once mounted, the element stays in the DOM and toggleHidden manages
+  // subsequent visibility changes.
+  const [mounted, setMounted] = useState(isTrulyVisible);
+  useEffect(() => {
+    if (isTrulyVisible && !mounted) setMounted(true);
+  }, [isTrulyVisible, mounted]);
+
   // Navigation state
   const [currentUrl, setCurrentUrl] = useState(tab.browserURL || "");
   const [isLoading, setIsLoading] = useState(false);
@@ -65,8 +77,9 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
   const [findText, setFindText] = useState("");
   const [findHasMatch, setFindHasMatch] = useState(true);
 
-  // Attach webview event listeners
+  // Attach webview event listeners once the element is in the DOM.
   useEffect(() => {
+    if (!mounted) return;
     const el = document.getElementById(webviewId) as ElectrobunWebview | null;
     if (!el) return;
     webviewRef.current = el;
@@ -103,7 +116,7 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
     });
 
     updateNavState();
-  }, [webviewId]);
+  }, [webviewId, mounted]);
 
   // Keyboard shortcut: Cmd+F for find
   useEffect(() => {
@@ -120,7 +133,7 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isFocused]);
 
-  // Show/hide the native webview overlay when visibility changes
+  // Show/hide the native webview overlay when visibility changes.
   useEffect(() => {
     const el = webviewRef.current;
     if (!el) return;
@@ -216,11 +229,13 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
       )}
 
       {/* @ts-ignore — electrobun-webview is a custom element */}
-      <electrobun-webview
-        id={webviewId}
-        src={tab.browserURL || "about:blank"}
-        style={{ flex: 1, width: "100%", minHeight: 0, display: isVisible ? "block" : "none" }}
-      />
+      {mounted && (
+        <electrobun-webview
+          id={webviewId}
+          src={tab.browserURL || "about:blank"}
+          style={{ flex: 1, width: "100%", minHeight: 0 }}
+        />
+      )}
     </div>
   );
 }

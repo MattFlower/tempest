@@ -4,6 +4,7 @@ import { createTab } from "../../models/pane-node";
 import { useStore } from "../../state/store";
 import { OverlayWrapper } from "../../state/useOverlay";
 import { api } from "../../state/rpc-client";
+import { toggleDevTools } from "../../state/devtools";
 import { fuzzyMatch } from "./fuzzy-match";
 import {
   addTab,
@@ -108,6 +109,7 @@ function useCommands(): PaletteCommand[] {
 
     // App
     { id: "toggle-sidebar", label: "Toggle Sidebar", shortcutHint: "⌘\\", canOpenAsPane: false, action: toggleSidebar },
+    { id: "toggle-devtools", label: "Toggle Developer Tools", shortcutHint: "⌘⌥I", canOpenAsPane: false, action: () => toggleDevTools() },
   ];
 }
 
@@ -324,6 +326,10 @@ export function CommandPalette() {
       if (e.metaKey && e.key === "\\") {
         e.preventDefault();
         useStore.getState().toggleSidebar();
+      }
+      if (e.metaKey && e.altKey && e.key === "i") {
+        e.preventDefault();
+        toggleDevTools();
       }
     };
     window.addEventListener("keydown", handler);

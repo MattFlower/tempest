@@ -208,6 +208,9 @@ const rpc = Electroview.defineRPC({
                 store.setViewMode(store.selectedWorkspacePath, ViewMode.VCS);
               }
               break;
+            case "toggle-devtools":
+              import("./devtools").then(({ toggleDevTools }) => toggleDevTools());
+              break;
           }
         });
       },
@@ -427,4 +430,5 @@ export const api = {
     rpcRequest.jjBookmarkSet({ workspacePath, revision, name, track }),
   jjRebase: (workspacePath: string, revision: string, destination: string) =>
     rpcRequest.jjRebase({ workspacePath, revision, destination }),
+
 };

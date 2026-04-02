@@ -99,6 +99,8 @@ export function App() {
     };
   }, [cleanupSidebarDrag]);
 
+
+
   const onDividerMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();

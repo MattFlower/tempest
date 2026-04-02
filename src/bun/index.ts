@@ -540,6 +540,8 @@ ApplicationMenu.setApplicationMenu([
       { label: "Diff", action: "view-diff", accelerator: "Cmd+2" },
       { label: "Dashboard", action: "view-dashboard", accelerator: "Cmd+3" },
       { label: "VCS", action: "view-vcs", accelerator: "Cmd+4" },
+      { type: "separator" },
+      { label: "Toggle Developer Tools", action: "toggle-devtools", accelerator: "Cmd+Alt+I" },
     ],
   },
   {

@@ -7,6 +7,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import type { SessionMessage, SessionSummary } from "../../../../shared/ipc-types";
 import { ToolCallBadge, HIDDEN_TOOLS } from "./ToolCallBadge";
+import { renderInlineMarkdown } from "../inline-markdown";
 
 interface MessageStreamProps {
   messages: SessionMessage[];
@@ -391,7 +392,7 @@ function UserMessage({
               className="text-[13px] mt-1 select-text whitespace-pre-wrap break-words"
               style={{ color: "var(--ctp-text)" }}
             >
-              {msg.text}
+              {renderInlineMarkdown(msg.text)}
             </div>
           )
         )}
@@ -468,7 +469,7 @@ function AssistantMessage({
                   : {}),
               }}
             >
-              {msg.text}
+              {renderInlineMarkdown(msg.text)}
             </div>
 
             {isLongText && (

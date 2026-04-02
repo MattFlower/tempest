@@ -4,13 +4,15 @@
 // bubbles, tool call waypoints with timeline navigation.
 // ============================================================
 
-import { useRef, useEffect, useMemo, useCallback } from "react";
+import { useRef, useEffect, useMemo, useCallback, useState } from "react";
 import type {
   FileAIContext,
   FileChangeTimeline,
   FileChangeEvent,
   SessionMessage,
+  ToolCallInfo,
 } from "../../../../shared/ipc-types";
+import { renderInlineMarkdown } from "../inline-markdown";
 
 interface AIContextPanelProps {
   context: FileAIContext | null;
@@ -126,7 +128,7 @@ export function AIContextPanel({
                     {msg.text && (
                       <MessageBubble message={msg} />
                     )}
-                    {eventsForMessage.map((event, eventIdx) => {
+                    {eventsForMessage.map((event) => {
                       // Find global index for this event
                       let globalIdx = 0;
                       outer: for (const s of context.sessions) {
@@ -135,12 +137,17 @@ export function AIContextPanel({
                           globalIdx++;
                         }
                       }
+                      // Find matching ToolCallInfo from the message
+                      const matchingToolCall = msg.toolCalls?.find(
+                        (tc) => tc.tool === event.toolName && tc.summary === event.inputSummary,
+                      );
                       return (
                         <ToolCallWaypoint
                           key={event.id}
                           event={event}
                           isCurrent={isCurrentWaypoint(event)}
                           globalIndex={globalIdx}
+                          toolCall={matchingToolCall}
                         />
                       );
                     })}
@@ -171,6 +178,10 @@ function MessageBubble({ message }: { message: SessionMessage }) {
   const isUser = message.type === "user";
   const text = message.text ?? "";
   const parsed = parseCommand(text);
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const strippedText = parsed ? null : stripTags(text);
+  const isLongText = strippedText != null && (strippedText.length > 200 || (strippedText.match(/\n/g)?.length ?? 0) > 2);
 
   return (
     <div className="flex flex-col gap-0.5">
@@ -207,26 +218,85 @@ function MessageBubble({ message }: { message: SessionMessage }) {
             )}
           </div>
         ) : (
-          truncate(stripTags(text), 300)
+          <div>
+            <div
+              style={
+                !isExpanded && isLongText
+                  ? {
+                      display: "-webkit-box",
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: "vertical" as const,
+                      overflow: "hidden",
+                    }
+                  : undefined
+              }
+            >
+              {renderInlineMarkdown(strippedText!)}
+            </div>
+            {isLongText && (
+              <button
+                className="text-xs mt-1 cursor-pointer"
+                style={{ color: "var(--ctp-blue)" }}
+                onClick={() => setIsExpanded((p) => !p)}
+              >
+                {isExpanded ? "Show less \u25B4" : "Show more \u25BE"}
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
   );
 }
 
+/** Parse tool input JSON into key-value pairs for structured display */
+function parsedParams(
+  toolCall: ToolCallInfo | undefined,
+): Array<{ key: string; value: string }> | null {
+  if (!toolCall?.input) return null;
+  try {
+    const json = JSON.parse(toolCall.input);
+    if (typeof json !== "object" || json === null) return null;
+    const params: Array<{ key: string; value: string }> = [];
+    for (const key of Object.keys(json).sort()) {
+      const value = json[key];
+      if (typeof value === "string") {
+        params.push({ key, value });
+      } else if (typeof value === "number" || typeof value === "boolean") {
+        params.push({ key, value: String(value) });
+      } else {
+        try {
+          params.push({ key, value: JSON.stringify(value, null, 2) });
+        } catch {
+          params.push({ key, value: String(value) });
+        }
+      }
+    }
+    return params.length > 0 ? params : null;
+  } catch {
+    return null;
+  }
+}
+
 function ToolCallWaypoint({
   event,
   isCurrent,
   globalIndex,
+  toolCall,
 }: {
   event: FileChangeEvent;
   isCurrent: boolean;
   globalIndex: number;
+  toolCall?: ToolCallInfo;
 }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const params = useMemo(() => parsedParams(toolCall), [toolCall]);
+  const hasDetail = params != null || toolCall?.input != null;
+
   return (
     <div
       data-waypoint-index={globalIndex}
-      className="flex items-center gap-1.5 px-2 py-1.5 rounded text-sm"
+      className="rounded text-sm"
       style={{
         background: isCurrent
           ? "rgba(203, 166, 247, 0.15)"
@@ -234,31 +304,94 @@ function ToolCallWaypoint({
         border: `1px solid ${isCurrent ? "var(--ctp-mauve)" : "rgba(203, 166, 247, 0.2)"}`,
       }}
     >
-      <span style={{ color: "var(--ctp-mauve)" }}>&#x270E;</span>
-      <span className="font-semibold" style={{ color: "var(--ctp-mauve)" }}>
-        {event.toolName}
-      </span>
-      <span
-        className="truncate flex-1"
-        style={{ color: "var(--ctp-text)" }}
+      {/* Header row — clickable to expand when detail available */}
+      <div
+        className={`flex items-center gap-1.5 px-2 py-1.5${hasDetail ? " cursor-pointer hover:bg-white/5" : ""}`}
+        onClick={hasDetail ? () => setIsExpanded((p) => !p) : undefined}
       >
-        {event.inputSummary}
-      </span>
-      {event.timestamp && (
-        <span className="text-xs flex-shrink-0" style={{ color: "var(--ctp-subtext0)" }}>
-          {formatTimestamp(event.timestamp)}
+        {hasDetail && (
+          <span
+            className="text-[10px] font-mono"
+            style={{ color: "var(--ctp-overlay0)" }}
+          >
+            {isExpanded ? "\u25BC" : "\u25B6"}
+          </span>
+        )}
+        <span style={{ color: "var(--ctp-mauve)" }}>&#x270E;</span>
+        <span className="font-semibold" style={{ color: "var(--ctp-mauve)" }}>
+          {event.toolName}
         </span>
-      )}
-      {isCurrent && (
         <span
-          className="px-1.5 py-0.5 text-xs font-bold rounded-full flex-shrink-0"
-          style={{
-            background: "var(--ctp-mauve)",
-            color: "var(--ctp-base)",
-          }}
+          className="truncate flex-1"
+          style={{ color: "var(--ctp-text)" }}
         >
-          CURRENT
+          {event.inputSummary}
         </span>
+        {event.timestamp && (
+          <span className="text-xs flex-shrink-0" style={{ color: "var(--ctp-subtext0)" }}>
+            {formatTimestamp(event.timestamp)}
+          </span>
+        )}
+        {isCurrent && (
+          <span
+            className="px-1.5 py-0.5 text-xs font-bold rounded-full flex-shrink-0"
+            style={{
+              background: "var(--ctp-mauve)",
+              color: "var(--ctp-base)",
+            }}
+          >
+            CURRENT
+          </span>
+        )}
+      </div>
+
+      {/* Expanded detail */}
+      {isExpanded && (
+        <div className="pb-2">
+          {params && params.length > 0 ? (
+            <div
+              className="mx-2 p-2 rounded space-y-1"
+              style={{ backgroundColor: "rgba(255,255,255,0.04)" }}
+            >
+              {params.map((param) => (
+                <div key={param.key}>
+                  <div
+                    className="text-[10px] font-semibold"
+                    style={{ color: "var(--ctp-overlay0)" }}
+                  >
+                    {param.key}
+                  </div>
+                  <div
+                    className="text-xs font-mono break-all select-text"
+                    style={{
+                      color: "var(--ctp-text)",
+                      ...(param.value.length > 200
+                        ? {
+                            display: "-webkit-box",
+                            WebkitLineClamp: 6,
+                            WebkitBoxOrient: "vertical" as const,
+                            overflow: "hidden",
+                          }
+                        : {}),
+                    }}
+                  >
+                    {param.value}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : toolCall?.input ? (
+            <div
+              className="mx-2 p-2 text-xs font-mono break-all rounded select-text"
+              style={{
+                color: "var(--ctp-text)",
+                backgroundColor: "rgba(255,255,255,0.04)",
+              }}
+            >
+              {toolCall.input}
+            </div>
+          ) : null}
+        </div>
       )}
     </div>
   );

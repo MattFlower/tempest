@@ -46,3 +46,5 @@ Tempest.app
 # Certificates
 *.p12
 *.p12.backup
+
+.env

@@ -3,6 +3,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Load .env if present (for local release builds)
+[[ -f "$PROJECT_DIR/.env" ]] && set -a && source "$PROJECT_DIR/.env" && set +a
+
 BUN="${BUN:-$(command -v bun)}"
 APP_NAME="Tempest"
 KEYCHAIN_PROFILE="${KEYCHAIN_PROFILE:-Tempest}"

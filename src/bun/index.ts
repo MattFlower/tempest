@@ -4,6 +4,9 @@
 // All 5 streams integrated.
 // ============================================================
 
+import { readFileSync, watch, type FSWatcher } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
 import { BrowserWindow, BrowserView, ApplicationMenu, Utils } from "electrobun/bun";
 import { PtyManager } from "./pty-manager";
 import { SessionManager } from "./session-manager";
@@ -14,6 +17,7 @@ import { HookEventListener } from "./hooks/hook-event-listener";
 import { HookSettingsBuilder } from "./hooks/hook-settings-builder";
 import { SessionActivityTracker } from "./hooks/session-activity-tracker";
 
+import { lookupSessionID, findSessionIDs } from "./session-id-lookup";
 import { loadConfig, saveConfig as saveConfigFile, defaultConfig } from "./config/app-config";
 import { PathResolver } from "./config/path-resolver";
 import { getUsageData } from "./usage/usage-service";
@@ -113,6 +117,85 @@ async function listFilesInDir(dirPath: string): Promise<string[]> {
   return results;
 }
 
+/**
+ * Walk a PaneNodeState tree and populate sessionID on claude tabs
+ * by looking up PID → ~/.claude/sessions/{PID}.json.
+ * Falls back to cwd-based matching if PID lookup fails.
+ * Mutates the tree in place (it's a transient object about to be saved).
+ */
+function enrichTreeWithSessionIds(node: any, workspacePath: string): void {
+  if (!node) return;
+  if (node.type === "leaf" && node.pane?.tabs) {
+    for (const tab of node.pane.tabs) {
+      if (tab.kind !== "claude") continue;
+      // Try PID-based lookup first
+      if (tab.terminalId) {
+        const pid = ptyManager.getPid(tab.terminalId);
+        if (pid) {
+          const sessionFile = join(homedir(), ".claude", "sessions", `${pid}.json`);
+          try {
+            const data = readFileSync(sessionFile, "utf-8");
+            const session = JSON.parse(data);
+            if (session.sessionId) {
+              tab.sessionID = session.sessionId;
+              continue;
+            }
+          } catch {
+            // File not found or parse error — fall through to cwd-based lookup
+          }
+        }
+      }
+      // Fallback: cwd-based matching
+      if (!tab.sessionID) {
+        const matches = findSessionIDs(workspacePath);
+        if (matches.length > 0) {
+          tab.sessionID = matches[0];
+        }
+      }
+    }
+  } else if (node.type === "split" && node.children) {
+    for (const child of node.children) {
+      enrichTreeWithSessionIds(child, workspacePath);
+    }
+  }
+}
+
+// Persistent watcher on ~/.claude/sessions/ — resolves session IDs for all
+// Claude terminals as soon as Claude writes the PID file.
+let sessionsWatcher: FSWatcher | null = null;
+
+function startSessionsWatcher(): void {
+  const sessionsPath = join(homedir(), ".claude", "sessions");
+
+  try {
+    sessionsWatcher = watch(sessionsPath, (_eventType, filename) => {
+      if (!filename?.endsWith(".json")) return;
+      const pid = parseInt(filename.replace(".json", ""), 10);
+      if (isNaN(pid)) return;
+
+      // Only care about PIDs that belong to one of our terminals
+      const terminalId = ptyManager.findTerminalByPid(pid);
+      if (!terminalId) return;
+
+      try {
+        const data = readFileSync(join(sessionsPath, filename), "utf-8");
+        const session = JSON.parse(data);
+        if (session.sessionId) {
+          console.log(`[session] Resolved session ${session.sessionId} for terminal ${terminalId} (PID ${pid})`);
+          try {
+            win.webview.rpc.send.sessionIdResolved({ terminalId, sessionId: session.sessionId });
+          } catch { /* webview not ready */ }
+        }
+      } catch {
+        // File may be partially written — next event will retry
+      }
+    });
+    console.log(`[session] Watching ${sessionsPath} for session files`);
+  } catch (err) {
+    console.error(`[session] Failed to watch ${sessionsPath}:`, err);
+  }
+}
+
 // Define RPC — all streams' handlers combined
 const rpc = BrowserView.defineRPC({
   handlers: {
@@ -125,6 +208,24 @@ const rpc = BrowserView.defineRPC({
       killTerminal: (params: any) => {
         ptyManager.kill(params.id);
       },
+      // --- Session ID Lookup (PID → Claude session) ---
+      lookupTerminalSessionId: async (params: any) => {
+        const { terminalId, workspacePath } = params as {
+          terminalId: string;
+          workspacePath: string;
+        };
+        // Try PID-based lookup first
+        const pid = ptyManager.getPid(terminalId);
+        if (pid) {
+          const sessionId = await lookupSessionID(pid);
+          if (sessionId) return { sessionId };
+        }
+        // Fallback: scan all session files matching this workspace cwd
+        const matches = findSessionIDs(workspacePath);
+        if (matches.length > 0) return { sessionId: matches[0] };
+        return { sessionId: null };
+      },
+
       buildClaudeCommand: (params: any) => sessionManager.buildClaudeCommand(params),
       buildShellCommand: (params: any) => sessionManager.buildShellCommand(params),
       buildEditorCommand: async (params: any) => {
@@ -210,6 +311,7 @@ const rpc = BrowserView.defineRPC({
         return await sessionStateManager.load();
       },
       savePaneState: (_params: any) => {
+        enrichTreeWithSessionIds(_params.paneTree, _params.workspacePath);
         sessionStateManager.savePaneState(_params.workspacePath, _params.paneTree);
         sessionStateManager.setSelectedWorkspacePath(_params.workspacePath);
       },
@@ -440,6 +542,7 @@ const rpc = BrowserView.defineRPC({
 
       // --- Pane state sync (Stream B + D) ---
       paneTreeChanged: (_msg: any) => {
+        enrichTreeWithSessionIds(_msg.tree, _msg.workspacePath);
         sessionStateManager.savePaneState(_msg.workspacePath, _msg.tree);
         sessionStateManager.setSelectedWorkspacePath(_msg.workspacePath);
       },
@@ -605,6 +708,7 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
   }
 
   activityTracker.startCleanupTimer();
+  startSessionsWatcher();
   sessionStateManager.startAutoSave();
 
   try {
@@ -619,6 +723,8 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
 // --- Shutdown cleanup (Stream A + D) ---
 async function shutdown() {
   console.log("[main] Shutting down...");
+  sessionsWatcher?.close();
+  sessionsWatcher = null;
   ptyManager.killAll();
   await sessionStateManager.flush();
   sessionStateManager.stopAutoSave();

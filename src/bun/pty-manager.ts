@@ -181,6 +181,19 @@ export class PtyManager {
     }
   }
 
+  /** Get the PID of the process running in a terminal. */
+  getPid(id: string): number | undefined {
+    return this.terminals.get(id)?.proc.pid;
+  }
+
+  /** Find the terminal ID that owns a given PID (reverse lookup). */
+  findTerminalByPid(pid: number): string | undefined {
+    for (const [id, instance] of this.terminals) {
+      if (instance.proc.pid === pid) return id;
+    }
+    return undefined;
+  }
+
   killAll() {
     for (const id of this.terminals.keys()) {
       this.kill(id);

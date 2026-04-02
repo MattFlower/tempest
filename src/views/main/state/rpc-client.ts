@@ -92,6 +92,26 @@ export function offPRDraftsChanged() {
   prDraftsChangedHandler = null;
 }
 
+/** Walk a PaneNode tree and update the sessionId on the tab matching the given terminalId. */
+function updateTabSessionId(node: any, terminalId: string, sessionId: string): boolean {
+  if (!node) return false;
+  if (node.type === "leaf" && node.pane?.tabs) {
+    for (const tab of node.pane.tabs) {
+      if (tab.terminalId === terminalId) {
+        tab.sessionId = sessionId;
+        return true;
+      }
+    }
+    return false;
+  }
+  if (node.type === "split" && node.children) {
+    for (const child of node.children) {
+      if (updateTabSessionId(child, terminalId, sessionId)) return true;
+    }
+  }
+  return false;
+}
+
 // Initialize RPC and Electroview
 const rpc = Electroview.defineRPC({
   maxRequestTime: 120_000, // native file dialogs block until user selects
@@ -107,6 +127,18 @@ const rpc = Electroview.defineRPC({
       },
       terminalExit: ({ id, exitCode }: WebviewMessages["terminalExit"]) => {
         terminalExitHandler?.(id, exitCode);
+      },
+      sessionIdResolved: (msg: any) => {
+        import("./store").then(({ useStore }) => {
+          const store = useStore.getState();
+          // Find the tab with this terminalId across all workspace pane trees and update its sessionId
+          for (const [wsPath, tree] of Object.entries(store.paneTrees)) {
+            if (updateTabSessionId(tree as any, msg.terminalId, msg.sessionId)) {
+              store.setPaneTree(wsPath, tree as any);
+              break;
+            }
+          }
+        });
       },
       hookEvent: (event: WebviewMessages["hookEvent"]) => {
         hookEventHandler?.(event);

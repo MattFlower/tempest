@@ -148,6 +148,7 @@ export interface PaneTabState {
   label: string;
   sessionID?: string; // Uppercase D — matches Swift Tempest format
   sessionId?: string; // Accept lowercase too for forward compat
+  terminalId?: string; // Ephemeral: used by backend for PID→session lookup, not persisted
   browserURL?: string;
   markdownFilePath?: string;
   editorFilePath?: string;

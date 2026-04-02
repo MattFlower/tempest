@@ -80,6 +80,8 @@ export function toNodeState(node: PaneNode): PaneNodeState {
           label: tab.label,
           // Write as sessionID (uppercase D) to match Swift Tempest format
           sessionID: tab.sessionId,
+          // Include terminalId so backend can do PID→session lookup
+          terminalId: tab.terminalId,
           browserURL: tab.browserURL,
           markdownFilePath: tab.markdownFilePath,
           // Also write Swift's nested format for cross-compat

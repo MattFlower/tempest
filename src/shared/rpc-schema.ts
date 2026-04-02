@@ -59,6 +59,11 @@ export interface BunRequests {
     response: void;
   };
 
+  // Session ID lookup (PID → Claude session)
+  lookupTerminalSessionId: {
+    params: { terminalId: string; workspacePath: string };
+    response: { sessionId: string | null };
+  };
   // Session commands
   buildClaudeCommand: {
     params: {
@@ -415,6 +420,7 @@ export interface BunMessages {
 export interface WebviewMessages {
   terminalOutput: { id: string; data: string; seq: number };
   terminalExit: { id: string; exitCode: number };
+  sessionIdResolved: { terminalId: string; sessionId: string };
   hookEvent: HookEvent;
   workspaceActivityChanged: { workspacePath: string; activityState: number | null; pid: number };
   workspacesChanged: { repoId: string; workspaces: TempestWorkspace[] };

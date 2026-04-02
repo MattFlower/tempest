@@ -16,5 +16,4 @@ Two-process architecture: Bun backend + React webview frontend, communicating vi
 3. **RPC hot path:** Terminal I/O uses fire-and-forget messages. Base64 encode PTY data. Sequence numbers for ordering.
 4. **Microtask coalescing:** PTY output batched via queueMicrotask.
 
-## Use Bun at /Users/mflower/.bun/bin/bun (version 1.3.11)
-## Build: `/Users/mflower/.bun/bin/bun x electrobun dev`
+## Build: `bun x electrobun dev` (requires Bun >= 1.3.11)

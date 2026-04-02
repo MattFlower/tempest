@@ -42,3 +42,7 @@ src/views/main/styles/tailwind.css
 
 Tempest.zip
 Tempest.app
+
+# Certificates
+*.p12
+*.p12.backup

@@ -3,10 +3,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-BUN="/Users/mflower/.bun/bin/bun"
+BUN="${BUN:-$(command -v bun)}"
 APP_NAME="Tempest"
-KEYCHAIN_PROFILE="Tempest"
-DEVELOPER_ID="Developer ID Application: Matthew Flower (24P9P34MKT)"
+KEYCHAIN_PROFILE="${KEYCHAIN_PROFILE:-Tempest}"
+DEVELOPER_ID="${ELECTROBUN_DEVELOPER_ID:?Set ELECTROBUN_DEVELOPER_ID env var (e.g. 'Developer ID Application: Name (TEAMID)')}"
 
 cd "$PROJECT_DIR"
 

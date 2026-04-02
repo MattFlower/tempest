@@ -139,7 +139,7 @@ describe("projectSlug", () => {
   });
 
   it("handles paths with trailing slash", () => {
-    expect(projectSlug("/Users/mflower/code/")).toBe("-Users-mflower-code-");
+    expect(projectSlug("/Users/dev/code/")).toBe("-Users-dev-code-");
   });
 });
 

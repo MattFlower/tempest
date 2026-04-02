@@ -4,6 +4,7 @@
 // ============================================================
 
 import { useState, useMemo, useCallback } from "react";
+import { diffLines } from "diff";
 import type { ToolCallInfo } from "../../../../shared/ipc-types";
 
 /** Tools that should be completely hidden from the viewer */
@@ -84,6 +85,102 @@ function excludedParamKeys(tool: string): Set<string> {
   }
 }
 
+/** Threshold for auto-collapsing diffs */
+const DIFF_COLLAPSE_LINES = 10;
+
+interface DiffLine {
+  type: "added" | "removed" | "context";
+  text: string;
+}
+
+/** Compute unified diff lines from old_string / new_string */
+function computeDiffLines(oldStr: string, newStr: string): DiffLine[] {
+  const changes = diffLines(oldStr, newStr);
+  const lines: DiffLine[] = [];
+  for (const change of changes) {
+    const changeLines = change.value.replace(/\n$/, "").split("\n");
+    const type: DiffLine["type"] = change.added
+      ? "added"
+      : change.removed
+        ? "removed"
+        : "context";
+    for (const line of changeLines) {
+      lines.push({ type, text: line });
+    }
+  }
+  return lines;
+}
+
+/** Try to extract edit diff info from an Edit tool call */
+function parseEditDiff(
+  toolCall: ToolCallInfo,
+): { filePath: string; lines: DiffLine[] } | null {
+  if (toolCall.tool !== "Edit" || !toolCall.input) return null;
+  try {
+    const json = JSON.parse(toolCall.input);
+    if (typeof json.old_string !== "string" || typeof json.new_string !== "string")
+      return null;
+    return {
+      filePath: json.file_path ?? "",
+      lines: computeDiffLines(json.old_string, json.new_string),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function UnifiedDiff({ lines }: { lines: DiffLine[] }) {
+  const [isCollapsed, setIsCollapsed] = useState(lines.length > DIFF_COLLAPSE_LINES);
+
+  return (
+    <div className="mx-2.5 rounded overflow-hidden" style={{ backgroundColor: "rgba(0,0,0,0.25)" }}>
+      {isCollapsed ? (
+        <button
+          onClick={() => setIsCollapsed(false)}
+          className="w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-white/5 cursor-pointer"
+          style={{ color: "var(--ctp-subtext0)" }}
+        >
+          {lines.filter((l) => l.type === "removed").length} removed, {lines.filter((l) => l.type === "added").length} added — click to expand ({lines.length} lines)
+        </button>
+      ) : (
+        <>
+          {lines.length > DIFF_COLLAPSE_LINES && (
+            <button
+              onClick={() => setIsCollapsed(true)}
+              className="w-full text-left px-3 py-1 text-[10px] font-mono hover:bg-white/5 cursor-pointer"
+              style={{ color: "var(--ctp-overlay0)" }}
+            >
+              collapse
+            </button>
+          )}
+          <pre className="text-xs font-mono leading-[1.4] overflow-x-auto select-text px-3 py-1.5">
+            {lines.map((line, i) => {
+              const prefix = line.type === "added" ? "+" : line.type === "removed" ? "-" : " ";
+              const color =
+                line.type === "added"
+                  ? "var(--ctp-green)"
+                  : line.type === "removed"
+                    ? "var(--ctp-red)"
+                    : "var(--ctp-subtext0)";
+              const bg =
+                line.type === "added"
+                  ? "rgba(94,200,94,0.1)"
+                  : line.type === "removed"
+                    ? "rgba(235,111,146,0.1)"
+                    : "transparent";
+              return (
+                <div key={i} style={{ color, backgroundColor: bg }}>
+                  {prefix} {line.text}
+                </div>
+              );
+            })}
+          </pre>
+        </>
+      )}
+    </div>
+  );
+}
+
 /** Parse the fullInput JSON into key-value pairs for structured display */
 function parsedParams(
   toolCall: ToolCallInfo,
@@ -121,6 +218,7 @@ export function ToolCallBadge({ toolCall }: ToolCallBadgeProps) {
   const inlineSummary = showInlineSummary(toolCall);
   const summary = useMemo(() => displaySummary(toolCall), [toolCall]);
   const params = useMemo(() => parsedParams(toolCall), [toolCall]);
+  const editDiff = useMemo(() => parseEditDiff(toolCall), [toolCall]);
   const toggle = useCallback(() => setIsExpanded((p) => !p), []);
 
   return (
@@ -162,7 +260,9 @@ export function ToolCallBadge({ toolCall }: ToolCallBadgeProps) {
       {/* Expanded detail */}
       {isExpanded && (
         <div className="pb-2">
-          {params && params.length > 0 ? (
+          {editDiff ? (
+            <UnifiedDiff lines={editDiff.lines} />
+          ) : params && params.length > 0 ? (
             <div
               className="mx-2.5 p-2.5 rounded space-y-1"
               style={{ backgroundColor: "rgba(255,255,255,0.04)" }}

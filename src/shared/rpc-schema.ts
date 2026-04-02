@@ -281,6 +281,17 @@ export interface BunRequests {
     response: { url: string } | { error: string };
   };
 
+  // PR Review — create a workspace for reviewing a PR
+  startPRReview: {
+    params: { repoId: string; prNumber: number };
+    response: {
+      success: boolean;
+      error?: string;
+      workspace?: TempestWorkspace;
+      prUrl?: string;
+    };
+  };
+
   // Assigned PRs
   getAssignedPRs: {
     params: void;

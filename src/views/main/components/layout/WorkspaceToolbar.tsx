@@ -1,11 +1,12 @@
-import { useMemo, useCallback } from "react";
-import { PaneTabKind, ViewMode, WorkspaceStatus, ActivityState } from "../../../../shared/ipc-types";
-import { createTab } from "../../models/pane-node";
+import { useMemo, useCallback, useState } from "react";
+import { PaneTabKind, WorkspaceStatus, ActivityState } from "../../../../shared/ipc-types";
+import { createTab, createPane, createLeaf, createSplit, toNodeState } from "../../models/pane-node";
 import { useStore } from "../../state/store";
 import { addTab, splitPane } from "../../state/actions";
 import { api } from "../../state/rpc-client";
 import { DropdownButton, type DropdownItem } from "./DropdownButton";
 import { StatusBadge } from "./StatusBadge";
+import { PRReviewDialog } from "../pr/PRReviewDialog";
 
 interface WorkspaceToolbarProps {
   workspacePath: string;
@@ -44,7 +45,12 @@ const PRIcon = (
 
 export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
   const workspacesByRepo = useStore((s) => s.workspacesByRepo);
+  const repos = useStore((s) => s.repos);
   const activity = useStore((s) => s.workspaceActivity[workspacePath]);
+
+  const [showPRReview, setShowPRReview] = useState(false);
+  const [prReviewLoading, setPrReviewLoading] = useState(false);
+  const [prReviewError, setPrReviewError] = useState<string | null>(null);
 
   // Find workspace object to get name and status
   const workspace = useMemo(() => {
@@ -54,6 +60,13 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
     }
     return null;
   }, [workspacesByRepo, workspacePath]);
+
+  // Find the repo for this workspace
+  const repoId = useMemo(() => {
+    if (!workspace) return null;
+    const repo = repos.find((r) => r.path === workspace.repoPath);
+    return repo?.id ?? null;
+  }, [workspace, repos]);
 
   // Derive effective status (activity overrides workspace.status)
   let effectiveStatus = workspace?.status ?? WorkspaceStatus.Idle;
@@ -76,6 +89,57 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
     }
   }, [workspacePath]);
 
+  const handleStartPRReview = useCallback(async (prNumber: number) => {
+    if (!repoId) {
+      setPrReviewError("Could not determine repository for this workspace.");
+      return;
+    }
+
+    setPrReviewLoading(true);
+    setPrReviewError(null);
+
+    try {
+      const result = await api.startPRReview(repoId, prNumber);
+
+      if (!result.success || !result.workspace) {
+        setPrReviewError(result.error ?? "Failed to create workspace.");
+        setPrReviewLoading(false);
+        return;
+      }
+
+      // Switch to the new workspace
+      const store = useStore.getState();
+      store.selectWorkspace(result.workspace.path);
+
+      // Set up 3-pane layout: Shell + Browser (PR URL) + Claude
+      const shellTab = createTab(PaneTabKind.Shell, "Shell", { terminalId: crypto.randomUUID() });
+      const shellPane = createPane(shellTab);
+
+      const browserTab = createTab(PaneTabKind.Browser, "PR", {
+        browserURL: result.prUrl ?? `https://github.com`,
+      });
+      const browserPane = createPane(browserTab);
+
+      const claudeTab = createTab(PaneTabKind.Claude, "Claude", { terminalId: crypto.randomUUID() });
+      const claudePane = createPane(claudeTab);
+
+      const tree = createSplit(
+        [createLeaf(shellPane), createLeaf(browserPane), createLeaf(claudePane)],
+        [1, 1, 1],
+      );
+
+      store.setPaneTree(result.workspace.path, tree);
+      store.setFocusedPaneId(shellPane.id);
+      api.notifyPaneTreeChanged(result.workspace.path, toNodeState(tree));
+
+      setShowPRReview(false);
+      setPrReviewLoading(false);
+    } catch (err: any) {
+      setPrReviewError(err.message ?? String(err));
+      setPrReviewLoading(false);
+    }
+  }, [repoId]);
+
   const newItems: DropdownItem[] = [
     { label: "Terminal", action: () => addTabToFocusedPane(PaneTabKind.Shell, "Shell") },
     { label: "Claude", action: () => addTabToFocusedPane(PaneTabKind.Claude, "Claude") },
@@ -96,26 +160,47 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
     { label: "Open PR", action: () => console.log("[TODO] Open PR") },
     { label: "Link PR", action: () => console.log("[TODO] Link PR") },
     { label: "View PR in Browser", action: handleViewPRInBrowser },
-    { label: "PR Review", action: () => useStore.getState().setViewMode(workspacePath, ViewMode.Dashboard) },
+    {
+      label: "PR Review",
+      action: () => {
+        setPrReviewError(null);
+        setShowPRReview(true);
+      },
+    },
   ];
 
   return (
-    <div
-      className="flex items-center px-4 py-1.5 flex-shrink-0 border-b border-[var(--ctp-surface0)]"
-      style={{ backgroundColor: "var(--ctp-mantle)" }}
-    >
-      <span className="text-sm font-semibold text-[var(--ctp-text)] mr-2">
-        {workspaceName}
-      </span>
-      <StatusBadge status={effectiveStatus} />
+    <>
+      <div
+        className="flex items-center px-4 py-1.5 flex-shrink-0 border-b border-[var(--ctp-surface0)]"
+        style={{ backgroundColor: "var(--ctp-mantle)" }}
+      >
+        <span className="text-sm font-semibold text-[var(--ctp-text)] mr-2">
+          {workspaceName}
+        </span>
+        <StatusBadge status={effectiveStatus} />
 
-      <span className="flex-1" />
+        <span className="flex-1" />
 
-      <div className="flex items-center gap-1">
-        <DropdownButton label="New" items={newItems} onDefaultAction={() => addTabToFocusedPane(PaneTabKind.Shell, "Shell")} />
-        <DropdownButton label="Split" items={splitItems} onDefaultAction={() => splitWithTab(PaneTabKind.Shell, "Shell")} />
-        <DropdownButton label="PR" icon={PRIcon} items={prItems} />
+        <div className="flex items-center gap-1">
+          <DropdownButton label="New" items={newItems} onDefaultAction={() => addTabToFocusedPane(PaneTabKind.Shell, "Shell")} />
+          <DropdownButton label="Split" items={splitItems} onDefaultAction={() => splitWithTab(PaneTabKind.Shell, "Shell")} />
+          <DropdownButton label="PR" icon={PRIcon} items={prItems} />
+        </div>
       </div>
-    </div>
+
+      {showPRReview && repoId && (
+        <PRReviewDialog
+          repoId={repoId}
+          onStartReview={handleStartPRReview}
+          onDismiss={() => {
+            setShowPRReview(false);
+            setPrReviewError(null);
+          }}
+          isLoading={prReviewLoading}
+          errorMessage={prReviewError}
+        />
+      )}
+    </>
   );
 }

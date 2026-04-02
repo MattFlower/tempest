@@ -35,6 +35,7 @@ import { AIContextProvider } from "./diff/ai-context-provider";
 import { PRMonitor } from "./pr/pr-monitor";
 import { lookupPRUrl } from "./pr/pr-url-lookup";
 import { getAssignedPRs } from "./pr/pr-assigned";
+import { startPRReview } from "./pr/pr-review-coordinator";
 import {
   getVCSStatus,
   vcsStageFiles,
@@ -423,6 +424,11 @@ const rpc = BrowserView.defineRPC({
           return { error: "No branch or bookmark found for the current workspace." };
         }
         return await lookupPRUrl(vcsInfo.repoPath, vcsInfo.branch);
+      },
+
+      // --- PR Review (create workspace for PR) ---
+      startPRReview: async (params: any) => {
+        return await startPRReview(workspaceManager, params.repoId, params.prNumber);
       },
 
       // --- Assigned PRs ---

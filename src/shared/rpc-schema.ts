@@ -29,6 +29,7 @@ import type {
 } from "./ipc-types";
 
 import type {
+  AssignedPR,
   DiffScope,
   FileAIContext,
   FileChangeTimeline,
@@ -278,6 +279,12 @@ export interface BunRequests {
   lookupPRUrl: {
     params: { workspacePath: string };
     response: { url: string } | { error: string };
+  };
+
+  // Assigned PRs
+  getAssignedPRs: {
+    params: void;
+    response: AssignedPR[];
   };
 
   // PR Feedback

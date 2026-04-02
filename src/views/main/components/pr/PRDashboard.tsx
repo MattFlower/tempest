@@ -6,7 +6,7 @@
 // ============================================================
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { PRDraftSummary } from "../../../../shared/ipc-types";
+import type { PRDraftSummary, AssignedPR } from "../../../../shared/ipc-types";
 import { api, onPRDraftsChanged, offPRDraftsChanged } from "../../state/rpc-client";
 import { useStore } from "../../state/store";
 import { DraftCard } from "./DraftCard";
@@ -39,6 +39,8 @@ export function PRDashboard() {
   const [starting, setStarting] = useState(false);
   const [lastPoll, setLastPoll] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
+  const [assignedPRs, setAssignedPRs] = useState<AssignedPR[]>([]);
+  const [loadingAssigned, setLoadingAssigned] = useState(false);
 
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -100,6 +102,43 @@ export function PRDashboard() {
     return () => {
       offPRDraftsChanged();
     };
+  }, [selectedWorkspacePath]);
+
+  // Fetch assigned PRs when not monitoring
+  useEffect(() => {
+    if (monitoring || !selectedWorkspacePath) return;
+    let cancelled = false;
+    setLoadingAssigned(true);
+    api.getAssignedPRs().then((prs: AssignedPR[]) => {
+      if (!cancelled) setAssignedPRs(prs);
+    }).catch((err: unknown) => {
+      console.error("[PRDashboard] fetch assigned PRs error:", err);
+    }).finally(() => {
+      if (!cancelled) setLoadingAssigned(false);
+    });
+    return () => { cancelled = true; };
+  }, [monitoring, selectedWorkspacePath]);
+
+  const handleReviewPR = useCallback(async (pr: AssignedPR) => {
+    if (!selectedWorkspacePath) return;
+    setError(null);
+    setStarting(true);
+    try {
+      await api.startPRMonitor({
+        workspacePath: selectedWorkspacePath,
+        prNumber: pr.number,
+        prURL: pr.url,
+        owner: pr.owner,
+        repo: pr.repo,
+      });
+      setMonitoring(true);
+      setMonitorInfo({ owner: pr.owner, repo: pr.repo, prNumber: pr.number });
+      setPrURL(pr.url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setStarting(false);
+    }
   }, [selectedWorkspacePath]);
 
   const handleCheckNow = useCallback(async () => {
@@ -257,60 +296,125 @@ export function PRDashboard() {
 
       {/* Start form or content */}
       {!monitoring ? (
-        <div className="flex flex-col items-center justify-center flex-1 gap-4 px-8">
-          <div
-            className="text-center"
-            style={{ color: "var(--ctp-subtext0)" }}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left: URL input section */}
+          <div className="flex flex-col items-center justify-center gap-4 px-8 w-1/2"
+            style={{ borderRight: "1px solid var(--ctp-surface0)" }}
           >
-            <div className="text-lg mb-1">No PR Monitored</div>
-            <div className="text-xs">
-              Enter a GitHub PR URL to start monitoring for review comments.
-            </div>
-          </div>
-
-          <div className="flex gap-2 w-full max-w-lg">
-            <input
-              type="text"
-              value={prURL}
-              onChange={(e) => setPrURL(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleStart();
-              }}
-              placeholder="https://github.com/owner/repo/pull/123"
-              className="flex-1 px-3 py-2 text-sm rounded outline-none"
-              style={{
-                backgroundColor: "var(--ctp-surface0)",
-                color: "var(--ctp-text)",
-                border: "1px solid var(--ctp-surface1)",
-              }}
-            />
-            <button
-              onClick={handleStart}
-              disabled={starting || !prURL.trim()}
-              className="px-4 py-2 text-sm font-medium rounded"
-              style={{
-                backgroundColor: starting
-                  ? "var(--ctp-surface1)"
-                  : "var(--ctp-blue)",
-                color: "var(--ctp-base)",
-                opacity: !prURL.trim() ? 0.5 : 1,
-              }}
-            >
-              {starting ? "Starting..." : "Start Monitoring"}
-            </button>
-          </div>
-
-          {error && (
             <div
-              className="text-xs px-3 py-2 rounded max-w-lg w-full"
-              style={{
-                backgroundColor: "rgba(243, 139, 168, 0.1)",
-                color: "var(--ctp-red)",
-              }}
+              className="text-center"
+              style={{ color: "var(--ctp-subtext0)" }}
             >
-              {error}
+              <div className="text-lg mb-1">No PR Monitored</div>
+              <div className="text-xs">
+                Enter a GitHub PR URL to start monitoring for review comments.
+              </div>
             </div>
-          )}
+
+            <div className="flex gap-2 w-full max-w-lg">
+              <input
+                type="text"
+                value={prURL}
+                onChange={(e) => setPrURL(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleStart();
+                }}
+                placeholder="https://github.com/owner/repo/pull/123"
+                className="flex-1 px-3 py-2 text-sm rounded outline-none"
+                style={{
+                  backgroundColor: "var(--ctp-surface0)",
+                  color: "var(--ctp-text)",
+                  border: "1px solid var(--ctp-surface1)",
+                }}
+              />
+              <button
+                onClick={handleStart}
+                disabled={starting || !prURL.trim()}
+                className="px-4 py-2 text-sm font-medium rounded"
+                style={{
+                  backgroundColor: starting
+                    ? "var(--ctp-surface1)"
+                    : "var(--ctp-blue)",
+                  color: "var(--ctp-base)",
+                  opacity: !prURL.trim() ? 0.5 : 1,
+                }}
+              >
+                {starting ? "Starting..." : "Start Monitoring"}
+              </button>
+            </div>
+
+            {error && (
+              <div
+                className="text-xs px-3 py-2 rounded max-w-lg w-full"
+                style={{
+                  backgroundColor: "rgba(243, 139, 168, 0.1)",
+                  color: "var(--ctp-red)",
+                }}
+              >
+                {error}
+              </div>
+            )}
+          </div>
+
+          {/* Right: Assigned PRs list */}
+          <div className="flex flex-col w-1/2 overflow-y-auto px-6 py-6">
+            <div
+              className="text-xs font-semibold uppercase tracking-wider mb-3"
+              style={{ color: "var(--ctp-subtext0)" }}
+            >
+              PRs Assigned to Me
+            </div>
+            {loadingAssigned ? (
+              <div className="text-xs" style={{ color: "var(--ctp-overlay0)" }}>
+                Loading...
+              </div>
+            ) : assignedPRs.length === 0 ? (
+              <div className="text-xs" style={{ color: "var(--ctp-overlay0)" }}>
+                No open PRs assigned to you.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1">
+                {assignedPRs.map((pr) => (
+                  <div
+                    key={pr.url}
+                    className="flex items-center gap-3 px-3 py-2 rounded"
+                    style={{ backgroundColor: "var(--ctp-surface0)" }}
+                  >
+                    <span
+                      className="text-xs font-medium shrink-0"
+                      style={{ color: "var(--ctp-subtext0)" }}
+                    >
+                      {pr.owner}/{pr.repo}
+                    </span>
+                    <span
+                      className="text-xs shrink-0"
+                      style={{ color: "var(--ctp-overlay0)" }}
+                    >
+                      #{pr.number}
+                    </span>
+                    <span
+                      className="text-sm truncate flex-1"
+                      style={{ color: "var(--ctp-text)" }}
+                    >
+                      {pr.title}
+                    </span>
+                    <button
+                      onClick={() => handleReviewPR(pr)}
+                      disabled={starting}
+                      className="text-xs font-medium px-2 py-1 rounded shrink-0"
+                      style={{
+                        backgroundColor: "var(--ctp-blue)",
+                        color: "var(--ctp-base)",
+                        opacity: starting ? 0.5 : 1,
+                      }}
+                    >
+                      Review
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       ) : drafts.length === 0 ? (
         <div

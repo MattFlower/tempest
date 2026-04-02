@@ -392,6 +392,9 @@ export const api = {
   lookupPRUrl: (workspacePath: string) =>
     rpcRequest.lookupPRUrl({ workspacePath }),
 
+  // Assigned PRs
+  getAssignedPRs: () => rpcRequest.getAssignedPRs(),
+
   // PR Feedback
   getPRMonitorStatus: (workspacePath: string) =>
     rpcRequest.getPRMonitorStatus({ workspacePath }),

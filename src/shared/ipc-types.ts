@@ -262,6 +262,16 @@ export interface RepoSettings {
   prepareScript: string;
 }
 
+// --- Assigned PRs ---
+
+export interface AssignedPR {
+  owner: string;
+  repo: string;
+  number: number;
+  title: string;
+  url: string;
+}
+
 // --- PR Feedback ---
 
 export interface PRDraftSummary {

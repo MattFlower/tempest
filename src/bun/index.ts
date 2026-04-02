@@ -34,6 +34,7 @@ import { readFileForEditor, writeFileForEditor, resolveModulePath } from "./edit
 import { AIContextProvider } from "./diff/ai-context-provider";
 import { PRMonitor } from "./pr/pr-monitor";
 import { lookupPRUrl } from "./pr/pr-url-lookup";
+import { getAssignedPRs } from "./pr/pr-assigned";
 import {
   getVCSStatus,
   vcsStageFiles,
@@ -422,6 +423,11 @@ const rpc = BrowserView.defineRPC({
           return { error: "No branch or bookmark found for the current workspace." };
         }
         return await lookupPRUrl(vcsInfo.repoPath, vcsInfo.branch);
+      },
+
+      // --- Assigned PRs ---
+      getAssignedPRs: async () => {
+        return await getAssignedPRs();
       },
 
       // --- PR Feedback (Feature 3) ---

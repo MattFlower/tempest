@@ -11,6 +11,7 @@ import { BookmarkManager } from "./browser/bookmark-manager";
 import { WorkspaceManager } from "./workspace-manager";
 import { SessionStateManager } from "./session-state-manager";
 import { HookEventListener } from "./hooks/hook-event-listener";
+import { HookSettingsBuilder } from "./hooks/hook-settings-builder";
 import { SessionActivityTracker } from "./hooks/session-activity-tracker";
 
 import { loadConfig, saveConfig as saveConfigFile, defaultConfig } from "./config/app-config";
@@ -74,7 +75,7 @@ function getBookmarkManager(repoPath: string): BookmarkManager {
 // --- Stream D: Backend Managers ---
 const workspaceManager = new WorkspaceManager();
 const sessionStateManager = new SessionStateManager();
-const hookListener = new HookEventListener();
+const hookListener = new HookEventListener(HookSettingsBuilder.socketPath);
 const activityTracker = new SessionActivityTracker();
 
 // --- Stream G: History ---

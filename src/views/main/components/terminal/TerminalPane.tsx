@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { PaneTabKind } from "../../../../shared/ipc-types";
 import { TerminalInstance } from "./terminal-instance";
+import { TerminalSearchBar } from "./TerminalSearchBar";
 import { api } from "../../state/rpc-client";
 import {
   initTerminalDispatch,
@@ -164,32 +165,61 @@ export function TerminalPane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terminalId]);
 
+  const [searchVisible, setSearchVisible] = useState(false);
+
   useEffect(() => {
-    if (isFocused) {
+    if (isFocused && !searchVisible) {
       instanceRef.current?.focus();
-    } else {
+    } else if (!isFocused) {
       instanceRef.current?.blur();
     }
-  }, [isFocused]);
+  }, [isFocused, searchVisible]);
 
   // Re-focus terminal when the window regains focus (e.g. after Cmd+Tab away and back).
-  // The isFocused prop doesn't change while the app is backgrounded, so the effect
-  // above won't re-fire — we need to listen for the window focus event explicitly.
   useEffect(() => {
     if (!isFocused) return;
 
     const handleWindowFocus = () => {
-      instanceRef.current?.focus();
+      if (!searchVisible) {
+        instanceRef.current?.focus();
+      }
     };
 
     window.addEventListener("focus", handleWindowFocus);
     return () => window.removeEventListener("focus", handleWindowFocus);
+  }, [isFocused, searchVisible]);
+
+  // Cmd+F to open terminal search
+  useEffect(() => {
+    if (!isFocused) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "f") {
+        e.preventDefault();
+        setSearchVisible(true);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isFocused]);
 
+  const handleSearchClose = useCallback(() => {
+    setSearchVisible(false);
+  }, []);
+
   return (
-    <div
-      ref={containerRef}
-      className="h-full w-full"
-    />
+    <div className="relative h-full w-full">
+      {searchVisible && instanceRef.current && (
+        <TerminalSearchBar
+          instance={instanceRef.current}
+          onClose={handleSearchClose}
+        />
+      )}
+      <div
+        ref={containerRef}
+        className="h-full w-full"
+      />
+    </div>
   );
 }

@@ -7,6 +7,7 @@ import { SearchAddon } from "@xterm/addon-search";
 export class TerminalInstance {
   readonly terminal: Terminal;
   readonly fitAddon: FitAddon;
+  readonly searchAddon: SearchAddon;
   private webglAddon: WebglAddon | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private resizeDebounceTimer: number | null = null;
@@ -66,7 +67,8 @@ export class TerminalInstance {
     this.fitAddon = new FitAddon();
     this.terminal.loadAddon(this.fitAddon);
     this.terminal.loadAddon(new WebLinksAddon());
-    this.terminal.loadAddon(new SearchAddon());
+    this.searchAddon = new SearchAddon();
+    this.terminal.loadAddon(this.searchAddon);
 
     this.terminal.open(container);
     this.initWebGL();
@@ -201,6 +203,11 @@ export class TerminalInstance {
 
       // Cmd+V: let the browser handle it so the 'paste' event fires
       if (event.metaKey && event.key === "v") {
+        return false;
+      }
+
+      // Cmd+F: let the browser handle it so our search bar opens
+      if (event.metaKey && event.key === "f") {
         return false;
       }
 

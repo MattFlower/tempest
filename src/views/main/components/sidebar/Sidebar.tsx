@@ -113,7 +113,7 @@ export function Sidebar() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[var(--ctp-mantle)]">
+    <div className="flex flex-col h-full bg-[var(--ctp-mantle)] select-none">
       {/* Titlebar drag region — room for traffic lights */}
       <div className="electrobun-webkit-app-region-drag h-8 flex-shrink-0" />
 

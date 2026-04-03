@@ -89,6 +89,12 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
   // overlay sits on top of all DOM content, so popovers are invisible otherwise).
   const [popoverOpen, setPopoverOpen] = useState(false);
 
+  // Stable refs for find callbacks so the host-message handler (registered
+  // once on mount) always calls the latest version without stale closures.
+  const findNextRef = useRef(() => {});
+  const findPreviousRef = useRef(() => {});
+  const closeFindBarRef = useRef(() => {});
+
   // Attach webview event listeners once the element is in the DOM.
   useEffect(() => {
     if (!mounted) return;
@@ -119,10 +125,23 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
       if (url) setCurrentUrl(url);
       setIsLoading(false);
       updateNavState();
-      // Ask the content page to send its title back via host-message
+      // Ask the content page to send its title back via host-message,
+      // and install a Cmd+F listener so find works even when the native
+      // WKWebView overlay has focus (keyboard events don't reach React).
       try {
         el.executeJavascript(
-          `if(window.__electrobunSendToHost){window.__electrobunSendToHost({type:"page-title",title:document.title})}`
+          `if(window.__electrobunSendToHost){` +
+            `window.__electrobunSendToHost({type:"page-title",title:document.title});` +
+            `if(!window.__tempestFindInstalled){` +
+              `window.__tempestFindInstalled=true;` +
+              `document.addEventListener("keydown",function(e){` +
+                `var m=e.metaKey||e.ctrlKey;` +
+                `if(m&&e.key==="f"){e.preventDefault();window.__electrobunSendToHost({type:"find-shortcut"})}` +
+                `else if(m&&e.key==="g"){e.preventDefault();window.__electrobunSendToHost({type:e.shiftKey?"find-previous":"find-next"})}` +
+                `else if(e.key==="Escape"){window.__electrobunSendToHost({type:"find-close"})}` +
+              `},true)` +
+            `}` +
+          `}`
         );
       } catch {}
     });
@@ -133,13 +152,21 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
       updateNavState();
     });
 
-    // Listen for host messages from the content page (e.g. page title)
+    // Listen for host messages from the content page (e.g. page title, find shortcut)
     el.on("host-message", (event: any) => {
       try {
         const raw = event?.detail ?? event;
         const data = typeof raw === "string" ? JSON.parse(raw) : raw;
         if (data?.type === "page-title" && typeof data.title === "string") {
           setPageTitle(data.title);
+        } else if (data?.type === "find-shortcut") {
+          setIsFindBarVisible(true);
+        } else if (data?.type === "find-next") {
+          findNextRef.current();
+        } else if (data?.type === "find-previous") {
+          findPreviousRef.current();
+        } else if (data?.type === "find-close") {
+          closeFindBarRef.current();
         }
       } catch {}
     });
@@ -271,6 +298,11 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
     setFindHasMatch(true);
     try { webviewRef.current?.stopFindInPage(); } catch {}
   }, []);
+
+  // Keep refs in sync with latest callbacks.
+  findNextRef.current = findNext;
+  findPreviousRef.current = findPrevious;
+  closeFindBarRef.current = closeFindBar;
 
   return (
     <div className="flex flex-col" style={{ height: "100%", width: "100%" }}>

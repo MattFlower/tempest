@@ -151,7 +151,7 @@ export function TabBar({ pane }: TabBarProps) {
           onClick={() => {
             if (!plusMenuOpen && plusBtnRef.current) {
               const rect = plusBtnRef.current.getBoundingClientRect();
-              setMenuPos({ top: rect.bottom + 4, left: rect.left });
+              setMenuPos({ top: rect.bottom + 4, left: rect.right });
             }
             setPlusMenuOpen((o) => !o);
           }}
@@ -161,8 +161,8 @@ export function TabBar({ pane }: TabBarProps) {
         </button>
         {plusMenuOpen && (
           <div
-            className="fixed min-w-[160px] rounded-lg border border-[var(--ctp-surface1)] bg-[var(--ctp-surface0)] shadow-lg overflow-hidden"
-            style={{ zIndex: 50, top: menuPos.top, left: menuPos.left }}
+            className="fixed w-[160px] rounded-lg border border-[var(--ctp-surface1)] bg-[var(--ctp-surface0)] shadow-lg overflow-hidden"
+            style={{ zIndex: 50, top: menuPos.top, right: window.innerWidth - menuPos.left }}
           >
             <button onClick={() => addTabToPane(PaneTabKind.Shell, "Shell")} className="w-full text-left px-3 py-1.5 text-xs text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)] transition-colors">Terminal</button>
             <button onClick={() => addTabToPane(PaneTabKind.Claude, "Claude")} className="w-full text-left px-3 py-1.5 text-xs text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)] transition-colors">Claude</button>

@@ -1,0 +1,526 @@
+import { useState, useEffect, useRef } from "react";
+import type { CustomScript, ScriptParameter } from "../../../../shared/ipc-types";
+import { api } from "../../state/rpc-client";
+import { onScriptRun } from "../../state/rpc-client";
+import { useOverlay } from "../../state/useOverlay";
+
+interface Props {
+  repoPath: string;
+  workspacePath: string;
+  workspaceName: string;
+  scripts: CustomScript[];
+  onChanged: (scripts: CustomScript[]) => void;
+  onDismiss: () => void;
+}
+
+export function ScriptDialog({
+  repoPath,
+  workspacePath,
+  workspaceName,
+  scripts,
+  onChanged,
+  onDismiss,
+}: Props) {
+  useOverlay();
+
+  // Form state — used for both add and edit
+  const [editing, setEditing] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null); // null = adding new
+  const [name, setName] = useState("");
+  const [mode, setMode] = useState<"inline" | "file">("inline");
+  const [script, setScript] = useState("");
+  const [scriptPath, setScriptPath] = useState("");
+  const [parameters, setParameters] = useState<ScriptParameter[]>([]);
+  const [showOutput, setShowOutput] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Test run state
+  const [testing, setTesting] = useState(false);
+  const [testOutput, setTestOutput] = useState("");
+  const [testExitCode, setTestExitCode] = useState<number | null>(null);
+
+  const nameRef = useRef<HTMLInputElement>(null);
+  const outputRef = useRef<HTMLPreElement>(null);
+
+  useEffect(() => {
+    if (editing) setTimeout(() => nameRef.current?.focus(), 0);
+  }, [editing]);
+
+  useEffect(() => {
+    if (outputRef.current) {
+      outputRef.current.scrollTop = outputRef.current.scrollHeight;
+    }
+  }, [testOutput]);
+
+  const persistScripts = async (updated: CustomScript[]) => {
+    const settings = await api.getRepoSettings(repoPath);
+    await api.saveRepoSettings(repoPath, {
+      ...settings,
+      customScripts: updated,
+    });
+    onChanged(updated);
+  };
+
+  const handleDelete = async (id: string) => {
+    await persistScripts(scripts.filter((s) => s.id !== id));
+  };
+
+  const resetForm = () => {
+    setName("");
+    setScript("");
+    setScriptPath("");
+    setMode("inline");
+    setParameters([]);
+    setShowOutput(false);
+    setTestOutput("");
+    setTestExitCode(null);
+    setEditing(false);
+    setEditingId(null);
+  };
+
+  const openEdit = (cs: CustomScript) => {
+    setEditingId(cs.id);
+    setName(cs.name);
+    setScript(cs.script);
+    setScriptPath(cs.scriptPath ?? "");
+    setMode(cs.scriptPath ? "file" : "inline");
+    setParameters(cs.parameters ?? []);
+    setShowOutput(cs.showOutput ?? false);
+    setTestOutput("");
+    setTestExitCode(null);
+    setEditing(true);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    const savedScript: CustomScript = {
+      id: editingId ?? crypto.randomUUID(),
+      name: name.trim(),
+      script: mode === "inline" ? script : "",
+      scriptPath: mode === "file" ? scriptPath : undefined,
+      parameters: parameters.length > 0 ? parameters : undefined,
+      showOutput,
+    };
+
+    if (editingId) {
+      // Replace existing
+      await persistScripts(scripts.map((s) => (s.id === editingId ? savedScript : s)));
+    } else {
+      // Append new
+      await persistScripts([...scripts, savedScript]);
+    }
+    resetForm();
+    setSaving(false);
+  };
+
+  const handleTestRun = async () => {
+    setTesting(true);
+    setTestOutput("");
+    setTestExitCode(null);
+    const { runId } = await api.runCustomScript({
+      repoPath,
+      workspacePath,
+      workspaceName,
+      script: mode === "inline" ? script : undefined,
+      scriptPath: mode === "file" ? scriptPath : undefined,
+    });
+    onScriptRun(
+      runId,
+      (data) => setTestOutput((prev) => prev + data),
+      (exitCode) => {
+        setTestExitCode(exitCode);
+        setTesting(false);
+      },
+    );
+  };
+
+  const handleBrowse = async () => {
+    const result = await api.browseFile(repoPath);
+    if (result.path) {
+      setScriptPath(result.path);
+      setTestOutput("");
+      setTestExitCode(null);
+    }
+  };
+
+  const handleAddParam = () => {
+    setParameters([...parameters, { name: "", displayName: "" }]);
+  };
+
+  const handleParamChange = (index: number, field: "name" | "displayName", value: string) => {
+    setParameters(parameters.map((p, i) => (i === index ? { ...p, [field]: value } : p)));
+  };
+
+  const handleRemoveParam = (index: number) => {
+    setParameters(parameters.filter((_, i) => i !== index));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      if (editing) {
+        resetForm();
+      } else {
+        onDismiss();
+      }
+    }
+    if (e.key === "s" && e.metaKey && editing && canSave) {
+      e.preventDefault();
+      handleSave();
+    }
+  };
+
+  const hasScript =
+    mode === "inline" ? script.trim().length > 0 : scriptPath.trim().length > 0;
+  const canTest = hasScript && !testing;
+  const canSave = name.trim().length > 0 && hasScript && !saving
+    && parameters.every((p) => p.name.trim().length > 0 && p.displayName.trim().length > 0);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
+      onClick={onDismiss}
+    >
+      <div
+        className="flex flex-col gap-4 rounded-xl p-6 shadow-2xl overflow-y-auto"
+        style={{
+          backgroundColor: "var(--ctp-base)",
+          border: "1px solid var(--ctp-surface0)",
+          width: 520,
+          maxHeight: "85vh",
+        }}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={handleKeyDown}
+      >
+        {/* Title */}
+        <h2
+          className="text-base font-bold text-center"
+          style={{ color: "var(--ctp-text)" }}
+        >
+          Manage Scripts
+        </h2>
+
+        {/* Script list */}
+        <div className="flex flex-col gap-1 overflow-y-auto" style={{ maxHeight: 200 }}>
+          {scripts.length === 0 && !editing && (
+            <p
+              className="text-xs text-center py-3"
+              style={{ color: "var(--ctp-overlay0)" }}
+            >
+              No scripts yet.
+            </p>
+          )}
+          {scripts.map((cs) => (
+            <div
+              key={cs.id}
+              className="flex items-center gap-2 px-3 py-2 rounded"
+              style={{
+                backgroundColor: "var(--ctp-surface0)",
+                border: "1px solid var(--ctp-surface1)",
+              }}
+            >
+              <div className="flex-1 min-w-0">
+                <div
+                  className="text-sm font-semibold truncate"
+                  style={{ color: "var(--ctp-text)" }}
+                >
+                  {cs.name}
+                </div>
+                <div
+                  className="text-[11px] font-mono truncate"
+                  style={{ color: "var(--ctp-overlay0)" }}
+                >
+                  {cs.scriptPath || cs.script}
+                  {cs.parameters && cs.parameters.length > 0 && (
+                    <span style={{ color: "var(--ctp-blue)" }}>
+                      {" "}({cs.parameters.map((p) => p.displayName || p.name).join(", ")})
+                    </span>
+                  )}
+                  {cs.showOutput && (
+                    <span style={{ color: "var(--ctp-green)" }}> [output]</span>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => openEdit(cs)}
+                className="px-2 py-1 rounded text-xs font-semibold transition-colors shrink-0"
+                style={{ color: "var(--ctp-blue)" }}
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => handleDelete(cs.id)}
+                className="px-2 py-1 rounded text-xs font-semibold transition-colors shrink-0"
+                style={{ color: "var(--ctp-red)" }}
+                title={`Delete "${cs.name}"`}
+              >
+                Delete
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Add / Edit form */}
+        {editing ? (
+          <div
+            className="flex flex-col gap-3 p-4 rounded-lg"
+            style={{
+              backgroundColor: "var(--ctp-mantle)",
+              border: "1px solid var(--ctp-surface0)",
+            }}
+          >
+            {/* Name */}
+            <div className="flex flex-col gap-1">
+              <label
+                className="text-[11px] font-semibold"
+                style={{ color: "var(--ctp-subtext0)" }}
+              >
+                Script name
+              </label>
+              <input
+                ref={nameRef}
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Lint & Fix"
+                className="px-3 py-2 rounded text-sm outline-none"
+                style={{
+                  backgroundColor: "var(--ctp-surface0)",
+                  color: "var(--ctp-text)",
+                  border: "1px solid var(--ctp-surface1)",
+                }}
+              />
+            </div>
+
+            {/* Mode toggle */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setMode("inline"); setTestOutput(""); setTestExitCode(null); }}
+                className="px-3 py-1 rounded text-xs font-semibold transition-colors"
+                style={{
+                  backgroundColor: mode === "inline" ? "var(--ctp-surface1)" : "var(--ctp-surface0)",
+                  color: mode === "inline" ? "var(--ctp-text)" : "var(--ctp-overlay0)",
+                }}
+              >
+                Write Script
+              </button>
+              <button
+                onClick={() => { setMode("file"); setTestOutput(""); setTestExitCode(null); }}
+                className="px-3 py-1 rounded text-xs font-semibold transition-colors"
+                style={{
+                  backgroundColor: mode === "file" ? "var(--ctp-surface1)" : "var(--ctp-surface0)",
+                  color: mode === "file" ? "var(--ctp-text)" : "var(--ctp-overlay0)",
+                }}
+              >
+                Link Script File
+              </button>
+            </div>
+
+            {/* Script input */}
+            {mode === "inline" ? (
+              <textarea
+                value={script}
+                onChange={(e) => { setScript(e.target.value); setTestOutput(""); setTestExitCode(null); }}
+                placeholder="e.g. npm run lint -- --fix"
+                rows={4}
+                spellCheck={false}
+                className="px-3 py-2 rounded text-sm font-mono outline-none resize-none"
+                style={{
+                  backgroundColor: "var(--ctp-surface0)",
+                  color: "var(--ctp-text)",
+                  border: "1px solid var(--ctp-surface1)",
+                }}
+              />
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={scriptPath}
+                  onChange={(e) => { setScriptPath(e.target.value); setTestOutput(""); setTestExitCode(null); }}
+                  placeholder="/path/to/script.sh"
+                  className="flex-1 px-3 py-2 rounded text-sm font-mono outline-none"
+                  style={{
+                    backgroundColor: "var(--ctp-surface0)",
+                    color: "var(--ctp-text)",
+                    border: "1px solid var(--ctp-surface1)",
+                  }}
+                />
+                <button
+                  onClick={handleBrowse}
+                  className="px-3 py-2 rounded text-xs font-semibold transition-colors"
+                  style={{ backgroundColor: "var(--ctp-surface1)", color: "var(--ctp-text)" }}
+                >
+                  Browse...
+                </button>
+              </div>
+            )}
+
+            {/* Parameters */}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <label
+                  className="text-[11px] font-semibold"
+                  style={{ color: "var(--ctp-subtext0)" }}
+                >
+                  Parameters
+                </label>
+                <button
+                  onClick={handleAddParam}
+                  className="text-[11px] font-semibold transition-colors"
+                  style={{ color: "var(--ctp-blue)" }}
+                >
+                  + Add
+                </button>
+              </div>
+              {parameters.length === 0 && (
+                <p className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
+                  No parameters. Values will be available as environment variables.
+                </p>
+              )}
+              {parameters.map((param, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={param.displayName}
+                    onChange={(e) => handleParamChange(i, "displayName", e.target.value)}
+                    placeholder="Display Name"
+                    className="flex-1 px-2 py-1.5 rounded text-xs outline-none"
+                    style={{
+                      backgroundColor: "var(--ctp-surface0)",
+                      color: "var(--ctp-text)",
+                      border: "1px solid var(--ctp-surface1)",
+                    }}
+                  />
+                  <input
+                    type="text"
+                    value={param.name}
+                    onChange={(e) => handleParamChange(i, "name", e.target.value)}
+                    placeholder="ENV_VAR"
+                    className="flex-1 px-2 py-1.5 rounded text-xs font-mono outline-none"
+                    style={{
+                      backgroundColor: "var(--ctp-surface0)",
+                      color: "var(--ctp-text)",
+                      border: "1px solid var(--ctp-surface1)",
+                    }}
+                  />
+                  <button
+                    onClick={() => handleRemoveParam(i)}
+                    className="text-[11px] transition-colors"
+                    style={{ color: "var(--ctp-red)" }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Show output toggle */}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showOutput}
+                onChange={(e) => setShowOutput(e.target.checked)}
+                className="accent-[var(--ctp-blue)]"
+              />
+              <span className="text-xs" style={{ color: "var(--ctp-text)" }}>
+                Show output when running
+              </span>
+            </label>
+
+            {/* Test Run */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleTestRun}
+                disabled={!canTest}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-semibold transition-opacity"
+                style={{
+                  backgroundColor: canTest ? "var(--ctp-surface1)" : "var(--ctp-surface0)",
+                  color: canTest ? "var(--ctp-text)" : "var(--ctp-overlay0)",
+                  cursor: canTest ? "pointer" : "not-allowed",
+                  opacity: canTest ? 1 : 0.5,
+                }}
+              >
+                <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M4 2l10 6-10 6V2z" />
+                </svg>
+                {testing ? "Running..." : "Test Run"}
+              </button>
+              {testExitCode !== null && !testing && (
+                <span
+                  className="text-xs font-semibold"
+                  style={{ color: testExitCode === 0 ? "var(--ctp-green)" : "var(--ctp-red)" }}
+                >
+                  {testExitCode === 0 ? "Success" : `Failed (exit ${testExitCode})`}
+                </span>
+              )}
+            </div>
+
+            {testOutput && (
+              <pre
+                ref={outputRef}
+                className="px-3 py-2 rounded text-[11px] font-mono overflow-auto max-h-32 whitespace-pre-wrap"
+                style={{
+                  backgroundColor: "var(--ctp-surface0)",
+                  color: "var(--ctp-subtext0)",
+                  border: "1px solid var(--ctp-surface1)",
+                }}
+              >
+                {testOutput}
+              </pre>
+            )}
+
+            {/* Form buttons */}
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={resetForm}
+                className="px-3 py-1.5 rounded text-sm transition-colors"
+                style={{ color: "var(--ctp-overlay1)" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={!canSave}
+                className="px-3 py-1.5 rounded text-sm font-semibold transition-opacity"
+                style={{
+                  backgroundColor: canSave ? "var(--ctp-blue)" : "var(--ctp-surface1)",
+                  color: canSave ? "var(--ctp-base)" : "var(--ctp-overlay0)",
+                  cursor: canSave ? "pointer" : "not-allowed",
+                }}
+              >
+                {saving ? "Saving..." : editingId ? "Save Changes" : "Add Script"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => { setEditingId(null); setEditing(true); }}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded text-sm font-semibold transition-colors"
+            style={{
+              backgroundColor: "var(--ctp-surface0)",
+              color: "var(--ctp-text)",
+              border: "1px solid var(--ctp-surface1)",
+            }}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M8 3v10M3 8h10" />
+            </svg>
+            Add New Script
+          </button>
+        )}
+
+        {/* Close */}
+        <div className="flex justify-end mt-1">
+          <button
+            onClick={onDismiss}
+            className="px-3 py-1.5 rounded text-sm font-semibold transition-colors"
+            style={{ backgroundColor: "var(--ctp-surface1)", color: "var(--ctp-text)" }}
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

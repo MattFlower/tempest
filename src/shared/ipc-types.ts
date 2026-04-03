@@ -269,8 +269,23 @@ export type ToolChangeDetail =
 
 // --- Repo Settings ---
 
+export interface ScriptParameter {
+  name: string;         // env var name (e.g. "BRANCH_NAME")
+  displayName: string;  // human-readable label (e.g. "Branch Name")
+}
+
+export interface CustomScript {
+  id: string;
+  name: string;
+  script: string;       // inline script content (empty if using scriptPath)
+  scriptPath?: string;  // path to linked script file on disk
+  parameters?: ScriptParameter[];
+  showOutput?: boolean;
+}
+
 export interface RepoSettings {
   prepareScript: string;
+  customScripts?: CustomScript[];
 }
 
 // --- Assigned PRs ---

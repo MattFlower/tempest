@@ -322,6 +322,26 @@ const rpc = BrowserView.defineRPC({
         return await workspaceManager.runPrepareScript(_params.script, _params.repoPath);
       },
 
+      // --- Custom Scripts ---
+      runCustomScript: async (_params: any) => {
+        return await workspaceManager.runCustomScript(_params);
+      },
+      browseFile: async (_params: any) => {
+        const { startingFolder } = (_params ?? {}) as { startingFolder?: string };
+        const home = Bun.env.HOME ?? "/";
+        const resolved = (startingFolder || "~/").replace(/^~(?=\/|$)/, home);
+        const paths = await Utils.openFileDialog({
+          startingFolder: resolved,
+          canChooseFiles: true,
+          canChooseDirectory: false,
+          allowsMultipleSelection: false,
+        });
+        return { path: paths.length > 0 ? paths[0] : null };
+      },
+      getRemoteRepos: async (_params: any) => {
+        return await workspaceManager.getRemoteRepos(_params.repoPath);
+      },
+
       // --- Bookmarks (Stream C) ---
       getBookmarks: async ({ repoPath }: { repoPath: string }) =>
         getBookmarkManager(repoPath).getAll(),
@@ -648,6 +668,18 @@ prMonitor.onDraftsChanged = (workspacePath) => {
   try {
     const drafts = prMonitor.getDrafts(workspacePath);
     win.webview.rpc.send.prDraftsChanged({ workspacePath, drafts });
+  } catch { /* webview not ready yet */ }
+};
+
+// --- Stream I: Wire custom script output push notifications ---
+workspaceManager.onScriptOutput = (runId, data) => {
+  try {
+    win.webview.rpc.send.scriptOutput({ runId, data });
+  } catch { /* webview not ready yet */ }
+};
+workspaceManager.onScriptExit = (runId, exitCode) => {
+  try {
+    win.webview.rpc.send.scriptExit({ runId, exitCode });
   } catch { /* webview not ready yet */ }
 };
 

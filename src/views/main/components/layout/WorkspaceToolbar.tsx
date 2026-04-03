@@ -1,5 +1,6 @@
-import { useMemo, useCallback, useState } from "react";
+import { useMemo, useCallback, useState, useEffect } from "react";
 import { PaneTabKind, WorkspaceStatus, ActivityState } from "../../../../shared/ipc-types";
+import type { CustomScript } from "../../../../shared/ipc-types";
 import { createTab, createPane, createLeaf, createSplit, toNodeState } from "../../models/pane-node";
 import { useStore } from "../../state/store";
 import { addTab, splitPane } from "../../state/actions";
@@ -7,6 +8,8 @@ import { api } from "../../state/rpc-client";
 import { DropdownButton, type DropdownItem } from "./DropdownButton";
 import { StatusBadge } from "./StatusBadge";
 import { PRReviewDialog } from "../pr/PRReviewDialog";
+import { ScriptDialog } from "./ScriptDialog";
+import { ScriptRunDialog } from "./ScriptRunDialog";
 
 interface WorkspaceToolbarProps {
   workspacePath: string;
@@ -52,6 +55,10 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
   const [prReviewLoading, setPrReviewLoading] = useState(false);
   const [prReviewError, setPrReviewError] = useState<string | null>(null);
 
+  const [showScriptDialog, setShowScriptDialog] = useState(false);
+  const [customScripts, setCustomScripts] = useState<CustomScript[]>([]);
+  const [runningScript, setRunningScript] = useState<CustomScript | null>(null);
+
   // Find workspace object to get name and status
   const workspace = useMemo(() => {
     for (const workspaces of Object.values(workspacesByRepo)) {
@@ -67,6 +74,37 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
     const repo = repos.find((r) => r.path === workspace.repoPath);
     return repo?.id ?? null;
   }, [workspace, repos]);
+
+  // Load custom scripts for this repo
+  useEffect(() => {
+    if (!workspace?.repoPath) return;
+    api.getRepoSettings(workspace.repoPath).then((settings: { customScripts?: CustomScript[] }) => {
+      setCustomScripts(settings.customScripts ?? []);
+    });
+  }, [workspace?.repoPath]);
+
+  const handleRunScript = useCallback(
+    async (cs: CustomScript) => {
+      if (!workspace) return;
+      const hasParams = (cs.parameters?.length ?? 0) > 0;
+
+      // If the script has parameters or showOutput, open the run dialog
+      if (hasParams || cs.showOutput) {
+        setRunningScript(cs);
+        return;
+      }
+
+      // Otherwise fire-and-forget
+      await api.runCustomScript({
+        repoPath: workspace.repoPath,
+        workspacePath: workspacePath,
+        workspaceName: workspace.name,
+        script: cs.script || undefined,
+        scriptPath: cs.scriptPath || undefined,
+      });
+    },
+    [workspace, workspacePath],
+  );
 
   // Derive effective status (activity overrides workspace.status)
   let effectiveStatus = workspace?.status ?? WorkspaceStatus.Idle;
@@ -169,6 +207,15 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
     },
   ];
 
+  const scriptsItems: DropdownItem[] = [
+    ...customScripts.map((cs) => ({
+      label: cs.name,
+      action: () => handleRunScript(cs),
+    })),
+    ...(customScripts.length > 0 ? [{ separator: true } as const] : []),
+    { label: "Manage Scripts", action: () => setShowScriptDialog(true) },
+  ];
+
   return (
     <>
       <div
@@ -186,6 +233,7 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
           <DropdownButton label="New" items={newItems} onDefaultAction={() => addTabToFocusedPane(PaneTabKind.Shell, "Shell")} />
           <DropdownButton label="Split" items={splitItems} onDefaultAction={() => splitWithTab(PaneTabKind.Shell, "Shell")} />
           <DropdownButton label="PR" icon={PRIcon} items={prItems} />
+          <DropdownButton label="Scripts" items={scriptsItems} />
         </div>
       </div>
 
@@ -199,6 +247,27 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
           }}
           isLoading={prReviewLoading}
           errorMessage={prReviewError}
+        />
+      )}
+
+      {showScriptDialog && workspace && (
+        <ScriptDialog
+          repoPath={workspace.repoPath}
+          workspacePath={workspacePath}
+          workspaceName={workspace.name}
+          scripts={customScripts}
+          onChanged={setCustomScripts}
+          onDismiss={() => setShowScriptDialog(false)}
+        />
+      )}
+
+      {runningScript && workspace && (
+        <ScriptRunDialog
+          script={runningScript}
+          repoPath={workspace.repoPath}
+          workspacePath={workspacePath}
+          workspaceName={workspace.name}
+          onDismiss={() => setRunningScript(null)}
         />
       )}
     </>

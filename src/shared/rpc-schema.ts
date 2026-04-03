@@ -7,6 +7,7 @@ import type {
   AppConfig,
   BinaryStatus,
   Bookmark,
+  CustomScript,
   DiffFile,
   HookEvent,
   JJBookmark,
@@ -159,6 +160,27 @@ export interface BunRequests {
   testPrepareScript: {
     params: { repoPath: string; script: string };
     response: { exitCode: number; output: string };
+  };
+
+  // Custom scripts
+  runCustomScript: {
+    params: {
+      repoPath: string;
+      workspacePath: string;
+      workspaceName: string;
+      script?: string;
+      scriptPath?: string;
+      paramValues?: Record<string, string>;
+    };
+    response: { runId: string };
+  };
+  browseFile: {
+    params: { startingFolder?: string };
+    response: { path: string | null };
+  };
+  getRemoteRepos: {
+    params: { repoPath: string };
+    response: string[];
   };
 
   // Bookmarks
@@ -450,4 +472,6 @@ export interface WebviewMessages {
   menuAction: { action: string };
   markdownFileChanged: { filePath: string; content: string; deleted?: boolean };
   prDraftsChanged: { workspacePath: string; drafts: PRDraftSummary[] };
+  scriptOutput: { runId: string; data: string };
+  scriptExit: { runId: string; exitCode: number };
 }

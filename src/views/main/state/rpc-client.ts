@@ -93,6 +93,25 @@ export function offPRDraftsChanged() {
   prDraftsChangedHandler = null;
 }
 
+// Script output streaming — keyed by runId
+type ScriptOutputHandler = (data: string) => void;
+type ScriptExitHandler = (exitCode: number) => void;
+const scriptOutputHandlers = new Map<string, ScriptOutputHandler>();
+const scriptExitHandlers = new Map<string, ScriptExitHandler>();
+
+export function onScriptRun(
+  runId: string,
+  onOutput: ScriptOutputHandler,
+  onExit: ScriptExitHandler,
+): () => void {
+  scriptOutputHandlers.set(runId, onOutput);
+  scriptExitHandlers.set(runId, onExit);
+  return () => {
+    scriptOutputHandlers.delete(runId);
+    scriptExitHandlers.delete(runId);
+  };
+}
+
 /** Walk a PaneNode tree and update the sessionId on the tab matching the given terminalId. */
 function updateTabSessionId(node: any, terminalId: string, sessionId: string): boolean {
   if (!node) return false;
@@ -191,6 +210,14 @@ const rpc = Electroview.defineRPC({
         if (prDraftsChangedHandler) {
           prDraftsChangedHandler(msg.workspacePath, msg.drafts);
         }
+      },
+      scriptOutput: (msg: any) => {
+        scriptOutputHandlers.get(msg.runId)?.(msg.data);
+      },
+      scriptExit: (msg: any) => {
+        scriptExitHandlers.get(msg.runId)?.(msg.exitCode);
+        scriptOutputHandlers.delete(msg.runId);
+        scriptExitHandlers.delete(msg.runId);
       },
       menuAction: (msg: any) => {
         Promise.all([
@@ -339,6 +366,20 @@ export const api = {
     rpcRequest.saveRepoSettings({ repoPath, settings }),
   testPrepareScript: (repoPath: string, script: string) =>
     rpcRequest.testPrepareScript({ repoPath, script }),
+
+  // Custom scripts
+  runCustomScript: (params: {
+    repoPath: string;
+    workspacePath: string;
+    workspaceName: string;
+    script?: string;
+    scriptPath?: string;
+    paramValues?: Record<string, string>;
+  }) => rpcRequest.runCustomScript(params),
+  browseFile: (startingFolder?: string) =>
+    rpcRequest.browseFile({ startingFolder }),
+  getRemoteRepos: (repoPath: string) =>
+    rpcRequest.getRemoteRepos({ repoPath }),
 
   // Bookmarks
   getBookmarks: (repoPath: string) => rpcRequest.getBookmarks({ repoPath }),

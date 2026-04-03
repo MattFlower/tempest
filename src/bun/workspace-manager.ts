@@ -29,6 +29,7 @@ export class WorkspaceManager {
   private workspacesByRepo = new Map<string, TempestWorkspace[]>();
   private providers = new Map<string, VCSProvider>();
   private sidebarInfoCache = new Map<string, WorkspaceSidebarInfo>();
+  private remoteReposCache = new Map<string, string[]>();
   private repoSettings: Record<string, RepoSettings> = {};
   private sidebarRefreshTimer?: ReturnType<typeof setInterval>;
   private config: AppConfig = defaultConfig();
@@ -293,6 +294,129 @@ export class WorkspaceManager {
     } catch (err: any) {
       return { exitCode: 1, output: err.message ?? String(err) };
     }
+  }
+
+  // --- Remote Repos (cached) ---
+
+  async getRemoteRepos(repoPath: string): Promise<string[]> {
+    const cached = this.remoteReposCache.get(repoPath);
+    if (cached) return cached;
+
+    try {
+      const gitPath = this.config.gitPath ?? "git";
+      const proc = Bun.spawn([gitPath, "remote", "-v"], {
+        cwd: repoPath,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const stdout = await new Response(proc.stdout).text();
+      await proc.exited;
+
+      // Parse "origin\tgit@github.com:Owner/Repo.git (fetch)" lines
+      // Extract unique owner/repo slugs
+      const slugs = new Set<string>();
+      for (const line of stdout.split("\n")) {
+        const url = line.split(/\s+/)[1];
+        if (!url) continue;
+        // SSH: git@github.com:Owner/Repo.git
+        const sshMatch = url.match(/:([^/]+\/[^/]+?)(?:\.git)?$/);
+        if (sshMatch?.[1]) { slugs.add(sshMatch[1]); continue; }
+        // HTTPS: https://github.com/Owner/Repo.git
+        const httpsMatch = url.match(/\/([^/]+\/[^/]+?)(?:\.git)?$/);
+        if (httpsMatch?.[1]) { slugs.add(httpsMatch[1]); }
+      }
+
+      const result = Array.from(slugs);
+      this.remoteReposCache.set(repoPath, result);
+      return result;
+    } catch {
+      return [];
+    }
+  }
+
+  // --- Custom Script Execution ---
+
+  // Push-notification callback for script output streaming (set by index.ts)
+  onScriptOutput?: (runId: string, data: string) => void;
+  onScriptExit?: (runId: string, exitCode: number) => void;
+
+  async runCustomScript(params: {
+    repoPath: string;
+    workspacePath: string;
+    workspaceName: string;
+    script?: string;
+    scriptPath?: string;
+    paramValues?: Record<string, string>;
+  }): Promise<{ runId: string }> {
+    const { repoPath, workspacePath, workspaceName, script, scriptPath, paramValues } = params;
+    const runId = crypto.randomUUID();
+
+    // Build env vars
+    const remoteRepos = await this.getRemoteRepos(repoPath);
+    const env: Record<string, string> = {
+      ...process.env as Record<string, string>,
+      REMOTE_REPOS: remoteRepos.join(" "),
+      WORKSPACE_NAME: workspaceName,
+    };
+
+    // Add user-defined parameter values as env vars
+    if (paramValues) {
+      for (const [key, value] of Object.entries(paramValues)) {
+        env[key] = value;
+      }
+    }
+
+    // Determine what to execute
+    let command: string[];
+    if (scriptPath) {
+      command = ["/bin/zsh", "-l", "-c", scriptPath];
+    } else if (script) {
+      command = ["/bin/zsh", "-l", "-c", script];
+    } else {
+      // Fire error immediately and return
+      setTimeout(() => {
+        this.onScriptOutput?.(runId, "No script or scriptPath provided\n");
+        this.onScriptExit?.(runId, 1);
+      }, 0);
+      return { runId };
+    }
+
+    // Spawn async — stream output, don't block the RPC response
+    const self = this;
+    (async () => {
+      try {
+        const proc = Bun.spawn(command, {
+          cwd: workspacePath,
+          stdout: "pipe",
+          stderr: "pipe",
+          env,
+        });
+
+        // Stream stdout and stderr concurrently
+        const streamReader = async (stream: ReadableStream<Uint8Array>) => {
+          const reader = stream.getReader();
+          const decoder = new TextDecoder();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            self.onScriptOutput?.(runId, decoder.decode(value, { stream: true }));
+          }
+        };
+
+        await Promise.all([
+          streamReader(proc.stdout as ReadableStream<Uint8Array>),
+          streamReader(proc.stderr as ReadableStream<Uint8Array>),
+        ]);
+
+        const exitCode = await proc.exited;
+        self.onScriptExit?.(runId, exitCode);
+      } catch (err: any) {
+        self.onScriptOutput?.(runId, err.message ?? String(err));
+        self.onScriptExit?.(runId, 1);
+      }
+    })();
+
+    return { runId };
   }
 
   // --- Sidebar Info ---

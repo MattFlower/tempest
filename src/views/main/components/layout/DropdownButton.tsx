@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-export interface DropdownItem {
-  label: string;
-  action: () => void;
-}
+export type DropdownItem =
+  | { label: string; action: () => void }
+  | { separator: true };
 
 interface DropdownButtonProps {
   label: string;
@@ -84,18 +83,25 @@ export function DropdownButton({ label, icon, items, onDefaultAction }: Dropdown
           className="absolute right-0 top-full mt-1 min-w-[160px] rounded-lg border border-[var(--ctp-surface1)] bg-[var(--ctp-surface0)] shadow-lg overflow-hidden"
           style={{ zIndex: 30 }}
         >
-          {items.map((item) => (
-            <button
-              key={item.label}
-              onClick={() => {
-                close();
-                item.action();
-              }}
-              className="w-full text-left px-3 py-1.5 text-xs text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)] transition-colors"
-            >
-              {item.label}
-            </button>
-          ))}
+          {items.map((item, i) =>
+            "separator" in item ? (
+              <div
+                key={`sep-${i}`}
+                className="my-1 border-t border-[var(--ctp-surface1)]"
+              />
+            ) : (
+              <button
+                key={item.label}
+                onClick={() => {
+                  close();
+                  item.action();
+                }}
+                className="w-full text-left px-3 py-1.5 text-xs text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)] transition-colors"
+              >
+                {item.label}
+              </button>
+            ),
+          )}
         </div>
       )}
     </div>

@@ -2,6 +2,7 @@
   "name": "tempest2",
   "module": "index.ts",
   "type": "module",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "build:css": "bun x @tailwindcss/cli -i src/views/main/styles/tailwind-input.css -o src/views/main/styles/tailwind.css",

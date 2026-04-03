@@ -135,7 +135,9 @@ export function Sidebar() {
             <RepoSection
               key={repo.id}
               repo={repo}
-              workspaces={workspacesByRepo[repo.id] ?? []}
+              workspaces={[...(workspacesByRepo[repo.id] ?? [])].sort((a, b) =>
+                a.name === "default" ? -1 : b.name === "default" ? 1 : 0
+              )}
               sidebarInfo={sidebarInfo}
               selectedWorkspacePath={selectedWorkspacePath}
               showDivider={index > 0}

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { DiffStats, TempestWorkspace } from "../../shared/ipc-types";
 import { VCSType, WorkspaceStatus } from "../../shared/ipc-types";
-import type { VCSProvider } from "./types";
+import type { VCSProvider, WorkspaceEntry } from "./types";
 import { PathResolver } from "../config/path-resolver";
 
 export class GitProvider implements VCSProvider {
@@ -39,7 +39,7 @@ export class GitProvider implements VCSProvider {
     };
   }
 
-  async listWorkspaceNames(): Promise<string[]> {
+  async listWorkspaces(_wsRoot: string): Promise<WorkspaceEntry[]> {
     const output = await this.runGit(
       ["worktree", "list", "--porcelain"],
       this.repoPath,
@@ -78,7 +78,7 @@ export class GitProvider implements VCSProvider {
       ["worktree", "list", "--porcelain"],
       this.repoPath,
     );
-    const worktreeNames = new Set(parseWorktreeList(worktreeOutput));
+    const worktreeNames = new Set(parseWorktreeList(worktreeOutput).map((e) => e.name));
 
     const seen = new Set<string>();
     const branches: string[] = [];
@@ -144,36 +144,42 @@ export class GitProvider implements VCSProvider {
 }
 
 /**
- * Parse `git worktree list --porcelain` output into workspace names.
- * First block = main worktree ("default").
- * Subsequent: branch name from `branch refs/heads/<name>`, or last path component if detached.
+ * Parse `git worktree list --porcelain` output into workspace entries.
+ * First block = main worktree ("default") with its actual path.
+ * Subsequent: branch name from `branch refs/heads/<name>`, or last path component if detached,
+ * paired with the actual worktree path from the porcelain output.
  */
-export function parseWorktreeList(output: string): string[] {
+export function parseWorktreeList(output: string): WorkspaceEntry[] {
   const blocks = output
     .split("\n\n")
     .filter((b) => b.trim().length > 0);
-  const names: string[] = [];
+  const entries: WorkspaceEntry[] = [];
 
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i]!;
+    const lines = block.split("\n");
+    const worktreeLine = lines.find((l) => l.startsWith("worktree "));
+    const path = worktreeLine ? worktreeLine.slice("worktree ".length) : "";
+
     if (i === 0) {
-      names.push("default");
+      entries.push({ name: "default", path });
       continue;
     }
-    const lines = block.split("\n");
+
     const branchLine = lines.find((l) => l.startsWith("branch refs/heads/"));
     if (branchLine) {
-      names.push(branchLine.slice("branch refs/heads/".length));
-    } else {
-      const worktreeLine = lines.find((l) => l.startsWith("worktree "));
-      if (worktreeLine) {
-        const path = worktreeLine.slice("worktree ".length);
-        const lastComponent = path.split("/").pop() ?? path;
-        names.push(lastComponent);
-      }
+      entries.push({
+        name: branchLine.slice("branch refs/heads/".length),
+        path,
+      });
+    } else if (path) {
+      entries.push({
+        name: path.split("/").pop() ?? path,
+        path,
+      });
     }
   }
-  return names;
+  return entries;
 }
 
 export function parseDiffStatSummary(output: string): DiffStats {

@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
+import { join } from "node:path";
 import type { DiffStats, TempestWorkspace } from "../../shared/ipc-types";
 import { VCSType, WorkspaceStatus } from "../../shared/ipc-types";
-import type { VCSProvider } from "./types";
+import type { VCSProvider, WorkspaceEntry } from "./types";
 import { PathResolver } from "../config/path-resolver";
 
 export class JJProvider implements VCSProvider {
@@ -40,10 +41,10 @@ export class JJProvider implements VCSProvider {
     };
   }
 
-  async listWorkspaceNames(): Promise<string[]> {
+  async listWorkspaces(wsRoot: string): Promise<WorkspaceEntry[]> {
     const output = await this.runJJ(["workspace", "list"], this.repoPath);
     // jj workspace list output format: "name: <change-id> <description>"
-    return output
+    const names = output
       .split("\n")
       .map((line) => {
         const colonIdx = line.indexOf(":");
@@ -51,6 +52,11 @@ export class JJProvider implements VCSProvider {
         return line.slice(0, colonIdx).trim();
       })
       .filter((name) => name.length > 0);
+
+    return names.map((name) => ({
+      name: name === "default" ? "default" : name,
+      path: name === "default" ? this.repoPath : join(wsRoot, name),
+    }));
   }
 
   async archiveWorkspace(workspace: TempestWorkspace): Promise<void> {

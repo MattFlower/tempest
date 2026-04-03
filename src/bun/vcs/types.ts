@@ -4,6 +4,11 @@ import type {
   VCSType,
 } from "../../shared/ipc-types";
 
+export interface WorkspaceEntry {
+  name: string;
+  path: string; // Absolute path to the worktree/workspace root
+}
+
 export interface VCSProvider {
   readonly vcsType: VCSType;
   readonly repoPath: string;
@@ -15,7 +20,12 @@ export interface VCSProvider {
     useExistingBranch?: boolean,
   ): Promise<TempestWorkspace>;
 
-  listWorkspaceNames(): Promise<string[]>;
+  /**
+   * List all workspaces/worktrees known to the VCS.
+   * @param wsRoot - The Tempest workspace root directory for this repo
+   *                 (used by jj to construct paths for non-default workspaces).
+   */
+  listWorkspaces(wsRoot: string): Promise<WorkspaceEntry[]>;
 
   archiveWorkspace(workspace: TempestWorkspace): Promise<void>;
 

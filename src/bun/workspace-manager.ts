@@ -243,28 +243,16 @@ export class WorkspaceManager {
     const provider = this.providers.get(repo.id);
     if (!provider) return;
 
-    const wsNames = await provider.listWorkspaceNames();
     const wsRoot = join(this.config.workspaceRoot, repoSlug(repo.path));
+    const entries = await provider.listWorkspaces(wsRoot);
     const workspaces: TempestWorkspace[] = [];
 
-    for (const name of wsNames) {
-      if (name === "default") {
+    for (const entry of entries) {
+      if (existsSync(entry.path)) {
         workspaces.push({
-          id: stableId(repo.path),
-          name,
-          path: repo.path,
-          repoPath: repo.path,
-          status: WorkspaceStatus.Idle,
-        });
-        continue;
-      }
-
-      const expectedPath = join(wsRoot, name);
-      if (existsSync(expectedPath)) {
-        workspaces.push({
-          id: stableId(expectedPath),
-          name,
-          path: expectedPath,
+          id: stableId(entry.path),
+          name: entry.name,
+          path: entry.path,
           repoPath: repo.path,
           status: WorkspaceStatus.Idle,
         });
@@ -350,11 +338,40 @@ export class WorkspaceManager {
     }
 
     // Periodic refresh every 15 seconds
-    this.sidebarRefreshTimer = setInterval(() => {
+    this.sidebarRefreshTimer = setInterval(async () => {
+      // Re-enumerate workspaces to discover external additions/removals
+      try {
+        await this.checkForWorkspaceChanges();
+      } catch (err) {
+        console.error("[workspace] workspace check failed:", err);
+      }
+
+      // Refresh sidebar info (includes any newly discovered workspaces)
       for (const ws of this.getAllWorkspaces()) {
         this.refreshSidebarInfo(ws.path);
       }
     }, 15_000);
+  }
+
+  private async checkForWorkspaceChanges(): Promise<void> {
+    for (const repo of this.repos) {
+      const oldKey = this.workspaceListKey(
+        this.workspacesByRepo.get(repo.id) ?? [],
+      );
+      await this.refreshWorkspacesInternal(repo);
+      const newWorkspaces = this.workspacesByRepo.get(repo.id) ?? [];
+      const newKey = this.workspaceListKey(newWorkspaces);
+      if (oldKey !== newKey) {
+        this.onWorkspacesChanged?.(repo.id, newWorkspaces);
+      }
+    }
+  }
+
+  private workspaceListKey(workspaces: TempestWorkspace[]): string {
+    return workspaces
+      .map((w) => w.id)
+      .sort()
+      .join("|");
   }
 
   stopSidebarRefresh(): void {

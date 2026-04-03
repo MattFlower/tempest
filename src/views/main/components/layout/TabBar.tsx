@@ -118,11 +118,12 @@ export function TabBar({ pane }: TabBarProps) {
       className={`
         relative flex h-8 items-center flex-shrink-0
         bg-[var(--ctp-mantle)] border-b border-[var(--ctp-surface0)]
+        overflow-hidden
       `}
     >
       <div
         ref={containerRef}
-        className="flex items-center h-full flex-1 min-w-0 overflow-x-auto"
+        className="flex items-center h-full flex-1 min-w-0 overflow-hidden"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}

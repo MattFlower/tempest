@@ -25,6 +25,8 @@ export interface PaneTab {
   resume?: boolean; // Transient: launch Claude with -c (continue). Not persisted.
   progressState?: ProgressState;
   progressValue?: number; // 0-100
+  shellCwd?: string; // Current working directory (tracked via OSC 7)
+  scrollbackContent?: string; // Transient: saved scrollback for restore on startup
 }
 
 export interface Pane {
@@ -92,6 +94,7 @@ export function toNodeState(node: PaneNode): PaneNodeState {
           editorLineNumber: tab.editorLineNumber,
           editorType: tab.editorType,
           diffScope: tab.diffScope,
+          shellCwd: tab.shellCwd,
         })),
         selectedTabIndex: Math.max(
           0,
@@ -132,6 +135,9 @@ export function fromNodeState(state: PaneNodeState): PaneNode {
         (ts.kind === PaneTabKind.Editor && ts.editorType !== EditorType.Monaco)
           ? crypto.randomUUID()
           : undefined,
+      // Restore shell CWD and scrollback for session restore
+      shellCwd: ts.shellCwd,
+      scrollbackContent: ts.scrollbackContent,
     }));
     const selectedTab = tabs[ps.selectedTabIndex] ?? tabs[0];
     return {

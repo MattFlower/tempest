@@ -3,16 +3,20 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { SearchAddon } from "@xterm/addon-search";
+import { SerializeAddon } from "@xterm/addon-serialize";
 import { ProgressAddon } from "@xterm/addon-progress";
 
 export class TerminalInstance {
   readonly terminal: Terminal;
   readonly fitAddon: FitAddon;
   readonly searchAddon: SearchAddon;
+  readonly serializeAddon: SerializeAddon;
   readonly progressAddon: ProgressAddon;
   private webglAddon: WebglAddon | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private resizeDebounceTimer: number | null = null;
+  private _cwd: string | undefined;
+  onCwdChange: ((cwd: string) => void) | null = null;
 
   constructor(
     readonly id: string,
@@ -68,10 +72,12 @@ export class TerminalInstance {
 
     this.fitAddon = new FitAddon();
     this.progressAddon = new ProgressAddon();
+    this.serializeAddon = new SerializeAddon();
     this.terminal.loadAddon(this.fitAddon);
     this.terminal.loadAddon(new WebLinksAddon());
     this.searchAddon = new SearchAddon();
     this.terminal.loadAddon(this.searchAddon);
+    this.terminal.loadAddon(this.serializeAddon);
     this.terminal.loadAddon(this.progressAddon);
 
     this.terminal.open(container);
@@ -135,9 +141,29 @@ export class TerminalInstance {
     // characters" — especially on the right side of the screen where
     // normal output never overwrites them.
     try {
-      // OSC (Operating System Command) sequences to silently consume:
+      // OSC 7: Working directory notification — parse CWD from file:// URL
+      this.terminal.parser.registerOscHandler(7, (data) => {
+        // Format: file://hostname/path or just /path
+        try {
+          const urlStr = data.trim();
+          if (urlStr.startsWith("file://")) {
+            const url = new URL(urlStr);
+            this._cwd = decodeURIComponent(url.pathname);
+          } else if (urlStr.startsWith("/")) {
+            this._cwd = urlStr;
+          }
+          if (this._cwd) {
+            this.onCwdChange?.(this._cwd);
+          }
+        } catch {
+          // Malformed URL — ignore
+        }
+        return true;
+      });
+
+      // OSC sequences to silently consume:
       for (const id of [
-        7,    // Working directory notification (CWD)
+              // OSC 7 handled above (CWD tracking)
               // OSC 9 handled by ProgressAddon (ConEmu progress sequences)
         22,   // Set mouse pointer shape
         52,   // Clipboard manipulation
@@ -383,6 +409,15 @@ export class TerminalInstance {
 
   proposeDimensions() {
     return this.fitAddon.proposeDimensions();
+  }
+
+  get cwd(): string | undefined {
+    return this._cwd;
+  }
+
+  /** Serialize terminal scrollback buffer (returns ANSI escape sequence string). */
+  serializeScrollback(rows: number = 200): string {
+    return this.serializeAddon.serialize({ scrollback: rows });
   }
 
   dispose() {

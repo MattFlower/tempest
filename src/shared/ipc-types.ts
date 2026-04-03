@@ -164,6 +164,8 @@ export interface PaneTabState {
   editorLineNumber?: number;
   editorType?: EditorType;
   diffScope?: DiffScope;
+  shellCwd?: string; // Last known CWD for shell terminals (tracked via OSC 7)
+  scrollbackContent?: string; // Serialized terminal scrollback for session restore
 }
 
 // --- Diff Viewer ---

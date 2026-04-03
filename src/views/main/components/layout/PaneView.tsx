@@ -50,11 +50,12 @@ function TabContent({ tab, paneId, isFocused, isVisible, workspacePath }: { tab:
         <TerminalPane
           terminalId={tab.terminalId}
           tabKind={tab.kind}
-          cwd={workspacePath || "/tmp"}
+          cwd={tab.kind === PaneTabKind.Shell ? (tab.shellCwd || workspacePath || "/tmp") : (workspacePath || "/tmp")}
           sessionId={tab.sessionId}
           resume={tab.resume}
           isFocused={isFocused}
           onCloseRequest={handleCloseRequest}
+          scrollbackContent={tab.scrollbackContent}
         />
       );
     case PaneTabKind.Browser:

@@ -8,8 +8,12 @@ import {
   registerTerminal,
   unregisterTerminal,
 } from "../../state/terminal-dispatch";
+import {
+  registerTerminalInstance,
+  unregisterTerminalInstance,
+} from "../../state/terminal-registry";
 import { consumePendingInput } from "../../state/pending-terminal-input";
-import { updateTabLabelByTerminalId, updateTabProgressByTerminalId } from "../../state/actions";
+import { updateTabLabelByTerminalId, updateTabProgressByTerminalId, updateTabCwdByTerminalId } from "../../state/actions";
 
 interface TerminalPaneProps {
   terminalId: string;
@@ -22,6 +26,8 @@ interface TerminalPaneProps {
   isFocused: boolean;
   onExit?: (exitCode: number) => void;
   onCloseRequest?: () => void;
+  /** Saved scrollback content to restore on startup. */
+  scrollbackContent?: string;
 }
 
 export function TerminalPane({
@@ -34,6 +40,7 @@ export function TerminalPane({
   isFocused,
   onExit,
   onCloseRequest,
+  scrollbackContent,
 }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const instanceRef = useRef<TerminalInstance | null>(null);
@@ -49,6 +56,7 @@ export function TerminalPane({
   const sessionIdRef = useRef(sessionId);
   const initialCommandRef = useRef(initialCommand);
   const resumeRef = useRef(resume);
+  const scrollbackContentRef = useRef(scrollbackContent);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -73,6 +81,22 @@ export function TerminalPane({
       },
     );
     instanceRef.current = instance;
+    registerTerminalInstance(terminalId, instance);
+
+    // Wire OSC 7 CWD tracking → update store
+    instance.onCwdChange = (newCwd) => {
+      updateTabCwdByTerminalId(terminalId, newCwd);
+    };
+
+    // Restore saved scrollback before PTY starts
+    const savedScrollback = scrollbackContentRef.current;
+    if (savedScrollback) {
+      instance.terminal.write(savedScrollback);
+      instance.terminal.write(
+        "\r\n\x1b[90m--- previous session restored ---\x1b[0m\r\n\r\n",
+      );
+      scrollbackContentRef.current = undefined;
+    }
 
     const dims = instance.proposeDimensions();
     const cols = dims?.cols ?? 80;
@@ -168,6 +192,7 @@ export function TerminalPane({
 
     return () => {
       unregisterTerminal(terminalId);
+      unregisterTerminalInstance(terminalId);
       instance.dispose();
       api.killTerminal({ id: terminalId });
     };

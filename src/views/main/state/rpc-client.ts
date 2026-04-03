@@ -5,6 +5,7 @@
 
 import { Electroview } from "electrobun/view";
 import type { BunMessages, WebviewMessages } from "../../../shared/rpc-schema";
+import { getAllTerminalInstances } from "./terminal-registry";
 
 // Sequence-ordered output buffer for terminal output.
 // Electrobun's async encrypted WebSocket can deliver RPC messages
@@ -116,7 +117,22 @@ function updateTabSessionId(node: any, terminalId: string, sessionId: string): b
 const rpc = Electroview.defineRPC({
   maxRequestTime: 120_000, // native file dialogs block until user selects
   handlers: {
-    requests: {},
+    requests: {
+      getTerminalScrollback: () => {
+        const instances = getAllTerminalInstances();
+        const entries: Array<{ terminalId: string; scrollback: string; cwd?: string }> = [];
+        for (const [id, instance] of instances) {
+          try {
+            entries.push({
+              terminalId: id,
+              scrollback: instance.serializeScrollback(200),
+              cwd: instance.cwd,
+            });
+          } catch { /* terminal may be disposed */ }
+        }
+        return { entries };
+      },
+    },
     messages: {
       terminalOutput: ({
         id,
@@ -345,6 +361,11 @@ export const api = {
   // Pane tree sync
   notifyPaneTreeChanged: (workspacePath: string, tree: any) =>
     rpcSend.paneTreeChanged({ workspacePath, tree }),
+
+  // Terminal scrollback persistence
+  sendTerminalScrollbackUpdate: (
+    entries: Array<{ terminalId: string; scrollback: string; cwd?: string }>,
+  ) => rpcSend.terminalScrollbackUpdate({ entries }),
 
   // Onboarding
   checkBinaries: () => rpcRequest.checkBinaries(),

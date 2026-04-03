@@ -91,6 +91,9 @@ const aiContextProvider = new AIContextProvider(historyStore);
 // --- Stream H: PR Feedback ---
 const prMonitor = new PRMonitor();
 
+// --- Terminal scrollback cache (webview sends periodic updates) ---
+const scrollbackCache = new Map<string, { scrollback: string; cwd?: string }>();
+
 // --- Stream E: listFiles ---
 const IGNORE_DIRS = new Set([
   "node_modules", ".git", ".jj", "dist", "build", ".next",
@@ -158,6 +161,30 @@ function enrichTreeWithSessionIds(node: any, workspacePath: string): void {
   } else if (node.type === "split" && node.children) {
     for (const child of node.children) {
       enrichTreeWithSessionIds(child, workspacePath);
+    }
+  }
+}
+
+/**
+ * Walk a PaneNodeState tree and populate scrollbackContent and shellCwd
+ * on terminal tabs using the scrollback cache (populated by the webview).
+ * Mutates the tree in place (it's a transient object about to be saved).
+ */
+function enrichTreeWithScrollback(node: any): void {
+  if (!node) return;
+  if (node.type === "leaf" && node.pane?.tabs) {
+    for (const tab of node.pane.tabs) {
+      if (tab.kind !== "shell" && tab.kind !== "claude") continue;
+      if (!tab.terminalId) continue;
+      const cached = scrollbackCache.get(tab.terminalId);
+      if (cached) {
+        tab.scrollbackContent = cached.scrollback;
+        if (cached.cwd) tab.shellCwd = cached.cwd;
+      }
+    }
+  } else if (node.type === "split" && node.children) {
+    for (const child of node.children) {
+      enrichTreeWithScrollback(child);
     }
   }
 }
@@ -555,8 +582,24 @@ const rpc = BrowserView.defineRPC({
       // --- Pane state sync (Stream B + D) ---
       paneTreeChanged: (_msg: any) => {
         enrichTreeWithSessionIds(_msg.tree, _msg.workspacePath);
+        enrichTreeWithScrollback(_msg.tree);
         sessionStateManager.savePaneState(_msg.workspacePath, _msg.tree);
         sessionStateManager.setSelectedWorkspacePath(_msg.workspacePath);
+      },
+
+      // --- Terminal scrollback persistence ---
+      terminalScrollbackUpdate: (msg: any) => {
+        const { entries } = msg as {
+          entries: Array<{ terminalId: string; scrollback: string; cwd?: string }>;
+        };
+        for (const entry of entries) {
+          scrollbackCache.set(entry.terminalId, {
+            scrollback: entry.scrollback,
+            cwd: entry.cwd,
+          });
+        }
+        // Enrich stored state so next flush includes latest scrollback
+        sessionStateManager.enrichTerminalData(scrollbackCache);
       },
 
       // --- Stats (optional) ---
@@ -737,6 +780,23 @@ async function shutdown() {
   console.log("[main] Shutting down...");
   sessionsWatcher?.close();
   sessionsWatcher = null;
+
+  // Collect final scrollback from webview before killing PTYs
+  try {
+    const result = await (win.webview.rpc as any).request.getTerminalScrollback();
+    if (result?.entries) {
+      for (const entry of result.entries) {
+        scrollbackCache.set(entry.terminalId, {
+          scrollback: entry.scrollback,
+          cwd: entry.cwd,
+        });
+      }
+      sessionStateManager.enrichTerminalData(scrollbackCache);
+    }
+  } catch (e) {
+    console.warn("[main] Failed to collect scrollback at shutdown:", e);
+  }
+
   ptyManager.killAll();
   await sessionStateManager.flush();
   sessionStateManager.stopAutoSave();

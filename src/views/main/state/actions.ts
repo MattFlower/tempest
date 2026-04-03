@@ -215,6 +215,26 @@ export function updateTabLabelByTerminalId(terminalId: string, label: string) {
   }
 }
 
+export function updateTabCwdByTerminalId(terminalId: string, cwd: string) {
+  const ctx = currentTree();
+  if (!ctx) return;
+
+  const panes = allPanes(ctx.tree);
+  for (const pane of panes) {
+    const tab = pane.tabs.find((t) => t.terminalId === terminalId);
+    if (tab) {
+      const newTree = updatingPane(ctx.tree, pane.id, (p) => ({
+        ...p,
+        tabs: p.tabs.map((t) =>
+          t.id === tab.id ? { ...t, shellCwd: cwd } : t,
+        ),
+      }));
+      commitTree(ctx.workspacePath, newTree);
+      return;
+    }
+  }
+}
+
 export function updateTabProgressByTerminalId(
   terminalId: string,
   state: 0 | 1 | 2 | 3 | 4,

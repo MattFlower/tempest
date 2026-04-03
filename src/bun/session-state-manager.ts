@@ -77,6 +77,34 @@ export class SessionStateManager {
     this.dirty = true;
   }
 
+  /** Update scrollback/cwd on terminal tabs in all stored pane trees. */
+  enrichTerminalData(
+    cache: Map<string, { scrollback: string; cwd?: string }>,
+  ): void {
+    if (!this.state || cache.size === 0) return;
+
+    const enrichNode = (node: any): void => {
+      if (!node) return;
+      if (node.type === "leaf" && node.pane?.tabs) {
+        for (const tab of node.pane.tabs) {
+          if (!tab.terminalId) continue;
+          const cached = cache.get(tab.terminalId);
+          if (cached) {
+            tab.scrollbackContent = cached.scrollback;
+            if (cached.cwd) tab.shellCwd = cached.cwd;
+          }
+        }
+      } else if (node.type === "split" && node.children) {
+        for (const child of node.children) enrichNode(child);
+      }
+    };
+
+    for (const ws of Object.values(this.state.workspaces)) {
+      enrichNode(ws.paneTree);
+    }
+    this.dirty = true;
+  }
+
   private ensureState(): void {
     if (!this.state) {
       this.state = {

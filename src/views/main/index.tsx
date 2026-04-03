@@ -5,8 +5,10 @@ import { App } from "./App";
 // Initialize RPC client (side-effect: sets up Electroview + message handlers)
 import "./state/rpc-client";
 import { initTerminalDispatch } from "./state/terminal-dispatch";
+import { startScrollbackAutosave } from "./state/scrollback-autosave";
 
 initTerminalDispatch();
+startScrollbackAutosave();
 
 const root = document.getElementById("root")!;
 createRoot(root).render(<App />);

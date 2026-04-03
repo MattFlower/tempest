@@ -431,6 +431,9 @@ export interface BunMessages {
   writeToTerminal: { id: string; data: string };
   paneTreeChanged: { workspacePath: string; tree: PaneNodeState };
   saveLatencyStats: { id: string; stats: LatencyStats };
+  terminalScrollbackUpdate: {
+    entries: Array<{ terminalId: string; scrollback: string; cwd?: string }>;
+  };
 }
 
 // --- Webview-side messages (Bun pushes these, no response) ---

@@ -9,7 +9,7 @@ import {
   unregisterTerminal,
 } from "../../state/terminal-dispatch";
 import { consumePendingInput } from "../../state/pending-terminal-input";
-import { updateTabLabelByTerminalId } from "../../state/actions";
+import { updateTabLabelByTerminalId, updateTabProgressByTerminalId } from "../../state/actions";
 
 interface TerminalPaneProps {
   terminalId: string;
@@ -145,6 +145,10 @@ export function TerminalPane({
 
     instance.terminal.onTitleChange((title) => {
       updateTabLabelByTerminalId(terminalId, title);
+    });
+
+    instance.progressAddon.onChange(({ state, value }) => {
+      updateTabProgressByTerminalId(terminalId, state, value);
     });
 
     registerTerminal(

@@ -1,4 +1,4 @@
-import { ActivityState, PaneTabKind } from "../../../../shared/ipc-types";
+import { ActivityState, PaneTabKind, ProgressState } from "../../../../shared/ipc-types";
 import type { PaneTab } from "../../models/pane-node";
 import { selectTab, closeTab } from "../../state/actions";
 import { useStore } from "../../state/store";
@@ -88,6 +88,38 @@ export function TabButton({ tab, paneId, isSelected }: TabButtonProps) {
       >
         {"×"}
       </button>
+
+      {/* Progress bar — thin line at bottom of tab */}
+      {tab.progressState != null && <ProgressBar state={tab.progressState} value={tab.progressValue ?? 0} />}
+    </div>
+  );
+}
+
+function progressColor(state: ProgressState): string {
+  switch (state) {
+    case ProgressState.Set:
+      return "bg-[var(--ctp-blue)]";
+    case ProgressState.Error:
+      return "bg-[var(--ctp-red)]";
+    case ProgressState.Pause:
+      return "bg-[var(--ctp-yellow)]";
+    case ProgressState.Indeterminate:
+      return "bg-[var(--ctp-blue)]";
+    default:
+      return "bg-[var(--ctp-blue)]";
+  }
+}
+
+function ProgressBar({ state, value }: { state: ProgressState; value: number }) {
+  const color = progressColor(state);
+  const isIndeterminate = state === ProgressState.Indeterminate;
+
+  return (
+    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--ctp-surface0)]">
+      <div
+        className={`h-full ${color} ${isIndeterminate ? "animate-pulse" : ""} transition-[width] duration-200`}
+        style={{ width: isIndeterminate ? "100%" : `${value}%` }}
+      />
     </div>
   );
 }

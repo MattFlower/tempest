@@ -10,6 +10,15 @@ export enum ActivityState {
   Idle = 2, // Idle/prompt
 }
 
+/** ConEmu OSC 9;4 progress state (matches @xterm/addon-progress). */
+export enum ProgressState {
+  None = 0,
+  Set = 1,
+  Error = 2,
+  Indeterminate = 3,
+  Pause = 4,
+}
+
 export enum WorkspaceStatus {
   Idle = "idle",
   Working = "working",

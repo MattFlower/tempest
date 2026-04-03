@@ -3,7 +3,7 @@
 // store and transform the pane tree using immutable helpers.
 // ============================================================
 
-import { PaneTabKind } from "../../../shared/ipc-types";
+import { PaneTabKind, ProgressState } from "../../../shared/ipc-types";
 import {
   type PaneNode,
   type Pane,
@@ -207,6 +207,33 @@ export function updateTabLabelByTerminalId(terminalId: string, label: string) {
         ...p,
         tabs: p.tabs.map((t) =>
           t.id === tab.id ? { ...t, label } : t,
+        ),
+      }));
+      commitTree(ctx.workspacePath, newTree);
+      return;
+    }
+  }
+}
+
+export function updateTabProgressByTerminalId(
+  terminalId: string,
+  state: 0 | 1 | 2 | 3 | 4,
+  value: number,
+) {
+  const ctx = currentTree();
+  if (!ctx) return;
+
+  const progressState = state === ProgressState.None ? undefined : (state as ProgressState);
+  const progressValue = state === ProgressState.None ? undefined : value;
+
+  const panes = allPanes(ctx.tree);
+  for (const pane of panes) {
+    const tab = pane.tabs.find((t) => t.terminalId === terminalId);
+    if (tab) {
+      const newTree = updatingPane(ctx.tree, pane.id, (p) => ({
+        ...p,
+        tabs: p.tabs.map((t) =>
+          t.id === tab.id ? { ...t, progressState, progressValue } : t,
         ),
       }));
       commitTree(ctx.workspacePath, newTree);

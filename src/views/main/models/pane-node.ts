@@ -5,7 +5,7 @@
 // Full implementation in Stream B.
 // ============================================================
 
-import { PaneTabKind, EditorType, type ActivityState, type DiffScope } from "../../../shared/ipc-types";
+import { PaneTabKind, EditorType, ProgressState, type ActivityState, type DiffScope } from "../../../shared/ipc-types";
 
 export interface PaneTab {
   id: string;
@@ -23,6 +23,8 @@ export interface PaneTab {
   editorType?: EditorType;
   diffScope?: DiffScope;
   resume?: boolean; // Transient: launch Claude with -c (continue). Not persisted.
+  progressState?: ProgressState;
+  progressValue?: number; // 0-100
 }
 
 export interface Pane {

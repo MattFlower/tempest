@@ -3,11 +3,13 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { SearchAddon } from "@xterm/addon-search";
+import { ProgressAddon } from "@xterm/addon-progress";
 
 export class TerminalInstance {
   readonly terminal: Terminal;
   readonly fitAddon: FitAddon;
   readonly searchAddon: SearchAddon;
+  readonly progressAddon: ProgressAddon;
   private webglAddon: WebglAddon | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private resizeDebounceTimer: number | null = null;
@@ -65,10 +67,12 @@ export class TerminalInstance {
     });
 
     this.fitAddon = new FitAddon();
+    this.progressAddon = new ProgressAddon();
     this.terminal.loadAddon(this.fitAddon);
     this.terminal.loadAddon(new WebLinksAddon());
     this.searchAddon = new SearchAddon();
     this.terminal.loadAddon(this.searchAddon);
+    this.terminal.loadAddon(this.progressAddon);
 
     this.terminal.open(container);
     this.initWebGL();
@@ -134,7 +138,7 @@ export class TerminalInstance {
       // OSC (Operating System Command) sequences to silently consume:
       for (const id of [
         7,    // Working directory notification (CWD)
-        9,    // Desktop notification (ConEmu/mintty)
+              // OSC 9 handled by ProgressAddon (ConEmu progress sequences)
         22,   // Set mouse pointer shape
         52,   // Clipboard manipulation
         99,   // Kitty notification protocol

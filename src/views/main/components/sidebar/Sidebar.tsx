@@ -75,7 +75,16 @@ export function Sidebar() {
   };
 
   const handleArchiveWorkspace = useCallback(async (workspace: TempestWorkspace) => {
-    const { paneTrees, selectedWorkspacePath, selectWorkspace: select } = useStore.getState();
+    const { paneTrees, selectedWorkspacePath, selectWorkspace: select, workspacesByRepo } = useStore.getState();
+
+    // Resolve the default workspace *before* archiving — the archive RPC
+    // removes the workspace from the store before it returns.
+    const repoId = Object.keys(workspacesByRepo).find((id) =>
+      workspacesByRepo[id].some((w) => w.path === workspace.path)
+    );
+    const defaultWs = repoId
+      ? workspacesByRepo[repoId].find((w) => w.name === "default")
+      : undefined;
 
     // Kill all terminals in this workspace's pane tree
     const tree = paneTrees[workspace.path];
@@ -94,13 +103,6 @@ export function Sidebar() {
 
     // If the archived workspace was focused, switch to the default workspace
     if (selectedWorkspacePath === workspace.path) {
-      const { workspacesByRepo } = useStore.getState();
-      const repoId = Object.keys(workspacesByRepo).find((id) =>
-        workspacesByRepo[id].some((w) => w.path === workspace.path)
-      );
-      const defaultWs = repoId
-        ? workspacesByRepo[repoId].find((w) => w.name === "default")
-        : undefined;
       select(defaultWs?.path ?? null);
     }
   }, []);

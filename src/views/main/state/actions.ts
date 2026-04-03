@@ -193,6 +193,28 @@ export function moveTabToNewPane(
   }
 }
 
+// --- Terminal-driven tab updates ---
+
+export function updateTabLabelByTerminalId(terminalId: string, label: string) {
+  const ctx = currentTree();
+  if (!ctx) return;
+
+  const panes = allPanes(ctx.tree);
+  for (const pane of panes) {
+    const tab = pane.tabs.find((t) => t.terminalId === terminalId);
+    if (tab) {
+      const newTree = updatingPane(ctx.tree, pane.id, (p) => ({
+        ...p,
+        tabs: p.tabs.map((t) =>
+          t.id === tab.id ? { ...t, label } : t,
+        ),
+      }));
+      commitTree(ctx.workspacePath, newTree);
+      return;
+    }
+  }
+}
+
 // --- Split / Pane Actions ---
 
 export function splitPane(direction: "right" | "left" = "right", emptyPane = false) {

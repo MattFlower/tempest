@@ -63,7 +63,7 @@ export function TabButton({ tab, paneId, isSelected }: TabButtonProps) {
   return (
     <div
       className={`
-        group relative flex items-center gap-1.5 px-3 h-full
+        group relative flex items-center gap-1.5 px-3 h-full min-w-0
         cursor-pointer select-none whitespace-nowrap text-sm
         transition-colors duration-100
         ${isSelected
@@ -79,7 +79,7 @@ export function TabButton({ tab, paneId, isSelected }: TabButtonProps) {
       {/* Activity indicator dot */}
       <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${activityColor(tab)}`} />
 
-      <span>{tab.label}</span>
+      <span className="truncate">{tab.label}</span>
 
       {/* Close button — visible on hover, macOS-style */}
       <button

@@ -9,6 +9,7 @@ import {
   unregisterTerminal,
 } from "../../state/terminal-dispatch";
 import { consumePendingInput } from "../../state/pending-terminal-input";
+import { updateTabLabelByTerminalId } from "../../state/actions";
 
 interface TerminalPaneProps {
   terminalId: string;
@@ -141,6 +142,10 @@ export function TerminalPane({
     };
 
     createTerminalWithCommand();
+
+    instance.terminal.onTitleChange((title) => {
+      updateTabLabelByTerminalId(terminalId, title);
+    });
 
     registerTerminal(
       terminalId,

@@ -162,6 +162,10 @@ export interface BunRequests {
     params: { repoPath: string; script: string };
     response: { exitCode: number; output: string };
   };
+  testArchiveScript: {
+    params: { repoPath: string; script: string };
+    response: { exitCode: number; output: string };
+  };
 
   // Custom scripts
   runCustomScript: {

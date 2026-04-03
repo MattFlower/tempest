@@ -322,6 +322,9 @@ const rpc = BrowserView.defineRPC({
       testPrepareScript: async (_params: any) => {
         return await workspaceManager.runPrepareScript(_params.script, _params.repoPath);
       },
+      testArchiveScript: async (_params: any) => {
+        return await workspaceManager.runPrepareScript(_params.script, _params.repoPath);
+      },
 
       // --- Custom Scripts ---
       runCustomScript: async (_params: any) => {

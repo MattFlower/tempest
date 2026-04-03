@@ -219,6 +219,22 @@ export class WorkspaceManager {
       if (!provider) return { success: false, error: "Provider not found" };
 
       try {
+        // Run archive script if configured
+        const settings = this.repoSettings[workspace.repoPath];
+        if (settings?.archiveScript?.trim()) {
+          const result = await this.runPrepareScript(settings.archiveScript, workspace.path);
+          if (result.exitCode !== 0) {
+            console.warn(
+              `[workspace] Archive script failed (exit ${result.exitCode}):`,
+              result.output,
+            );
+            return {
+              success: false,
+              error: `Archive script failed (exit ${result.exitCode}):\n${result.output}`,
+            };
+          }
+        }
+
         await provider.archiveWorkspace(workspace);
         const updated = workspaces.filter((w) => w.id !== workspaceId);
         this.workspacesByRepo.set(repoId, updated);
@@ -266,7 +282,7 @@ export class WorkspaceManager {
   // --- Repo Settings ---
 
   getRepoSettings(repoPath: string): RepoSettings {
-    return this.repoSettings[repoPath] ?? { prepareScript: "" };
+    return this.repoSettings[repoPath] ?? { prepareScript: "", archiveScript: "" };
   }
 
   async saveRepoSettings(repoPath: string, settings: RepoSettings): Promise<void> {

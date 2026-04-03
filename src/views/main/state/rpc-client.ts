@@ -368,6 +368,8 @@ export const api = {
     rpcRequest.saveRepoSettings({ repoPath, settings }),
   testPrepareScript: (repoPath: string, script: string) =>
     rpcRequest.testPrepareScript({ repoPath, script }),
+  testArchiveScript: (repoPath: string, script: string) =>
+    rpcRequest.testArchiveScript({ repoPath, script }),
 
   // Custom scripts
   runCustomScript: (params: {

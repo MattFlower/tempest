@@ -293,6 +293,7 @@ export interface CustomScript {
 
 export interface RepoSettings {
   prepareScript: string;
+  archiveScript: string;
   customScripts?: CustomScript[];
 }
 

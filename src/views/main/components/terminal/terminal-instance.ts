@@ -135,15 +135,12 @@ export class TerminalInstance {
     }
 
     // ─── Consume escape sequences not natively handled by xterm.js ───
-    // CLI tools (Claude Code, shell integrations, etc.) emit OSC and DCS
-    // sequences for features xterm.js doesn't support. Without explicit
-    // handlers, payloads from these sequences can leak as visible "stray
-    // characters" — especially on the right side of the screen where
-    // normal output never overwrites them.
+    // terminal.parser.registerDcsHandler wraps handlers with an internal Xi
+    // class that accumulates DCS data and calls the handler as a FUNCTION
+    // (data: string, params: number[]) => boolean. Do NOT pass objects.
     try {
       // OSC 7: Working directory notification — parse CWD from file:// URL
       this.terminal.parser.registerOscHandler(7, (data) => {
-        // Format: file://hostname/path or just /path
         try {
           const urlStr = data.trim();
           if (urlStr.startsWith("file://")) {
@@ -174,25 +171,45 @@ export class TerminalInstance {
       ]) {
         this.terminal.parser.registerOscHandler(id, () => true);
       }
-
-      // DCS (Device Control String) sequences — prevent binary payloads
-      // from sixel graphics, tmux passthrough, etc. from rendering as text.
-      const nullDcs = {
-        hook() {},
-        put() {},
-        unhook() {},
-      };
-      // Sixel graphics (DCS Ps;Ps;Ps q ...)
-      this.terminal.parser.registerDcsHandler({ final: "q" }, { ...nullDcs });
-      // Request terminfo string (DCS + q ...)
-      this.terminal.parser.registerDcsHandler(
-        { intermediates: "+", final: "q" },
-        { ...nullDcs },
-      );
-      // Set terminfo string (DCS + p ...)
+      // Sixel graphics (DCS q ...) — consume silently
+      this.terminal.parser.registerDcsHandler({ final: "q" }, () => true);
+      // Set terminfo string (DCS +p ...) — consume silently
       this.terminal.parser.registerDcsHandler(
         { intermediates: "+", final: "p" },
-        { ...nullDcs },
+        () => true,
+      );
+
+      // XTGETTCAP (DCS +q): apps like neovim query terminal capabilities
+      // at startup. We must respond or the TUI freezes waiting.
+      // Protocol: request  = DCS +q <hex-cap>[;<hex-cap>...] ST
+      //           success  = DCS 1+r <hex-cap>=<hex-value> ST
+      //           unknown  = DCS 0+r <hex-cap> ST
+      const hexEncode = (s: string) =>
+        Array.from(s, (c) => c.charCodeAt(0).toString(16)).join("");
+      const xtgettcapValues: Record<string, string> = {
+        RGB: "8/8/8",         // 24-bit true color
+        Se: "\x1b[2 q",       // reset cursor shape
+        Ss: "\x1b[%p1%d q",   // set cursor shape
+      };
+      this.terminal.parser.registerDcsHandler(
+        { intermediates: "+", final: "q" },
+        (data: string) => {
+          const caps = data.split(";");
+          for (const hexName of caps) {
+            if (!hexName) continue;
+            const name = hexName
+              .match(/.{1,2}/g)
+              ?.map((h) => String.fromCharCode(parseInt(h, 16)))
+              .join("") ?? "";
+            const value = xtgettcapValues[name];
+            if (value !== undefined) {
+              this.onInput(`\x1bP1+r${hexName}=${hexEncode(value)}\x1b\\`);
+            } else {
+              this.onInput(`\x1bP0+r${hexName}\x1b\\`);
+            }
+          }
+          return true;
+        },
       );
     } catch (e) {
       console.warn(`[${this.id}] Failed to register escape sequence handlers:`, e);
@@ -303,8 +320,6 @@ export class TerminalInstance {
 
         const dims = this.fitAddon.proposeDimensions();
         if (!dims) return;
-        // Skip if dimensions haven't actually changed — avoids
-        // redundant reflows that can split positioned content.
         if (dims.cols === lastCols && dims.rows === lastRows) return;
         lastCols = dims.cols;
         lastRows = dims.rows;

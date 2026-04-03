@@ -23,6 +23,9 @@ export const PaneTreeView = memo(function PaneTreeView({
 
   const { children, ratios, id: splitId } = node;
 
+  // Normalize ratios so they sum to 1 (callers may pass proportional values like [1,1,1])
+  const totalRatio = ratios.reduce((a, b) => a + b, 0) || 1;
+
   return (
     <div className="flex flex-row h-full w-full overflow-hidden">
       {children.map((child, i) => {
@@ -39,7 +42,7 @@ export const PaneTreeView = memo(function PaneTreeView({
           ? isMaxTarget
             ? 100
             : 0
-          : (ratios[i] ?? 0) * 100;
+          : ((ratios[i] ?? 0) / totalRatio) * 100;
 
         return (
           <div key={childId} className="flex flex-row" style={{ display: "contents" }}>

@@ -31,6 +31,10 @@ export default {
       icons: "icon.iconset",
       codesign: true,
       notarize: false,
+      entitlements: {
+        "com.apple.security.device.microphone":
+          "Tempest needs microphone access for Claude Code voice input.",
+      },
     },
   },
 } satisfies ElectrobunConfig;

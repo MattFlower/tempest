@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add OSC 8 hyperlink support -- terminal apps can now emit clickable hyperlinks (used by GCC,
+  cargo, gh CLI, and many other tools). Clicking opens in the system browser.
+- Add OSC 52 clipboard write support -- terminal apps like Neovim and tmux can now copy text to
+  the system clipboard via escape sequences. Read/query is denied for security.
+- Add OSC 133 shell integration (FinalTerm protocol) -- tracks prompt and command boundaries.
+  Use Cmd+Shift+Up/Down to jump between prompts in terminal scrollback.
 - Add documentation section to the website with a keyboard shortcuts reference page
 - Add HTTP Remote Control Server -- an optional HTTP server that allows Tempest to be controlled
   remotely. Features bearer token authentication, configurable port, a web dashboard showing

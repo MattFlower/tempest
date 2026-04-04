@@ -711,6 +711,11 @@ const rpc = BrowserView.defineRPC({
       writeToTerminal: (msg: any) => {
         ptyManager.write(msg.id, msg.data);
       },
+      clipboardWrite: (msg: any) => {
+        const proc = Bun.spawn(["pbcopy"], { stdin: "pipe" });
+        proc.stdin.write(msg.text);
+        proc.stdin.end();
+      },
 
       // --- Pane state sync (Stream B + D) ---
       paneTreeChanged: (_msg: any) => {

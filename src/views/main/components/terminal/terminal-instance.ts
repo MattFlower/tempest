@@ -5,6 +5,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { SearchAddon } from "@xterm/addon-search";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { ProgressAddon } from "@xterm/addon-progress";
+import { api } from "../../state/rpc-client";
 
 export class TerminalInstance {
   readonly terminal: Terminal;
@@ -16,6 +17,8 @@ export class TerminalInstance {
   private resizeObserver: ResizeObserver | null = null;
   private resizeDebounceTimer: number | null = null;
   private _cwd: string | undefined;
+  private _promptMarks: { promptLine: number; exitCode: number | undefined }[] = [];
+  private _lastNavLine: number = -1; // line we last navigated to, -1 = at bottom
   onCwdChange: ((cwd: string) => void) | null = null;
 
   constructor(
@@ -43,6 +46,20 @@ export class TerminalInstance {
 
       drawBoldTextInBrightColors: false,
       minimumContrastRatio: 1,
+
+      // OSC 8 hyperlinks: open in system browser on click, no confirmation dialog
+      linkHandler: {
+        activate: (_event: MouseEvent, uri: string) => {
+          try {
+            const url = new URL(uri);
+            if (url.protocol === "http:" || url.protocol === "https:") {
+              window.open(uri, "_blank");
+            }
+          } catch {
+            // Invalid URL — ignore
+          }
+        },
+      },
 
       // Ghostty default palette with neutral gray background
       theme: {
@@ -158,14 +175,67 @@ export class TerminalInstance {
         return true;
       });
 
+      // OSC 52: Clipboard write — apps like Neovim, tmux use this to copy to clipboard.
+      // Format: OSC 52 ; <target> ; <base64-data> ST
+      // We only support write (not read/query) for security.
+      this.terminal.parser.registerOscHandler(52, (data) => {
+        const semi = data.indexOf(";");
+        if (semi < 0) return true;
+        const payload = data.slice(semi + 1);
+        // "?" means query (read clipboard) — deny silently
+        if (payload === "?") return true;
+        try {
+          const bytes = Uint8Array.from(atob(payload), (c) => c.charCodeAt(0));
+          const text = new TextDecoder().decode(bytes);
+          // Route through Bun backend (pbcopy) — WebView clipboard API
+          // requires user gesture which OSC 52 doesn't have.
+          api.clipboardWrite(text);
+        } catch {
+          // Invalid base64 — ignore
+        }
+        return true;
+      });
+
+      // OSC 133: FinalTerm shell integration (prompt/command/output boundaries)
+      // Markers: A=prompt start, B=command start (user typing), C=output start, D=command end
+      this.terminal.parser.registerOscHandler(133, (data) => {
+        if (!data) return true;
+        const marker = data[0];
+        switch (marker) {
+          case "A": {
+            // Prompt start — record the cursor line as a prompt boundary
+            const line = this.terminal.buffer.active.cursorY + this.terminal.buffer.active.baseY;
+            this._promptMarks.push({ promptLine: line, exitCode: undefined });
+            // Prune marks that have scrolled out of the buffer
+            const minLine = this.terminal.buffer.active.baseY - (this.terminal.options.scrollback ?? 10000);
+            while (this._promptMarks.length > 0 && this._promptMarks[0]!.promptLine < minLine) {
+              this._promptMarks.shift();
+            }
+            break;
+          }
+          case "D": {
+            // Command end — capture exit code (format: "D;exitcode")
+            const last = this._promptMarks[this._promptMarks.length - 1];
+            if (last) {
+              const parts = data.split(";");
+              const code = parts[1] !== undefined ? parseInt(parts[1], 10) : undefined;
+              last.exitCode = Number.isNaN(code!) ? undefined : code;
+            }
+            break;
+          }
+          // B and C are consumed but not tracked (no UI yet)
+        }
+        return true;
+      });
+
       // OSC sequences to silently consume:
       for (const id of [
               // OSC 7 handled above (CWD tracking)
               // OSC 9 handled by ProgressAddon (ConEmu progress sequences)
+              // OSC 52 handled above (clipboard write)
+              // OSC 133 handled above (shell integration)
         22,   // Set mouse pointer shape
-        52,   // Clipboard manipulation
         99,   // Kitty notification protocol
-        133,  // FinalTerm shell integration (prompt/command markers)
         633,  // VS Code shell integration
         1337, // iTerm2 proprietary (inline images, marks, badges, etc.)
       ]) {
@@ -220,6 +290,8 @@ export class TerminalInstance {
     let suppressNextData: string | null = null;
 
     this.terminal.onData((data) => {
+      // User typed something — reset prompt navigation position
+      this._lastNavLine = -1;
       if (suppressNextData !== null) {
         const expected = suppressNextData;
         suppressNextData = null;
@@ -255,6 +327,16 @@ export class TerminalInstance {
 
       // Cmd+F: let the browser handle it so our search bar opens
       if (event.metaKey && event.key === "f") {
+        return false;
+      }
+
+      // Cmd+Shift+Up/Down: prompt navigation (OSC 133)
+      if (event.metaKey && event.shiftKey && event.key === "ArrowUp") {
+        this.scrollToPreviousPrompt();
+        return false;
+      }
+      if (event.metaKey && event.shiftKey && event.key === "ArrowDown") {
+        this.scrollToNextPrompt();
         return false;
       }
 
@@ -428,6 +510,47 @@ export class TerminalInstance {
 
   get cwd(): string | undefined {
     return this._cwd;
+  }
+
+  get promptMarks(): ReadonlyArray<{ promptLine: number; exitCode: number | undefined }> {
+    return this._promptMarks;
+  }
+
+  /** Scroll to the previous prompt boundary (Cmd+Shift+Up). */
+  scrollToPreviousPrompt(): boolean {
+    if (this._promptMarks.length === 0) return false;
+
+    // First navigation starts from the cursor; subsequent ones continue from last position
+    const refLine = this._lastNavLine >= 0
+      ? this._lastNavLine
+      : this.terminal.buffer.active.baseY + this.terminal.buffer.active.cursorY;
+
+    for (let i = this._promptMarks.length - 1; i >= 0; i--) {
+      if (this._promptMarks[i]!.promptLine < refLine) {
+        this._lastNavLine = this._promptMarks[i]!.promptLine;
+        this.terminal.scrollToLine(this._lastNavLine);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Scroll to the next prompt boundary (Cmd+Shift+Down). */
+  scrollToNextPrompt(): boolean {
+    if (this._promptMarks.length === 0 || this._lastNavLine < 0) return false;
+
+    for (const mark of this._promptMarks) {
+      if (mark.promptLine > this._lastNavLine) {
+        this._lastNavLine = mark.promptLine;
+        this.terminal.scrollToLine(this._lastNavLine);
+        return true;
+      }
+    }
+
+    // Past the last mark — return to bottom
+    this._lastNavLine = -1;
+    this.terminal.scrollToBottom();
+    return true;
   }
 
   /** Serialize terminal scrollback buffer (returns ANSI escape sequence string). */

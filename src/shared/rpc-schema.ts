@@ -512,6 +512,7 @@ export interface BunRequests {
 
 export interface BunMessages {
   writeToTerminal: { id: string; data: string };
+  clipboardWrite: { text: string };
   paneTreeChanged: { workspacePath: string; tree: PaneNodeState };
   saveLatencyStats: { id: string; stats: LatencyStats };
   terminalScrollbackUpdate: {

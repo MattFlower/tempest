@@ -324,6 +324,8 @@ export const api = {
   writeToTerminal: (id: string, data: string) =>
     rpcSend.writeToTerminal({ id, data }),
 
+  clipboardWrite: (text: string) => rpcSend.clipboardWrite({ text }),
+
   // Session commands
   buildClaudeCommand: (params: {
     workspacePath: string;

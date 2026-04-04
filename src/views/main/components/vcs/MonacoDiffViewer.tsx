@@ -1,25 +1,20 @@
 // ============================================================
 // MonacoDiffViewer — Monaco Editor-based diff viewer.
+// Uses @monaco-editor/react DiffEditor with AMD-loaded Monaco
+// for proper worker support (diff computation, syntax highlighting).
 // Supports both unified (inline) and side-by-side diff modes.
 // Exposes navigation via forwardRef handle.
 // ============================================================
 
-import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
-import * as monaco from "monaco-editor";
+import { useRef, forwardRef, useImperativeHandle, useCallback } from "react";
+import { DiffEditor, loader } from "@monaco-editor/react";
+import type { editor } from "monaco-editor";
 
-// Configure Monaco workers for browser environment
-self.MonacoEnvironment = {
-  getWorker(_: string, _label: string) {
-    const blob = new Blob(
-      ['self.onmessage = function() {}'],
-      { type: "text/javascript" },
-    );
-    return new Worker(URL.createObjectURL(blob));
-  },
-};
+// Configure Monaco to load from local bundled files (same as MonacoEditorPane)
+loader.config({ paths: { vs: "./monaco-editor/min/vs" } });
 
 // Catppuccin Mocha theme for Monaco
-const CATPPUCCIN_THEME: monaco.editor.IStandaloneThemeData = {
+const CATPPUCCIN_THEME: editor.IStandaloneThemeData = {
   base: "vs-dark",
   inherit: true,
   rules: [
@@ -49,8 +44,8 @@ const CATPPUCCIN_THEME: monaco.editor.IStandaloneThemeData = {
   },
 };
 
+const THEME_NAME = "catppuccin-mocha";
 let themeRegistered = false;
-let modelCounter = 0;
 
 // --- Public handle for navigation ---
 
@@ -74,24 +69,17 @@ export const MonacoDiffViewer = forwardRef<
   { originalContent, modifiedContent, language, filePath, displayMode },
   ref,
 ) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const editorRef = useRef<monaco.editor.IStandaloneDiffEditor | null>(null);
-
-  // Register theme once
-  if (!themeRegistered) {
-    monaco.editor.defineTheme("catppuccin-mocha", CATPPUCCIN_THEME);
-    themeRegistered = true;
-  }
+  const editorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
 
   // Expose navigation methods
   useImperativeHandle(ref, () => ({
     goToNextDiff: () => {
-      const editor = editorRef.current;
-      if (!editor) return;
-      const changes = editor.getLineChanges();
+      const ed = editorRef.current;
+      if (!ed) return;
+      const changes = ed.getLineChanges();
       if (!changes || changes.length === 0) return;
 
-      const modEditor = editor.getModifiedEditor();
+      const modEditor = ed.getModifiedEditor();
       const currentLine = modEditor.getPosition()?.lineNumber ?? 0;
 
       // Find next change after current line
@@ -109,12 +97,12 @@ export const MonacoDiffViewer = forwardRef<
       modEditor.setPosition({ lineNumber: firstLine, column: 1 });
     },
     goToPrevDiff: () => {
-      const editor = editorRef.current;
-      if (!editor) return;
-      const changes = editor.getLineChanges();
+      const ed = editorRef.current;
+      if (!ed) return;
+      const changes = ed.getLineChanges();
       if (!changes || changes.length === 0) return;
 
-      const modEditor = editor.getModifiedEditor();
+      const modEditor = ed.getModifiedEditor();
       const currentLine = modEditor.getPosition()?.lineNumber ?? Infinity;
 
       // Find previous change before current line
@@ -134,61 +122,38 @@ export const MonacoDiffViewer = forwardRef<
     },
   }));
 
-  // Single effect: create editor + set models. Re-runs on any prop change.
-  useEffect(() => {
-    if (!containerRef.current) return;
-
-    // Dispose previous editor
-    if (editorRef.current) {
-      editorRef.current.dispose();
-      editorRef.current = null;
+  const handleBeforeMount = useCallback((monaco: any) => {
+    if (!themeRegistered) {
+      monaco.editor.defineTheme(THEME_NAME, CATPPUCCIN_THEME);
+      themeRegistered = true;
     }
+  }, []);
 
-    const editor = monaco.editor.createDiffEditor(containerRef.current, {
-      theme: "catppuccin-mocha",
-      readOnly: true,
-      renderSideBySide: displayMode === "side-by-side",
-      automaticLayout: true,
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      fontSize: 12,
-      lineHeight: 18,
-      renderOverviewRuler: false,
-      padding: { top: 8 },
-      diffWordWrap: "on",
-      ignoreTrimWhitespace: false,
-    });
-
+  const handleMount = useCallback((editor: editor.IStandaloneDiffEditor) => {
     editorRef.current = editor;
-
-    // Create models with unique URIs to avoid conflicts
-    const id = ++modelCounter;
-    const originalModel = monaco.editor.createModel(
-      originalContent,
-      language,
-      monaco.Uri.parse(`inmemory://diff-original/${id}/${filePath}`),
-    );
-    const modifiedModel = monaco.editor.createModel(
-      modifiedContent,
-      language,
-      monaco.Uri.parse(`inmemory://diff-modified/${id}/${filePath}`),
-    );
-
-    editor.setModel({ original: originalModel, modified: modifiedModel });
-
-    return () => {
-      editor.dispose();
-      originalModel.dispose();
-      modifiedModel.dispose();
-      editorRef.current = null;
-    };
-  }, [originalContent, modifiedContent, language, filePath, displayMode]);
+  }, []);
 
   return (
-    <div
-      ref={containerRef}
-      className="w-full h-full"
-      style={{ backgroundColor: "#1e1e2e" }}
+    <DiffEditor
+      key={filePath}
+      original={originalContent}
+      modified={modifiedContent}
+      language={language}
+      theme={THEME_NAME}
+      beforeMount={handleBeforeMount}
+      onMount={handleMount}
+      options={{
+        readOnly: true,
+        renderSideBySide: displayMode === "side-by-side",
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        fontSize: 12,
+        lineHeight: 18,
+        renderOverviewRuler: false,
+        padding: { top: 8 },
+        diffWordWrap: "on",
+        ignoreTrimWhitespace: false,
+      }}
     />
   );
 });

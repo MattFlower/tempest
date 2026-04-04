@@ -87,8 +87,10 @@ async function getJJDiff(
   const jjPath = pathResolver.resolve("jj", configuredPath);
 
   if (scope === DiffScope.SingleCommit && commitRef) {
+    // Translate git-style HEAD to jj's @ (working copy parent)
+    const jjRef = commitRef === "HEAD" ? "@" : commitRef;
     return runCommand(
-      [jjPath, "diff", "--git", `--context=${contextLines}`, "-r", commitRef],
+      [jjPath, "diff", "--git", `--context=${contextLines}`, "-r", jjRef],
       workspacePath,
     );
   }

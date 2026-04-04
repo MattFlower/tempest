@@ -409,7 +409,13 @@ function parseCommand(text: string): { name: string; args: string } | null {
 }
 
 function stripTags(text: string): string {
-  return text.replace(/<[^>]+>/g, "").trim();
+  let result = text;
+  let previous;
+  do {
+    previous = result;
+    result = result.replace(/<[^>]+>/g, "");
+  } while (result !== previous);
+  return result.trim();
 }
 
 function truncate(text: string, limit: number): string {

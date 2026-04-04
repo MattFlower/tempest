@@ -14,29 +14,26 @@ const pathResolver = new PathResolver();
 export function parseGitHubRemote(remote: string): string | null {
   const trimmed = remote.trim();
 
-  // HTTPS: https://github.com/owner/repo.git
-  if (trimmed.includes("github.com/")) {
-    try {
-      const url = new URL(trimmed);
-      const components = url.pathname.split("/").filter(Boolean);
-      if (components.length < 2) return null;
-      const owner = components[0];
-      const repo = components[1].replace(/\.git$/, "");
-      return `${owner}/${repo}`;
-    } catch {
-      return null;
-    }
-  }
-
   // SSH: git@github.com:owner/repo.git
-  if (trimmed.includes("github.com:")) {
+  if (trimmed.startsWith("git@github.com:")) {
     const parts = trimmed.split(":");
     if (parts.length !== 2) return null;
     const path = parts[1].replace(/\.git$/, "");
     return path;
   }
 
-  return null;
+  // HTTPS: https://github.com/owner/repo.git
+  try {
+    const url = new URL(trimmed);
+    if (url.hostname !== "github.com") return null;
+    const components = url.pathname.split("/").filter(Boolean);
+    if (components.length < 2) return null;
+    const owner = components[0];
+    const repo = components[1].replace(/\.git$/, "");
+    return `${owner}/${repo}`;
+  } catch {
+    return null;
+  }
 }
 
 /**

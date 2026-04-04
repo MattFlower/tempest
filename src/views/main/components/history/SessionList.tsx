@@ -43,7 +43,13 @@ function formatRelativeDate(isoString: string): string {
 
 /** Strip HTML/XML tags from a string */
 function stripTags(str: string): string {
-  return str.replace(/<[^>]+>/g, "").trim();
+  let result = str;
+  let previous;
+  do {
+    previous = result;
+    result = result.replace(/<[^>]+>/g, "");
+  } while (result !== previous);
+  return result.trim();
 }
 
 export function SessionList({

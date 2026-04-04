@@ -6,7 +6,7 @@
 
 import { readFileSync, watch, type FSWatcher } from "node:fs";
 import { join } from "node:path";
-import { homedir } from "node:os";
+import { homedir, networkInterfaces } from "node:os";
 import { BrowserWindow, BrowserView, ApplicationMenu, Utils } from "electrobun/bun";
 import { PtyManager } from "./pty-manager";
 import { SessionManager } from "./session-manager";
@@ -20,6 +20,7 @@ import { SessionActivityTracker } from "./hooks/session-activity-tracker";
 import { lookupSessionID, findSessionIDs, lookupPlanPath } from "./session-id-lookup";
 import { loadConfig, saveConfig as saveConfigFile, defaultConfig } from "./config/app-config";
 import { PathResolver } from "./config/path-resolver";
+import { TempestHttpServer, generateToken, consumePendingPrompt } from "./http-server";
 import { getUsageData } from "./usage/usage-service";
 import { HistoryStore } from "./history/history-store";
 import {
@@ -91,6 +92,12 @@ const aiContextProvider = new AIContextProvider(historyStore);
 
 // --- Stream H: PR Feedback ---
 const prMonitor = new PRMonitor();
+
+// --- HTTP Remote Control Server ---
+const httpServer = new TempestHttpServer({
+  workspaceManager,
+  activityTracker,
+});
 
 // --- Terminal scrollback cache (webview sends periodic updates) ---
 const scrollbackCache = new Map<string, { scrollback: string; cwd?: string }>();
@@ -656,6 +663,48 @@ const rpc = BrowserView.defineRPC({
       jjRebase: async (params: any) => {
         return await jjRebase(params.workspacePath, params.revision, params.destination);
       },
+
+      // --- HTTP Remote Control Server ---
+      startHttpServer: (params: any) => {
+        const config = {
+          enabled: true,
+          port: params.port ?? 7778,
+          hostname: params.hostname ?? "127.0.0.1",
+          token: params.token || generateToken(),
+        };
+        return httpServer.start(config);
+      },
+      stopHttpServer: () => {
+        httpServer.stop();
+      },
+      getHttpServerStatus: () => {
+        if (httpServer.isRunning()) {
+          return {
+            running: true,
+            port: httpServer.getPort(),
+            hostname: httpServer.getHostname(),
+            token: httpServer.getToken(),
+          };
+        }
+        return { running: false };
+      },
+      consumePendingPrompt: (params: any) => {
+        const prompt = consumePendingPrompt(params.workspacePath) ?? null;
+        return { prompt };
+      },
+      getNetworkInterfaces: () => {
+        const ifaces = networkInterfaces();
+        const results: Array<{ name: string; address: string; family: string }> = [];
+        for (const [name, entries] of Object.entries(ifaces)) {
+          if (!entries) continue;
+          for (const entry of entries) {
+            if (entry.family === "IPv4" && !entry.internal) {
+              results.push({ name, address: entry.address, family: "IPv4" });
+            }
+          }
+        }
+        return results;
+      },
     },
     messages: {
       // --- Terminal I/O (Stream A) ---
@@ -744,6 +793,13 @@ workspaceManager.onScriptOutput = (runId, data) => {
 workspaceManager.onScriptExit = (runId, exitCode) => {
   try {
     win.webview.rpc.send.scriptExit({ runId, exitCode });
+  } catch { /* webview not ready yet */ }
+};
+
+// --- HTTP Server: Wire push notifications ---
+httpServer.onSelectWorkspace = (workspacePath) => {
+  try {
+    win.webview.rpc.send.selectWorkspace({ workspacePath });
   } catch { /* webview not ready yet */ }
 };
 
@@ -869,6 +925,16 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
   } catch (err) {
     console.error("[main] HistoryStore init failed:", err);
   }
+
+  // Auto-start HTTP server if configured
+  try {
+    const config = await loadConfig();
+    if (config.httpServer?.enabled) {
+      httpServer.start(config.httpServer);
+    }
+  } catch (err) {
+    console.error("[main] HTTP server auto-start failed:", err);
+  }
 })();
 
 // --- Shutdown cleanup (Stream A + D) ---
@@ -902,6 +968,7 @@ async function shutdown() {
   historyStore.stopRefreshTimer();
   unwatchAllMarkdown();
   prMonitor.shutdown();
+  httpServer.stop();
 }
 
 process.on("SIGINT", () => { shutdown().then(() => process.exit(0)); });

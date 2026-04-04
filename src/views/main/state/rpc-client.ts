@@ -219,6 +219,11 @@ const rpc = Electroview.defineRPC({
         scriptOutputHandlers.delete(msg.runId);
         scriptExitHandlers.delete(msg.runId);
       },
+      selectWorkspace: (msg: any) => {
+        import("./store").then(({ useStore }) => {
+          useStore.getState().selectWorkspace(msg.workspacePath);
+        });
+      },
       menuAction: (msg: any) => {
         Promise.all([
           import("./store"),
@@ -552,4 +557,12 @@ export const api = {
   jjRebase: (workspacePath: string, revision: string, destination: string) =>
     rpcRequest.jjRebase({ workspacePath, revision, destination }),
 
+  // HTTP Remote Control Server
+  startHttpServer: (params: { enabled: boolean; port: number; hostname: string; token: string }) =>
+    rpcRequest.startHttpServer(params),
+  stopHttpServer: () => rpcRequest.stopHttpServer(),
+  getHttpServerStatus: () => rpcRequest.getHttpServerStatus(),
+  getNetworkInterfaces: () => rpcRequest.getNetworkInterfaces(),
+  consumePendingPrompt: (workspacePath: string) =>
+    rpcRequest.consumePendingPrompt({ workspacePath }),
 };

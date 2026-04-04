@@ -107,6 +107,19 @@ export interface Bookmark {
   position: number;
 }
 
+export interface HttpServerConfig {
+  enabled: boolean;
+  port: number;
+  hostname: string; // e.g. "0.0.0.0", "127.0.0.1", or a specific interface IP
+  token: string;
+}
+
+export interface NetworkInterface {
+  name: string;    // e.g. "en0", "lo0"
+  address: string; // e.g. "192.168.1.100"
+  family: "IPv4" | "IPv6";
+}
+
 export interface AppConfig {
   workspaceRoot: string;
   jjPath?: string;
@@ -116,6 +129,7 @@ export interface AppConfig {
   claudeArgs: string[];
   editor?: string; // e.g. "nvim", "hx", "vim", "code". Defaults to "nvim".
   monacoVimMode?: boolean; // Enable vim keybindings in Monaco editor. Defaults to false.
+  httpServer?: HttpServerConfig;
 }
 
 // --- Hook Events ---

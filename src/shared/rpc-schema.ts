@@ -10,10 +10,12 @@ import type {
   CustomScript,
   DiffFile,
   HookEvent,
+  HttpServerConfig,
   JJBookmark,
   JJChangedFile,
   JJLogResult,
   LatencyStats,
+  NetworkInterface,
   PaneNodeState,
   RepoSettings,
   SessionMessage,
@@ -482,6 +484,28 @@ export interface BunRequests {
     params: { workspacePath: string; revision: string; destination: string };
     response: { success: boolean; error?: string };
   };
+
+  // --- HTTP Remote Control Server ---
+  startHttpServer: {
+    params: HttpServerConfig;
+    response: { port: number; hostname: string; token: string };
+  };
+  stopHttpServer: {
+    params: void;
+    response: void;
+  };
+  getHttpServerStatus: {
+    params: void;
+    response: { running: boolean; port?: number; hostname?: string; token?: string };
+  };
+  getNetworkInterfaces: {
+    params: void;
+    response: NetworkInterface[];
+  };
+  consumePendingPrompt: {
+    params: { workspacePath: string };
+    response: { prompt: string | null };
+  };
 }
 
 // --- Bun-side messages (Webview fires these, no response) ---
@@ -511,4 +535,5 @@ export interface WebviewMessages {
   prDraftsChanged: { workspacePath: string; drafts: PRDraftSummary[] };
   scriptOutput: { runId: string; data: string };
   scriptExit: { runId: string; exitCode: number };
+  selectWorkspace: { workspacePath: string };
 }

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add HTTP Remote Control Server -- an optional HTTP server that allows Tempest to be controlled
+  remotely. Features bearer token authentication, configurable port, a web dashboard showing
+  repos/workspaces with live status indicators, and the ability to create new workspaces with
+  an initial Claude prompt. Configurable via a new "Remote" tab in Settings with enable toggle,
+  listen address (with network interface selection), port, token generation, URL copy, and QR code.
+
 ### Fixed
 
 ### Changed

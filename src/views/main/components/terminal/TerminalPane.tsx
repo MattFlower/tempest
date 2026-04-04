@@ -163,6 +163,22 @@ export function TerminalPane({
           api.writeToTerminal(terminalId, pendingInput);
         }, 2000);
       }
+
+      // Check for a pending prompt from the HTTP remote control server.
+      // These are keyed by workspace path and need a longer delay since
+      // Claude Code takes several seconds to fully start up.
+      if (tabKindRef.current === PaneTabKind.Claude) {
+        try {
+          const { prompt } = await api.consumePendingPrompt(cwdRef.current);
+          if (prompt) {
+            setTimeout(() => {
+              api.writeToTerminal(terminalId, prompt + "\r");
+            }, 5000);
+          }
+        } catch {
+          // Non-critical — ignore if RPC fails
+        }
+      }
     };
 
     createTerminalWithCommand();

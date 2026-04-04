@@ -27,11 +27,4 @@ Two-process architecture: Bun backend + React webview frontend, communicating vi
 
 ## Releasing
 
-When the user asked for a release to be made, do the following:
-
-1. Suggest a version number for the release to the user based on the items in CHANGELOG.md
-2. Once a version number has been confirmed with the user, change the "Unreleased" section of the
-   CHANGELOG.md to be named after the release.
-   3a. If the repo is a jujutsu repo (it has a .jj directory), tag with `jj tag set` and push with `jj git push`
-   3b. If the repo is git repo (it has a .git dir but not a .jj dir), tag the release with `git tag` and push with `git push`
-3. The release should contain the information that was in the former "Unreleased" section of the Changelog.
+Use the `/release` skill to cut a release. It handles changelog updates, tagging, pushing, and verifying the GitHub release.

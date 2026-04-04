@@ -1,6 +1,6 @@
 import { useMemo, useCallback, useState, useEffect } from "react";
-import { PaneTabKind, WorkspaceStatus, ActivityState } from "../../../../shared/ipc-types";
-import type { CustomScript } from "../../../../shared/ipc-types";
+import { PaneTabKind, WorkspaceStatus, ActivityState, VCSType } from "../../../../shared/ipc-types";
+import type { CustomScript, OpenPRState } from "../../../../shared/ipc-types";
 import { createTab, createPane, createLeaf, createSplit, toNodeState } from "../../models/pane-node";
 import { useStore } from "../../state/store";
 import { addTab, splitPane } from "../../state/actions";
@@ -8,6 +8,7 @@ import { api } from "../../state/rpc-client";
 import { DropdownButton, type DropdownItem } from "./DropdownButton";
 import { StatusBadge } from "./StatusBadge";
 import { PRReviewDialog } from "../pr/PRReviewDialog";
+import { OpenPRDialog } from "../pr/OpenPRDialog";
 import { ScriptDialog } from "./ScriptDialog";
 import { ScriptRunDialog } from "./ScriptRunDialog";
 
@@ -54,6 +55,12 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
   const [showPRReview, setShowPRReview] = useState(false);
   const [prReviewLoading, setPrReviewLoading] = useState(false);
   const [prReviewError, setPrReviewError] = useState<string | null>(null);
+  const [showOpenPR, setShowOpenPR] = useState(false);
+  const [showLinkPR, setShowLinkPR] = useState(false);
+  const [linkPRUrl, setLinkPRUrl] = useState("");
+  const [prState, setPrState] = useState<OpenPRState | null>(null);
+  const [prError, setPrError] = useState<string | null>(null);
+  const [vcsType, setVcsType] = useState<VCSType>(VCSType.Git);
 
   const [showScriptDialog, setShowScriptDialog] = useState(false);
   const [customScripts, setCustomScripts] = useState<CustomScript[]>([]);
@@ -82,6 +89,18 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
       setCustomScripts(settings.customScripts ?? []);
     });
   }, [workspace?.repoPath]);
+
+  // Load PR state and VCS type on mount / workspace change
+  useEffect(() => {
+    api.getOpenPRState(workspacePath).then((state: OpenPRState | null) => {
+      setPrState(state);
+    });
+    if (workspace?.repoPath) {
+      api.getVCSType(workspace.repoPath).then((type: VCSType) => {
+        setVcsType(type);
+      });
+    }
+  }, [workspacePath, workspace?.repoPath]);
 
   const handleRunScript = useCallback(
     async (cs: CustomScript) => {
@@ -115,16 +134,85 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
   const workspaceName = workspace?.name ?? workspacePath.split("/").pop() ?? "Workspace";
 
   const handleViewPRInBrowser = useCallback(async () => {
+    const paneId = useStore.getState().focusedPaneId;
+    setPrError(null);
+
+    // Fast path: use cached PR URL
+    if (prState?.prURL) {
+      if (!paneId) return;
+      const tab = createTab(PaneTabKind.Browser, "PR", { browserURL: prState.prURL });
+      addTab(paneId, tab);
+      return;
+    }
+
+    // Slow path: discover via gh CLI
     try {
       const result = await api.lookupPRUrl(workspacePath);
       if ("error" in result) {
-        console.warn("[WorkspaceToolbar] View PR failed:", result.error);
+        setPrError(result.error);
         return;
       }
-      addTabToFocusedPane(PaneTabKind.Browser, "PR", { browserURL: result.url });
+      if (!paneId) return;
+      const tab = createTab(PaneTabKind.Browser, "PR", { browserURL: result.url });
+      addTab(paneId, tab);
+
+      // Cache for future use
+      const newState: OpenPRState = { prURL: result.url };
+      setPrState(newState);
+      api.setOpenPRState(workspacePath, newState);
     } catch (err) {
-      console.error("[WorkspaceToolbar] View PR error:", err);
+      setPrError(err instanceof Error ? err.message : String(err));
     }
+  }, [workspacePath, prState]);
+
+  const handleOpenPR = useCallback(async () => {
+    setPrError(null);
+    if (prState) {
+      // PR already exists — just push updates
+      try {
+        const result = await api.updatePR(workspacePath);
+        if (!result.success) {
+          setPrError(result.error ?? "Push failed.");
+        }
+      } catch (err) {
+        setPrError(err instanceof Error ? err.message : String(err));
+      }
+    } else {
+      // No PR yet — show dialog
+      setShowOpenPR(true);
+    }
+  }, [workspacePath, prState]);
+
+  const handlePRCreated = useCallback((prURL: string, bookmarkName?: string) => {
+    const newState: OpenPRState = { prURL, bookmarkName };
+    setPrState(newState);
+    setShowOpenPR(false);
+
+    // Open the PR in a browser tab
+    const paneId = useStore.getState().focusedPaneId;
+    if (paneId) {
+      const tab = createTab(PaneTabKind.Browser, "PR", { browserURL: prURL });
+      addTab(paneId, tab);
+    }
+  }, []);
+
+  const handleLinkPR = useCallback((url: string) => {
+    const trimmed = url.trim();
+    if (!trimmed) return;
+
+    // Store the linked PR state
+    const newState: OpenPRState = { prURL: trimmed };
+    setPrState(newState);
+    api.setOpenPRState(workspacePath, newState);
+
+    // Open in browser tab
+    const paneId = useStore.getState().focusedPaneId;
+    if (paneId) {
+      const tab = createTab(PaneTabKind.Browser, "PR", { browserURL: trimmed });
+      addTab(paneId, tab);
+    }
+    setShowLinkPR(false);
+    setLinkPRUrl("");
   }, [workspacePath]);
 
   const handleStartPRReview = useCallback(async (prNumber: number) => {
@@ -195,8 +283,8 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
   ];
 
   const prItems: DropdownItem[] = [
-    { label: "Open PR", action: () => console.log("[TODO] Open PR") },
-    { label: "Link PR", action: () => console.log("[TODO] Link PR") },
+    { label: prState ? "Update PR" : "Open PR", action: handleOpenPR },
+    { label: "Link PR", action: () => { setShowLinkPR(true); setLinkPRUrl(""); } },
     { label: "View PR in Browser", action: handleViewPRInBrowser },
     {
       label: "PR Review",
@@ -229,6 +317,17 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
 
         <span className="flex-1" />
 
+        {prError && (
+          <span
+            className="text-xs mr-2 px-2 py-0.5 rounded cursor-pointer"
+            style={{ backgroundColor: "rgba(243, 139, 168, 0.15)", color: "var(--ctp-red)" }}
+            onClick={() => setPrError(null)}
+            title="Click to dismiss"
+          >
+            {prError}
+          </span>
+        )}
+
         <div className="flex items-center gap-1">
           <DropdownButton label="New" items={newItems} onDefaultAction={() => addTabToFocusedPane(PaneTabKind.Shell, "Shell")} />
           <DropdownButton label="Split" items={splitItems} onDefaultAction={() => splitWithTab(PaneTabKind.Shell, "Shell")} />
@@ -247,6 +346,16 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
           }}
           isLoading={prReviewLoading}
           errorMessage={prReviewError}
+        />
+      )}
+
+      {showOpenPR && workspace && (
+        <OpenPRDialog
+          workspacePath={workspacePath}
+          workspaceName={workspace.name}
+          vcsType={vcsType}
+          onCreated={handlePRCreated}
+          onDismiss={() => setShowOpenPR(false)}
         />
       )}
 
@@ -269,6 +378,52 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
           workspaceName={workspace.name}
           onDismiss={() => setRunningScript(null)}
         />
+      )}
+
+      {showLinkPR && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15%]" onClick={() => setShowLinkPR(false)}>
+          <div
+            className="w-[450px] flex flex-col rounded-xl border border-[var(--ctp-surface1)] bg-[var(--ctp-surface0)] shadow-2xl overflow-hidden p-4 gap-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="text-sm font-semibold text-[var(--ctp-text)]">Link PR</span>
+            <input
+              type="text"
+              value={linkPRUrl}
+              onChange={(e) => setLinkPRUrl(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleLinkPR(linkPRUrl); if (e.key === "Escape") setShowLinkPR(false); }}
+              placeholder="https://github.com/owner/repo/pull/123"
+              className="px-3 py-2 text-sm rounded outline-none"
+              style={{
+                backgroundColor: "var(--ctp-mantle)",
+                color: "var(--ctp-text)",
+                border: "1px solid var(--ctp-surface1)",
+              }}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowLinkPR(false)}
+                className="px-3 py-1.5 text-xs rounded"
+                style={{ backgroundColor: "var(--ctp-surface1)", color: "var(--ctp-text)" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleLinkPR(linkPRUrl)}
+                disabled={!linkPRUrl.trim()}
+                className="px-3 py-1.5 text-xs rounded"
+                style={{
+                  backgroundColor: "var(--ctp-blue)",
+                  color: "var(--ctp-base)",
+                  opacity: !linkPRUrl.trim() ? 0.5 : 1,
+                }}
+              >
+                Open
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

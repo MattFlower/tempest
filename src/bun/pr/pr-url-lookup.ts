@@ -36,16 +36,6 @@ export function parseGitHubRemote(remote: string): string | null {
   }
 }
 
-/**
- * Look up the PR URL for the given branch in a repository.
- *
- * @param repoPath  Path to the repo root (must contain .git). Used for
- *                  `git remote` and `gh pr view` — important because jj
- *                  workspaces don't have their own .git directory.
- * @param branch    The branch or bookmark name to look up. For jj repos
- *                  this is the bookmark name (resolved by the VCS provider),
- *                  for git repos it's the branch name.
- */
 export async function lookupPRUrl(
   repoPath: string,
   branch: string,

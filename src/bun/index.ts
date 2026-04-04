@@ -34,6 +34,7 @@ import { readFileForEditor, writeFileForEditor, resolveModulePath } from "./edit
 import { AIContextProvider } from "./diff/ai-context-provider";
 import { PRMonitor } from "./pr/pr-monitor";
 import { lookupPRUrl } from "./pr/pr-url-lookup";
+import { getDefaultTitleAndBody, openPR as openPRAction, updatePR as updatePRAction } from "./pr/pr-open";
 import { getAssignedPRs } from "./pr/pr-assigned";
 import { startPRReview } from "./pr/pr-review-coordinator";
 import {
@@ -471,6 +472,57 @@ const rpc = BrowserView.defineRPC({
           return { error: "No branch or bookmark found for the current workspace." };
         }
         return await lookupPRUrl(vcsInfo.repoPath, vcsInfo.branch);
+      },
+
+      // --- Open PR (push + create draft PR) ---
+      getDefaultPRTitleBody: async (params: any) => {
+        try {
+          const ws = workspaceManager.findWorkspaceByPath(params.workspacePath);
+          if (!ws) return { error: "Workspace not found." };
+          const vcsType = workspaceManager.getVCSType(ws.repoPath);
+          return await getDefaultTitleAndBody(
+            params.workspacePath, ws.repoPath, vcsType, params.bookmarkName,
+          );
+        } catch (err: any) {
+          return { error: err.message ?? String(err) };
+        }
+      },
+      openPR: async (params: any) => {
+        try {
+          const ws = workspaceManager.findWorkspaceByPath(params.workspacePath);
+          if (!ws) return { error: "Workspace not found." };
+          const vcsType = workspaceManager.getVCSType(ws.repoPath);
+          const prURL = await openPRAction(
+            params.workspacePath, ws.repoPath, vcsType,
+            params.bookmarkName, params.title, params.body,
+          );
+          // Persist PR state
+          sessionStateManager.savePRState(params.workspacePath, {
+            bookmarkName: params.bookmarkName,
+            prURL,
+          });
+          return { prURL };
+        } catch (err: any) {
+          return { error: err.message ?? String(err) };
+        }
+      },
+      updatePR: async (params: any) => {
+        try {
+          const ws = workspaceManager.findWorkspaceByPath(params.workspacePath);
+          if (!ws) return { success: false, error: "Workspace not found." };
+          const vcsType = workspaceManager.getVCSType(ws.repoPath);
+          const prState = sessionStateManager.getPRState(params.workspacePath);
+          await updatePRAction(params.workspacePath, vcsType, prState?.bookmarkName);
+          return { success: true };
+        } catch (err: any) {
+          return { success: false, error: err.message ?? String(err) };
+        }
+      },
+      getOpenPRState: async (params: any) => {
+        return sessionStateManager.getPRState(params.workspacePath);
+      },
+      setOpenPRState: async (params: any) => {
+        sessionStateManager.savePRState(params.workspacePath, params.prState);
       },
 
       // --- PR Review (create workspace for PR) ---

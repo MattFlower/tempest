@@ -129,6 +129,13 @@ export interface HookEvent {
   toolName?: string;
 }
 
+// --- Open PR State ---
+
+export interface OpenPRState {
+  bookmarkName?: string; // jj only
+  prURL: string;
+}
+
 // --- Session State (Persistence) ---
 
 export interface SessionState {
@@ -141,6 +148,7 @@ export interface SessionState {
 export interface WorkspacePaneState {
   workspacePath: string;
   paneTree: PaneNodeState;
+  prState?: OpenPRState;
 }
 
 export type PaneNodeState =

@@ -354,6 +354,8 @@ export const api = {
   // Sidebar
   getSidebarInfo: (workspacePath: string) =>
     rpcRequest.getSidebarInfo({ workspacePath }),
+  getVCSType: (repoPath: string) =>
+    rpcRequest.getVCSType({ repoPath }),
 
   // Config
   getConfig: () => rpcRequest.getConfig(),
@@ -453,6 +455,18 @@ export const api = {
   // PR URL Lookup
   lookupPRUrl: (workspacePath: string) =>
     rpcRequest.lookupPRUrl({ workspacePath }),
+
+  // Open PR
+  getDefaultPRTitleBody: (workspacePath: string, bookmarkName?: string) =>
+    rpcRequest.getDefaultPRTitleBody({ workspacePath, bookmarkName }),
+  openPR: (workspacePath: string, title: string, body: string, bookmarkName?: string) =>
+    rpcRequest.openPR({ workspacePath, bookmarkName, title, body }),
+  updatePR: (workspacePath: string) =>
+    rpcRequest.updatePR({ workspacePath }),
+  getOpenPRState: (workspacePath: string) =>
+    rpcRequest.getOpenPRState({ workspacePath }),
+  setOpenPRState: (workspacePath: string, prState: any) =>
+    rpcRequest.setOpenPRState({ workspacePath, prState }),
 
   // PR Review
   startPRReview: (repoId: string, prNumber: number) =>

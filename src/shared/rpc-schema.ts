@@ -34,6 +34,7 @@ import type {
   DiffScope,
   FileAIContext,
   FileChangeTimeline,
+  OpenPRState,
   PRDraftSummary,
 } from "./ipc-types";
 
@@ -301,6 +302,33 @@ export interface BunRequests {
   lookupPRUrl: {
     params: { workspacePath: string };
     response: { url: string } | { error: string };
+  };
+
+  // Open PR — push and create a draft PR
+  getDefaultPRTitleBody: {
+    params: { workspacePath: string; bookmarkName?: string };
+    response: { title: string; body: string } | { error: string };
+  };
+  openPR: {
+    params: {
+      workspacePath: string;
+      bookmarkName?: string;
+      title: string;
+      body: string;
+    };
+    response: { prURL: string } | { error: string };
+  };
+  updatePR: {
+    params: { workspacePath: string };
+    response: { success: boolean; error?: string };
+  };
+  getOpenPRState: {
+    params: { workspacePath: string };
+    response: OpenPRState | null;
+  };
+  setOpenPRState: {
+    params: { workspacePath: string; prState: OpenPRState | null };
+    response: void;
   };
 
   // PR Review — create a workspace for reviewing a PR

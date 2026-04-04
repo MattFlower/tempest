@@ -531,7 +531,7 @@ export class WorkspaceManager {
 
   // --- Helpers ---
 
-  private findWorkspaceByPath(path: string): TempestWorkspace | undefined {
+  findWorkspaceByPath(path: string): TempestWorkspace | undefined {
     for (const workspaces of this.workspacesByRepo.values()) {
       const ws = workspaces.find((w) => w.path === path);
       if (ws) return ws;

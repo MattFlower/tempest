@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type {
   SessionState,
   PaneNodeState,
+  OpenPRState,
   WorkspacePaneState,
 } from "../shared/ipc-types";
 
@@ -72,9 +73,27 @@ export class SessionStateManager {
 
   savePaneState(workspacePath: string, paneTree: PaneNodeState): void {
     this.ensureState();
-    this.state!.workspaces[workspacePath] = { workspacePath, paneTree };
+    const existing = this.state!.workspaces[workspacePath];
+    this.state!.workspaces[workspacePath] = {
+      workspacePath,
+      paneTree,
+      prState: existing?.prState,
+    };
     this.state!.savedAt = new Date().toISOString();
     this.dirty = true;
+  }
+
+  savePRState(workspacePath: string, prState: OpenPRState | null): void {
+    this.ensureState();
+    const existing = this.state!.workspaces[workspacePath];
+    if (existing) {
+      existing.prState = prState ?? undefined;
+    }
+    this.dirty = true;
+  }
+
+  getPRState(workspacePath: string): OpenPRState | null {
+    return this.state?.workspaces[workspacePath]?.prState ?? null;
   }
 
   /** Update scrollback/cwd on terminal tabs in all stored pane trees. */

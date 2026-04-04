@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Keyboard Shortcuts — Tempest</title>
+  <meta name="description" content="Complete keyboard shortcut reference for Tempest — the macOS developer workspace.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-card: #16161f;
+      --border: #1e1e2e;
+      --text-primary: #e4e4ef;
+      --text-secondary: #8888a0;
+      --accent: #6e8efb;
+      --accent-dim: #4a5a8a;
+      --accent-glow: rgba(110, 142, 251, 0.15);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    code, .mono {
+      font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* --- Nav --- */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 50;
+      background: rgba(10, 10, 15, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-logo {
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+    }
+    .nav-logo a { color: inherit; }
+    .nav-logo a:hover { text-decoration: none; }
+
+    .nav-links { display: flex; gap: 28px; align-items: center; }
+    .nav-links a {
+      font-size: 14px;
+      color: var(--text-secondary);
+      font-weight: 500;
+      transition: color 0.15s;
+    }
+    .nav-links a:hover { color: var(--text-primary); text-decoration: none; }
+    .nav-links a.active { color: var(--text-primary); }
+
+    .nav-cta {
+      background: var(--accent);
+      color: #fff !important;
+      padding: 6px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      transition: opacity 0.15s;
+    }
+    .nav-cta:hover { opacity: 0.85; text-decoration: none !important; }
+
+    /* --- Page layout --- */
+    .page {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 100px 24px 80px;
+    }
+
+    .page-header {
+      margin-bottom: 48px;
+    }
+
+    .breadcrumb {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+    .breadcrumb a { color: var(--text-secondary); }
+    .breadcrumb a:hover { color: var(--text-primary); }
+
+    .page-header h1 {
+      font-size: clamp(28px, 4vw, 40px);
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      margin-bottom: 12px;
+    }
+
+    .page-header p {
+      font-size: 16px;
+      color: var(--text-secondary);
+      max-width: 560px;
+    }
+
+    /* --- Shortcut sections --- */
+    .shortcut-section {
+      margin-bottom: 48px;
+    }
+
+    .shortcut-section h2 {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .shortcut-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .shortcut-table tr {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .shortcut-table tr:last-child {
+      border-bottom: none;
+    }
+
+    .shortcut-table td {
+      padding: 10px 0;
+      font-size: 14px;
+      vertical-align: top;
+    }
+
+    .shortcut-table td:first-child {
+      width: 220px;
+      padding-right: 24px;
+      white-space: nowrap;
+    }
+
+    .shortcut-table td:last-child {
+      color: var(--text-secondary);
+    }
+
+    kbd {
+      display: inline-block;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 2px 8px;
+      font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.6;
+      color: var(--text-primary);
+      box-shadow: 0 1px 0 var(--border);
+    }
+
+    kbd + kbd {
+      margin-left: 2px;
+    }
+
+    .key-separator {
+      color: var(--text-secondary);
+      margin: 0 4px;
+      font-size: 12px;
+    }
+
+    /* --- Footer --- */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 24px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    footer a { color: var(--text-secondary); }
+    footer a:hover { color: var(--text-primary); }
+
+    @media (max-width: 640px) {
+      .nav-links a:not(.nav-cta) { display: none; }
+      .shortcut-table td:first-child { width: auto; }
+      .shortcut-table td { display: block; padding: 4px 0; }
+      .shortcut-table td:first-child { padding-bottom: 2px; }
+      .shortcut-table td:last-child { padding-bottom: 12px; }
+      .shortcut-table tr { display: block; padding: 8px 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="nav-inner">
+      <div class="nav-logo"><a href="../">Tempest</a></div>
+      <div class="nav-links">
+        <a href="../#features">Features</a>
+        <a href="./" class="active">Docs</a>
+        <a href="https://github.com/MattFlower/tempest" class="nav-cta">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="page">
+    <div class="page-header">
+      <p class="breadcrumb"><a href="./">Docs</a> / Keyboard Shortcuts</p>
+      <h1>Keyboard Shortcuts</h1>
+      <p>Complete reference for all keyboard shortcuts in Tempest. All shortcuts use the <kbd>&#8984;</kbd> (Command) key as the primary modifier.</p>
+    </div>
+
+    <!-- Command Palette -->
+    <section class="shortcut-section">
+      <h2>Command Palette</h2>
+      <table class="shortcut-table">
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>Shift</kbd><kbd>P</kbd></td>
+          <td>Open command palette (commands mode)</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>P</kbd></td>
+          <td>Open command palette (files mode)</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8593;</kbd> <span class="key-separator">/</span> <kbd>&#8595;</kbd></td>
+          <td>Navigate items in palette</td>
+        </tr>
+        <tr>
+          <td><kbd>Enter</kbd></td>
+          <td>Execute selected command or open file</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8592;</kbd></td>
+          <td>Open selected item in left pane</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8594;</kbd></td>
+          <td>Open selected item in right pane</td>
+        </tr>
+        <tr>
+          <td><kbd>Tab</kbd></td>
+          <td>Switch between commands and files mode</td>
+        </tr>
+        <tr>
+          <td><kbd>Esc</kbd></td>
+          <td>Close palette</td>
+        </tr>
+      </table>
+    </section>
+
+    <!-- Tab Management -->
+    <section class="shortcut-section">
+      <h2>Tab Management</h2>
+      <table class="shortcut-table">
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>T</kbd></td>
+          <td>New Claude tab</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>Enter</kbd></td>
+          <td>New shell tab</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>Shift</kbd><kbd>B</kbd></td>
+          <td>Open browser tab</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>Shift</kbd><kbd>H</kbd></td>
+          <td>Open chat history</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>W</kbd></td>
+          <td>Close current tab</td>
+        </tr>
+      </table>
+    </section>
+
+    <!-- Pane Operations -->
+    <section class="shortcut-section">
+      <h2>Pane Operations</h2>
+      <table class="shortcut-table">
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>D</kbd></td>
+          <td>Split pane vertically (new pane to the right)</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>]</kbd></td>
+          <td>Focus next pane</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>[</kbd></td>
+          <td>Focus previous pane</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>Alt</kbd><kbd>&#8594;</kbd></td>
+          <td>Focus pane to the right</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>Alt</kbd><kbd>&#8592;</kbd></td>
+          <td>Focus pane to the left</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>Shift</kbd><kbd>Enter</kbd></td>
+          <td>Toggle maximize/restore current pane</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>Shift</kbd><kbd>=</kbd></td>
+          <td>Reset all pane sizes to equal</td>
+        </tr>
+      </table>
+    </section>
+
+    <!-- View Modes -->
+    <section class="shortcut-section">
+      <h2>View Modes</h2>
+      <table class="shortcut-table">
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>1</kbd></td>
+          <td>Switch to terminal view</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>2</kbd></td>
+          <td>Switch to diff view</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>3</kbd></td>
+          <td>Switch to dashboard view</td>
+        </tr>
+      </table>
+    </section>
+
+    <!-- Editor -->
+    <section class="shortcut-section">
+      <h2>Editor</h2>
+      <table class="shortcut-table">
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>S</kbd></td>
+          <td>Save file</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>W</kbd></td>
+          <td>Close editor tab</td>
+        </tr>
+        <tr>
+          <td><kbd>:</kbd><kbd>q</kbd></td>
+          <td>Quit (Vim mode)</td>
+        </tr>
+        <tr>
+          <td><kbd>:</kbd><kbd>w</kbd><kbd>q</kbd></td>
+          <td>Save and quit (Vim mode)</td>
+        </tr>
+      </table>
+    </section>
+
+    <!-- Terminal -->
+    <section class="shortcut-section">
+      <h2>Terminal</h2>
+      <table class="shortcut-table">
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>C</kbd></td>
+          <td>Copy selection (when text is selected)</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>V</kbd></td>
+          <td>Paste from clipboard</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>F</kbd></td>
+          <td>Open find bar</td>
+        </tr>
+        <tr>
+          <td><kbd>Shift</kbd><kbd>Enter</kbd></td>
+          <td>Send newline to Claude Code (CSI u encoding)</td>
+        </tr>
+      </table>
+    </section>
+
+    <!-- Terminal Search -->
+    <section class="shortcut-section">
+      <h2>Terminal Search</h2>
+      <table class="shortcut-table">
+        <tr>
+          <td><kbd>Enter</kbd></td>
+          <td>Find next match</td>
+        </tr>
+        <tr>
+          <td><kbd>Shift</kbd><kbd>Enter</kbd></td>
+          <td>Find previous match</td>
+        </tr>
+        <tr>
+          <td><kbd>Esc</kbd></td>
+          <td>Close search bar</td>
+        </tr>
+      </table>
+    </section>
+
+    <!-- Browser -->
+    <section class="shortcut-section">
+      <h2>Browser</h2>
+      <table class="shortcut-table">
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>F</kbd></td>
+          <td>Open find bar</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>G</kbd></td>
+          <td>Find next match</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>Shift</kbd><kbd>G</kbd></td>
+          <td>Find previous match</td>
+        </tr>
+        <tr>
+          <td><kbd>Esc</kbd></td>
+          <td>Close find bar</td>
+        </tr>
+      </table>
+    </section>
+
+    <!-- Version Control -->
+    <section class="shortcut-section">
+      <h2>Version Control</h2>
+      <table class="shortcut-table">
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>Enter</kbd></td>
+          <td>Commit (when in commit panel)</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>Shift</kbd><kbd>Enter</kbd></td>
+          <td>Commit and push</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>S</kbd></td>
+          <td>Save revision description (Jujutsu)</td>
+        </tr>
+      </table>
+    </section>
+
+    <!-- UI -->
+    <section class="shortcut-section">
+      <h2>UI</h2>
+      <table class="shortcut-table">
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>\</kbd></td>
+          <td>Toggle sidebar</td>
+        </tr>
+        <tr>
+          <td><kbd>&#8984;</kbd><kbd>Alt</kbd><kbd>I</kbd></td>
+          <td>Toggle developer tools</td>
+        </tr>
+      </table>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>&copy; 2025 Tempest. Built with <a href="https://electrobun.dev/">Electrobun</a>.</p>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Documentation — Tempest</title>
+  <meta name="description" content="Tempest documentation — guides, keyboard shortcuts, and reference for the macOS developer workspace.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-card: #16161f;
+      --border: #1e1e2e;
+      --text-primary: #e4e4ef;
+      --text-secondary: #8888a0;
+      --accent: #6e8efb;
+      --accent-dim: #4a5a8a;
+      --accent-glow: rgba(110, 142, 251, 0.15);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    code, .mono {
+      font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* --- Nav --- */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 50;
+      background: rgba(10, 10, 15, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-logo {
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+    }
+    .nav-logo a { color: inherit; }
+    .nav-logo a:hover { text-decoration: none; }
+
+    .nav-links { display: flex; gap: 28px; align-items: center; }
+    .nav-links a {
+      font-size: 14px;
+      color: var(--text-secondary);
+      font-weight: 500;
+      transition: color 0.15s;
+    }
+    .nav-links a:hover { color: var(--text-primary); text-decoration: none; }
+    .nav-links a.active { color: var(--text-primary); }
+
+    .nav-cta {
+      background: var(--accent);
+      color: #fff !important;
+      padding: 6px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      transition: opacity 0.15s;
+    }
+    .nav-cta:hover { opacity: 0.85; text-decoration: none !important; }
+
+    /* --- Page layout --- */
+    .page {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 100px 24px 80px;
+    }
+
+    .page-header {
+      margin-bottom: 48px;
+    }
+
+    .page-header h1 {
+      font-size: clamp(28px, 4vw, 40px);
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      margin-bottom: 12px;
+    }
+
+    .page-header p {
+      font-size: 16px;
+      color: var(--text-secondary);
+      max-width: 560px;
+    }
+
+    /* --- Doc cards --- */
+    .doc-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+
+    .doc-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+      transition: border-color 0.2s;
+      display: block;
+      color: var(--text-primary);
+    }
+    .doc-card:hover { border-color: var(--accent-dim); text-decoration: none; }
+
+    .doc-card h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .doc-card p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* --- Footer --- */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 24px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    footer a { color: var(--text-secondary); }
+    footer a:hover { color: var(--text-primary); }
+
+    @media (max-width: 640px) {
+      .nav-links a:not(.nav-cta) { display: none; }
+      .doc-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="nav-inner">
+      <div class="nav-logo"><a href="../">Tempest</a></div>
+      <div class="nav-links">
+        <a href="../#features">Features</a>
+        <a href="./" class="active">Docs</a>
+        <a href="https://github.com/MattFlower/tempest" class="nav-cta">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="page">
+    <div class="page-header">
+      <h1>Documentation</h1>
+      <p>Guides and reference for getting the most out of Tempest.</p>
+    </div>
+
+    <div class="doc-grid">
+      <a href="keyboard-shortcuts.html" class="doc-card">
+        <h2>Keyboard Shortcuts</h2>
+        <p>Complete reference for all keyboard shortcuts — navigation, tab management, pane operations, editor, terminal, and more.</p>
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <p>&copy; 2025 Tempest. Built with <a href="https://electrobun.dev/">Electrobun</a>.</p>
+  </footer>
+
+</body>
+</html>

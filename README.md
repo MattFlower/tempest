@@ -1,5 +1,7 @@
 # Tempest
 
+![Tempest screenshot](website/static/terminal-screen.webp)
+
 A macOS developer tool built with [Electrobun](https://electrobun.dev/) (Bun + native WebView). Tempest provides an integrated workspace with terminal emulation, a built-in browser, code editing, markdown preview, git/PR workflows, and session management -- all in a single native app.
 
 ## Features
@@ -8,10 +10,14 @@ A macOS developer tool built with [Electrobun](https://electrobun.dev/) (Bun + n
 - **Browser** -- Tabbed browsing via system WKWebView with bookmarks
 - **Editor** -- Monaco editor with Vim bindings
 - **Markdown viewer** -- Live-rendered markdown with Mermaid diagram support
-- **Git integration** -- Diff viewer, VCS status, file staging
+- **Git & Jujutsu integration** -- Diff viewer, VCS status, file staging for both Git and Jujutsu
 - **PR monitor** -- Track and review pull requests
-- **Session management** -- Workspace persistence and session state restore
-- **Claude Code hooks** -- Event hooks for AI-assisted development workflows
+- **Session management** -- Workspace persistence, session state restore, and terminal scrollback capture
+- **Workspaces** -- Create, archive, and switch between workspaces, each with their own terminals, browser tabs, and sessions. Activity indicators show whether each workspace is idle, working, or waiting for input.
+- **Ask Claude** -- Highlight text in Diff View or VCS View and send it to Claude Code with context automatically included
+- **Custom scripts** -- Define parameterized scripts and run them with a button click
+- **Command palette** -- Quick access to commands (Cmd+Shift+P) and files (Cmd+P), with arrow keys to target left or right pane
+- **Remote control server** -- Optional HTTP server for controlling Tempest remotely, with bearer token auth, a web dashboard, and QR code for easy mobile access
 
 ## Prerequisites
 

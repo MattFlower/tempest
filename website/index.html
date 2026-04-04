@@ -202,17 +202,18 @@
 
     .screenshot {
       width: 100%;
-      aspect-ratio: 16/10;
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--text-secondary);
-      font-size: 14px;
       position: relative;
       overflow: hidden;
+    }
+
+    .screenshot img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 12px;
     }
 
     .screenshot::before {
@@ -220,21 +221,6 @@
       position: absolute;
       inset: 0;
       background: linear-gradient(135deg, rgba(110, 142, 251, 0.04) 0%, transparent 60%);
-    }
-
-    .screenshot-dots {
-      position: absolute;
-      top: 16px;
-      left: 20px;
-      display: flex;
-      gap: 8px;
-    }
-
-    .screenshot-dots span {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: var(--border);
     }
 
     /* --- Features --- */
@@ -414,6 +400,7 @@
       <div class="nav-links">
         <a href="#features">Features</a>
         <a href="#tech">Tech</a>
+        <a href="docs/">Docs</a>
         <a href="https://github.com/MattFlower/tempest" class="nav-cta">GitHub</a>
       </div>
     </div>
@@ -440,10 +427,7 @@
 
     <div class="screenshot-wrapper">
       <div class="screenshot">
-        <div class="screenshot-dots">
-          <span></span><span></span><span></span>
-        </div>
-        <span style="position:relative">Screenshot coming soon</span>
+        <img src="static/terminal-screen.webp" alt="Image of the main Tempest page">
       </div>
     </div>
   </section>
@@ -475,12 +459,12 @@
       <div class="feature-card">
         <div class="feature-icon">&#8801;</div>
         <h3>Markdown viewer</h3>
-        <p>Live-rendered markdown with Mermaid diagram support. Great for docs, READMEs, and design notes.</p>
+        <p>Live-rendered markdown with Mermaid diagram support. Great for docs, READMEs, Claude Plans, and design notes.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#10562;</div>
-        <h3>Git integration</h3>
-        <p>Built-in diff viewer, VCS status, and file staging. See what changed and commit without switching to a separate tool.</p>
+        <h3>Git &amp; Jujutsu integration</h3>
+        <p>Built-in diff viewer, VCS status, and file staging for both Git and Jujutsu. See what changed and commit without switching to a separate tool.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#10003;</div>
@@ -490,12 +474,27 @@
       <div class="feature-card">
         <div class="feature-icon">&#8634;</div>
         <h3>Session management</h3>
-        <p>Workspace persistence and session state restore. Close and reopen exactly where you left off.</p>
+        <p>Workspace persistence, session state restore, and terminal scrollback capture. Close and reopen exactly where you left off.</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon">&#10697;</div>
-        <h3>Claude Code hooks</h3>
-        <p>Event hooks for AI-assisted development workflows. Integrate Claude Code into your development process.</p>
+        <div class="feature-icon">&#9707;</div>
+        <h3>Workspaces</h3>
+        <p>Create, archive, and switch between workspaces, each with their own terminals, browser tabs, and sessions. Activity indicators show whether each workspace is idle, working, or waiting for input.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#9993;</div>
+        <h3>Ask Claude</h3>
+        <p>Highlight text in Diff View or VCS View and send it to Claude Code with context automatically included. Spec-driven development made interactive.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#9654;</div>
+        <h3>Custom scripts</h3>
+        <p>Define parameterized scripts and run them with a button click. Automate repetitive tasks without leaving the workspace.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#8984;</div>
+        <h3>Command palette</h3>
+        <p>Quick access to commands and files with Cmd+Shift+P and Cmd+P. Open results in the current pane or use arrow keys to target left or right.</p>
       </div>
     </div>
   </section>
@@ -558,7 +557,7 @@
 
   <!-- Footer -->
   <footer>
-    <p>&copy; 2025 Tempest. Built with <a href="https://electrobun.dev/">Electrobun</a>.</p>
+    <p>&copy; 2026 Tempest. Built with <a href="https://electrobun.dev/">Electrobun</a>.</p>
   </footer>
 
 </body>

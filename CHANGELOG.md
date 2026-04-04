@@ -26,10 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-### Changed
-
 - Much better Claude session management -- filesystem watches immediately pick up the session
   ids for Claude sessions.
+
+### Changed
+
 
 ### Removed
 
@@ -46,6 +47,8 @@ foundation of Tempest.
 
 ### Added
 
+- Claude Code use that is 100% legit and works with Claude Max subscriptions.  My aim is to 
+  always remain 100% in the good graces of Anthropic.
 - Add Workspaces or Archive Workspaces seamlessly, each having a separate visual space to use
   Claude, open Terminals, or open Browsers.
 - Workspaces support both Git and [Jujutsu](https://jj-vcs.dev).
@@ -55,7 +58,14 @@ foundation of Tempest.
   deletions in version control to the associated change conversions in claude.
 - Multiple Panes in the main body of the application, each can contain Terminals, Claude Code,
   Browser, or Chat History
-- The beginnings of session storage -- Claude sessions attempt to be restored.
+- Workspace-specific bookmarks, making it easy to link directly to places like your Github 
+  project, CI build, and the port your browser uses.  No additional navigation needed.
+- The beginnings of session storage -- Claude sessions attempt to be restored and browser tabs 
+  retain the urls they are looking at.
 - Add "Command" menu (Cmd+Shift+p). Not only can you press enter on some tools to open in the
   current tab, but you can also use the left or right buttons to open to either side.
 - Add "Open File" command (Cmd+p) that opens a Neovim in a new tab, pointing at a file.
+- Ability to Open a new PR based on your local changes 
+- Ability to Open the current PR for your git branch / jj bookmark in the browser.
+- A status indicator for each workspace indicating whether Claude is idle, working, or waiting 
+  for input from the user.

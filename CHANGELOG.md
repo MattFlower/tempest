@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   repos/workspaces with live status indicators, and the ability to create new workspaces with
   an initial Claude prompt. Configurable via a new "Remote" tab in Settings with enable toggle,
   listen address (with network interface selection), port, token generation, URL copy, and QR code.
+- Add DMG distribution -- releases now include a polished DMG installer with drag-to-Applications
+  in addition to the existing ZIP archive. Both are code-signed and notarized.
+- Add Homebrew Cask support -- install via `brew tap MattFlower/recipes && brew install --cask tempest`.
+  The tap is automatically updated on each release.
 
 ### Fixed
 

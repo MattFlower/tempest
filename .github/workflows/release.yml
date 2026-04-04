@@ -42,17 +42,24 @@ jobs:
         env:
           ELECTROBUN_DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID }}
 
-      - name: Find app bundle
+      - name: Find build artifacts
         run: |
           APP_PATH=$(find build -maxdepth 2 -name "*.app" -type d | head -1)
+          DMG_PATH=$(find artifacts -name "*.dmg" | head -1)
           if [[ -z "$APP_PATH" ]]; then
             echo "ERROR: No .app bundle found in build/"
             exit 1
           fi
+          if [[ -z "$DMG_PATH" ]]; then
+            echo "ERROR: No .dmg found in artifacts/"
+            exit 1
+          fi
           echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
-          echo "Found: $APP_PATH"
+          echo "DMG_PATH=$DMG_PATH" >> "$GITHUB_ENV"
+          echo "Found app: $APP_PATH"
+          echo "Found dmg: $DMG_PATH"
 
-      - name: Notarize
+      - name: Notarize app
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
@@ -67,14 +74,30 @@ jobs:
           xcrun stapler staple "$APP_PATH"
           rm "$APP_PATH.zip"
 
+      - name: Notarize DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcrun notarytool submit "$DMG_PATH" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$DMG_PATH"
+          cp "$DMG_PATH" Tempest.dmg
+
       - name: Create distributable zip
         run: ditto -c -k --keepParent "$APP_PATH" Tempest.zip
 
-      - name: Upload artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Tempest.zip
-          path: Tempest.zip
+          name: Tempest
+          path: |
+            Tempest.dmg
+            Tempest.zip
 
       - name: Extract changelog for release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -89,7 +112,47 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" Tempest.zip \
+          gh release create "${{ github.ref_name }}" Tempest.dmg Tempest.zip \
             --repo "${{ github.repository }}" \
             --title "${{ github.ref_name }}" \
             --notes-file release_notes.md
+
+      - name: Update Homebrew tap
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          SHA256=$(shasum -a 256 Tempest.dmg | awk '{print $1}')
+
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${{ github.repository_owner }}/homebrew-recipes.git" homebrew-tap
+          cd homebrew-tap
+
+          cat > Casks/tempest.rb << CASK
+          cask "tempest" do
+            version "${VERSION}"
+            sha256 "${SHA256}"
+
+            url "https://github.com/${{ github.repository }}/releases/download/v#{version}/Tempest.dmg"
+            name "Tempest"
+            desc "macOS developer tool for AI-assisted coding"
+            homepage "https://gotempest.net"
+
+            depends_on macos: ">= :ventura"
+
+            app "Tempest.app"
+
+            zap trash: [
+              "~/Library/Application Support/com.tempest.app",
+              "~/Library/Preferences/com.tempest.app.plist",
+              "~/Library/Caches/com.tempest.app",
+            ]
+          end
+          CASK
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/tempest.rb
+          git commit -m "Update Tempest to ${VERSION}"
+          git push

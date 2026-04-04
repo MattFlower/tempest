@@ -4,6 +4,19 @@
 
 A macOS developer tool built with [Electrobun](https://electrobun.dev/) (Bun + native WebView). Tempest provides an integrated workspace with terminal emulation, a built-in browser, code editing, markdown preview, git/PR workflows, and session management -- all in a single native app.
 
+## Install
+
+### Homebrew (recommended)
+
+```bash
+brew tap MattFlower/recipes
+brew install --cask tempest
+```
+
+### Manual download
+
+Grab the latest `Tempest.dmg` or `Tempest.zip` from the [GitHub Releases](https://github.com/MattFlower/tempest/releases) page.
+
 ## Features
 
 - **Terminal** -- xterm.js with WebGL rendering, backed by Bun.Terminal PTY
@@ -19,12 +32,14 @@ A macOS developer tool built with [Electrobun](https://electrobun.dev/) (Bun + n
 - **Command palette** -- Quick access to commands (Cmd+Shift+P) and files (Cmd+P), with arrow keys to target left or right pane
 - **Remote control server** -- Optional HTTP server for controlling Tempest remotely, with bearer token auth, a web dashboard, and QR code for easy mobile access
 
-## Prerequisites
+## Building Locally
+
+### Prerequisites
 
 - macOS
 - [Bun](https://bun.sh/) >= 1.3.11
 
-## Setup
+### Setup
 
 ```sh
 # Install dependencies
@@ -34,7 +49,7 @@ bun install
 bun run dev
 ```
 
-## Common Commands
+### Common Commands
 
 | Command | Description |
 |---|---|

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add "Open Current Plan" command to the command palette, which finds and opens the Claude Code
+  plan file for the focused Claude session in the built-in markdown viewer.
 - Full Rewrite in Electrobun and Typescript, achieving parity (from what I can tell, at least)
 - Introduce Monaco Editor as a built-in editor for those that don't love Neovim as much as I do
 - Add dedicated markdown viewer

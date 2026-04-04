@@ -107,6 +107,27 @@ function useCommands(): PaletteCommand[] {
       }
     }},
 
+    // Claude plans
+    { id: "open-plan", label: "Open Current Plan", canOpenAsPane: true, action: async () => {
+      const state = useStore.getState();
+      const { focusedPaneId, paneTrees, selectedWorkspacePath: wsPath } = state;
+      if (!focusedPaneId || !wsPath) return;
+      const tree = paneTrees[wsPath];
+      if (!tree) return;
+
+      // Find the focused pane's selected tab — must be a Claude tab with a sessionId
+      const pane = findPane(tree, focusedPaneId);
+      if (!pane) return;
+      const tab = pane.tabs.find((t) => t.id === pane.selectedTabId);
+      if (!tab || tab.kind !== PaneTabKind.Claude || !tab.sessionId) return;
+
+      const result = await api.getSessionPlanPath(tab.sessionId, wsPath);
+      if (!result.planPath) return;
+
+      const name = result.planPath.split("/").pop() ?? "Plan";
+      addTabToFocusedPane(PaneTabKind.MarkdownViewer, name, { markdownFilePath: result.planPath });
+    }},
+
     // App
     { id: "toggle-sidebar", label: "Toggle Sidebar", shortcutHint: "⌘\\", canOpenAsPane: false, action: toggleSidebar },
     { id: "toggle-devtools", label: "Toggle Developer Tools", shortcutHint: "⌘⌥I", canOpenAsPane: false, action: () => toggleDevTools() },

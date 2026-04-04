@@ -17,7 +17,7 @@ import { HookEventListener } from "./hooks/hook-event-listener";
 import { HookSettingsBuilder } from "./hooks/hook-settings-builder";
 import { SessionActivityTracker } from "./hooks/session-activity-tracker";
 
-import { lookupSessionID, findSessionIDs } from "./session-id-lookup";
+import { lookupSessionID, findSessionIDs, lookupPlanPath } from "./session-id-lookup";
 import { loadConfig, saveConfig as saveConfigFile, defaultConfig } from "./config/app-config";
 import { PathResolver } from "./config/path-resolver";
 import { getUsageData } from "./usage/usage-service";
@@ -254,6 +254,15 @@ const rpc = BrowserView.defineRPC({
         const matches = findSessionIDs(workspacePath);
         if (matches.length > 0) return { sessionId: matches[0] };
         return { sessionId: null };
+      },
+
+      getSessionPlanPath: (params: any) => {
+        const { sessionId, workspacePath } = params as {
+          sessionId: string;
+          workspacePath: string;
+        };
+        const planPath = lookupPlanPath(sessionId, workspacePath);
+        return { planPath };
       },
 
       buildClaudeCommand: (params: any) => sessionManager.buildClaudeCommand(params),

@@ -67,6 +67,11 @@ export interface BunRequests {
     params: { terminalId: string; workspacePath: string };
     response: { sessionId: string | null };
   };
+  // Plan file lookup (session → plan)
+  getSessionPlanPath: {
+    params: { sessionId: string; workspacePath: string };
+    response: { planPath: string | null };
+  };
   // Session commands
   buildClaudeCommand: {
     params: {

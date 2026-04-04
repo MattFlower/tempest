@@ -430,6 +430,10 @@ export const api = {
   isHistorySearchAvailable: () =>
     rpcRequest.isHistorySearchAvailable(undefined as any),
 
+  // Plan lookup
+  getSessionPlanPath: (sessionId: string, workspacePath: string) =>
+    rpcRequest.getSessionPlanPath({ sessionId, workspacePath }),
+
   // Markdown
   readMarkdownFile: (filePath: string) =>
     rpcRequest.readMarkdownFile({ filePath }),

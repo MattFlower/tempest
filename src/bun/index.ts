@@ -116,7 +116,7 @@ async function listFilesInDir(dirPath: string): Promise<string[]> {
     for await (const entry of glob.scan({
       cwd: dirPath,
       onlyFiles: true,
-      dot: false,
+      dot: true,
       followSymlinks: false,
     })) {
       const parts = entry.split("/");

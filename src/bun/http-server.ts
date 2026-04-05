@@ -541,7 +541,7 @@ function dashboardHTML(
       <form id="new-ws-form" onsubmit="submitNewWorkspace(event)">
         <input type="hidden" id="modal-repo-id">
         <label for="ws-name">Workspace Name</label>
-        <input type="text" id="ws-name" required placeholder="e.g. feature-auth" autofocus>
+        <input type="text" id="ws-name" required placeholder="e.g. feature-auth" autofocus autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
         <label for="ws-prompt">Claude Prompt <span class="optional">(optional)</span></label>
         <textarea id="ws-prompt" rows="6" placeholder="e.g. Implement user authentication using JWT tokens..."></textarea>
         <div class="modal-buttons">

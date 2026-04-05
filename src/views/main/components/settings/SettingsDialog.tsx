@@ -15,9 +15,10 @@ type Tab = "general" | "remote";
 export function SettingsDialog() {
   useOverlay();
   const toggleSettingsDialog = useStore((s) => s.toggleSettingsDialog);
+  const initialTab = useStore((s) => s.settingsDialogInitialTab);
 
   const [config, setConfig] = useState<AppConfig | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>("general");
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
 
   // General tab state
   const [editor, setEditor] = useState<"nvim" | "monaco">("nvim");

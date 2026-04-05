@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add HTTP server status indicator icon in the workspace toolbar — shows blue when the
+  HTTP server is enabled, grey when disabled. Clicking opens the Remote settings tab.
 - Auto-populate Scripts dropdown with scripts from package.json. Detects the package runner
   (bun/npm/yarn/pnpm) from lock files and runs scripts with the correct command. Refreshes
   on each dropdown open so mid-session edits to package.json are picked up.

@@ -39,6 +39,7 @@ export interface TempestStore {
   commandPaletteVisible: boolean;
   commandPaletteInitialMode: "commands" | "files";
   settingsDialogVisible: boolean;
+  settingsDialogInitialTab: "general" | "remote";
   newWorkspaceRepoId: string | null;
   overlayCount: number;
 
@@ -62,6 +63,7 @@ export interface TempestStore {
   toggleCommandPalette: () => void;
   openCommandPaletteFiles: () => void;
   toggleSettingsDialog: () => void;
+  openSettingsTab: (tab: "general" | "remote") => void;
   requestNewWorkspace: (repoId: string | null) => void;
   pushOverlay: () => void;
   popOverlay: () => void;
@@ -91,6 +93,7 @@ export const useStore = create<TempestStore>((set) => ({
   commandPaletteVisible: false,
   commandPaletteInitialMode: "commands" as const,
   settingsDialogVisible: false,
+  settingsDialogInitialTab: "general" as const,
   newWorkspaceRepoId: null,
   overlayCount: 0,
 
@@ -127,7 +130,12 @@ export const useStore = create<TempestStore>((set) => ({
   openCommandPaletteFiles: () =>
     set({ commandPaletteVisible: true, commandPaletteInitialMode: "files" as const }),
   toggleSettingsDialog: () =>
-    set((s) => ({ settingsDialogVisible: !s.settingsDialogVisible })),
+    set((s) => ({
+      settingsDialogVisible: !s.settingsDialogVisible,
+      settingsDialogInitialTab: s.settingsDialogVisible ? s.settingsDialogInitialTab : "general" as const,
+    })),
+  openSettingsTab: (tab) =>
+    set({ settingsDialogVisible: true, settingsDialogInitialTab: tab }),
   requestNewWorkspace: (repoId) => set({ newWorkspaceRepoId: repoId }),
   pushOverlay: () => set((s) => ({ overlayCount: s.overlayCount + 1 })),
   popOverlay: () => set((s) => ({ overlayCount: Math.max(0, s.overlayCount - 1) })),

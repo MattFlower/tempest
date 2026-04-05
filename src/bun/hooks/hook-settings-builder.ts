@@ -1,4 +1,4 @@
-import { mkdir, unlink } from "node:fs/promises";
+import { mkdir, unlink, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
@@ -63,16 +63,43 @@ export class HookSettingsBuilder {
     );
     const dir = join(homedir(), ".tempest");
     await mkdir(dir, { recursive: true });
-    const path = join(dir, `settings-${crypto.randomUUID()}.json`);
-    await Bun.write(path, json);
+
+    const hasher = new Bun.CryptoHasher("sha256");
+    hasher.update(json);
+    const hash = hasher.digest("hex").slice(0, 12);
+    const path = join(dir, `settings-${hash}.json`);
+
+    const file = Bun.file(path);
+    if (!(await file.exists())) {
+      await Bun.write(path, json);
+    }
+
     return path;
   }
 
-  static async cleanupSettingsFile(path: string): Promise<void> {
-    try {
-      await unlink(path);
-    } catch {
-      // Ignore — file may already be deleted
+  /** Remove legacy UUID-named settings files and stale hash-based files. */
+  static async cleanupStaleSettingsFiles(): Promise<void> {
+    const dir = join(homedir(), ".tempest");
+    const glob = new Bun.Glob("settings-*.json");
+    const uuidPattern = /^settings-[0-9a-f]{8}-[0-9a-f]{4}-/;
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+
+    for await (const name of glob.scan({ cwd: dir, onlyFiles: true })) {
+      const fullPath = join(dir, name);
+
+      // Always remove old UUID-based files (legacy cleanup)
+      if (uuidPattern.test(name)) {
+        try { await unlink(fullPath); } catch {}
+        continue;
+      }
+
+      // For hash-based files, remove if older than 7 days
+      try {
+        const s = await stat(fullPath);
+        if (Date.now() - s.mtimeMs > sevenDaysMs) {
+          await unlink(fullPath);
+        }
+      } catch {}
     }
   }
 

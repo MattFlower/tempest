@@ -79,12 +79,6 @@ export class SessionManager {
     return { command: ["/bin/zsh", "-l"] };
   }
 
-  async cleanupSettingsFile(path?: string): Promise<void> {
-    if (path) {
-      await HookSettingsBuilder.cleanupSettingsFile(path);
-    }
-  }
-
   /** Check if a Claude session JSONL file exists under ~/.claude/projects/ */
   private async sessionExists(sessionId: string, workspacePath: string): Promise<boolean> {
     const home = homedir();

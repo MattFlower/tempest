@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed settings file proliferation in `~/.tempest/` — use content-hashed filenames instead of UUIDs, with startup cleanup of stale files
+
 ### Changed
 
 ### Removed

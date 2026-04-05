@@ -84,6 +84,9 @@ function getBookmarkManager(repoPath: string): BookmarkManager {
 const workspaceManager = new WorkspaceManager();
 const sessionStateManager = new SessionStateManager();
 const hookListener = new HookEventListener(HookSettingsBuilder.socketPath);
+HookSettingsBuilder.cleanupStaleSettingsFiles().catch((err) =>
+  console.error("[main] Settings cleanup failed:", err),
+);
 const activityTracker = new SessionActivityTracker();
 
 // --- Stream G: History ---

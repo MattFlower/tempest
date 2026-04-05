@@ -124,19 +124,19 @@ describe("HookSettingsBuilder", () => {
   });
 
   describe("writeSettingsFile", () => {
-    it("creates a file in ~/.tempest/ directory with valid JSON", async () => {
-      const hookBinaryPath = "bun /path/to/tempest-hook.ts";
-      const socketPath = "/tmp/tempest-501.sock";
+    const hookBinaryPath = "bun /path/to/tempest-hook.ts";
+    const socketPath = "/tmp/tempest-501.sock";
 
+    it("creates a file in ~/.tempest/ directory with valid JSON", async () => {
       const filePath = await HookSettingsBuilder.writeSettingsFile(
         hookBinaryPath,
         socketPath,
       );
       filesToCleanup.push(filePath);
 
-      // Verify the path is in the expected directory
+      // Verify the path uses a content hash (12 hex chars)
       expect(filePath).toContain("/.tempest/");
-      expect(filePath).toMatch(/settings-.*\.json$/);
+      expect(filePath).toMatch(/settings-[0-9a-f]{12}\.json$/);
 
       // Verify the file contains valid JSON matching buildSettingsJSON output
       const file = Bun.file(filePath);
@@ -146,6 +146,39 @@ describe("HookSettingsBuilder", () => {
         socketPath,
       );
       expect(content).toBe(expectedJSON);
+    });
+
+    it("returns the same path for identical parameters (idempotent)", async () => {
+      const path1 = await HookSettingsBuilder.writeSettingsFile(
+        hookBinaryPath,
+        socketPath,
+      );
+      const path2 = await HookSettingsBuilder.writeSettingsFile(
+        hookBinaryPath,
+        socketPath,
+      );
+      filesToCleanup.push(path1);
+
+      expect(path1).toBe(path2);
+    });
+
+    it("returns different paths for different workspaceNames", async () => {
+      const channelPath = "/path/to/tempest-channel.ts";
+      const path1 = await HookSettingsBuilder.writeSettingsFile(
+        hookBinaryPath,
+        socketPath,
+        channelPath,
+        "workspace-a",
+      );
+      const path2 = await HookSettingsBuilder.writeSettingsFile(
+        hookBinaryPath,
+        socketPath,
+        channelPath,
+        "workspace-b",
+      );
+      filesToCleanup.push(path1, path2);
+
+      expect(path1).not.toBe(path2);
     });
   });
 

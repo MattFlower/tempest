@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Push initial Homebrew cask definition to the tap repo so `brew install --cask tempest` works
+
 ### Changed
 
 ### Removed

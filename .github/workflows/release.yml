@@ -128,7 +128,6 @@ jobs:
 
           git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${{ github.repository_owner }}/homebrew-recipes.git" homebrew-tap
           cd homebrew-tap
-          mkdir -p Casks
 
           cat > Casks/tempest.rb << CASK
           cask "tempest" do

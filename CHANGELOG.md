@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Fixed
+
+### Changed
+
+### Removed
+
+## [0.9.0] - 2026-04-05
+
+### Added
+
 - Accent line spanning the full window width below the view mode bar. Moved ViewModeBar to 
   App level so it sits above the sidebar/workspace split.
 - Add HTTP server status indicator icon in the workspace toolbar — shows blue when the

@@ -276,17 +276,32 @@ export class TerminalInstance {
         return true;
       });
 
+      // OSC 22: Mouse pointer shape — TUI apps (Textual, Charm) set cursor on hover.
+      const cursorMap: Record<string, string> = {
+        default: "default", text: "text", pointer: "pointer", hand: "pointer",
+        help: "help", wait: "wait", crosshair: "crosshair", move: "move",
+        grab: "grab", "not-allowed": "not-allowed", progress: "progress",
+        "col-resize": "col-resize", "row-resize": "row-resize",
+      };
+      this.terminal.parser.registerOscHandler(22, (data) => {
+        const name = data.trim();
+        if (this.terminal.element) {
+          this.terminal.element.style.cursor = cursorMap[name] ?? "";
+        }
+        return true;
+      });
+
       // OSC sequences to silently consume:
       for (const id of [
               // OSC 7 handled above (CWD tracking)
               // OSC 9 handled above (notifications) + ProgressAddon (progress)
+              // OSC 22 handled above (mouse pointer shape)
               // OSC 52 handled above (clipboard write)
               // OSC 99 handled above (Kitty notifications)
               // OSC 133 handled above (shell integration)
               // OSC 1337 handled by ImageAddon (iTerm2 inline images)
               // Sixel DCS handled by ImageAddon
               // Kitty graphics handled by ImageAddon
-        22,   // Set mouse pointer shape
         633,  // VS Code shell integration
       ]) {
         this.terminal.parser.registerOscHandler(id, () => true);

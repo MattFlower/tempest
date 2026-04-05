@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add filesystem path browsing to the Open File dialog (Cmd+P) -- type an absolute path
+  (`/etc/hosts`), tilde path (`~/bin`), or relative path (`./src`) to browse the filesystem
+  directly. Selecting a directory drills into it; clearing the query reverts to project files.
 - "Open Repo in Browser" command palette entry — opens the GitHub repo for the current workspace in a browser tab, navigating to the current branch if it has been pushed
 
 ### Fixed

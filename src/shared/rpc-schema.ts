@@ -240,6 +240,15 @@ export interface BunRequests {
     params: { workspacePath: string };
     response: string[];
   };
+  browsePath: {
+    params: { query: string; workspacePath: string };
+    response: {
+      kind: "file" | "directory" | "not_found" | "error";
+      resolvedPath: string;
+      entries?: string[];
+      error?: string;
+    };
+  };
 
   // Onboarding
   checkBinaries: {

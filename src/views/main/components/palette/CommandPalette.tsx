@@ -29,6 +29,10 @@ interface PaletteCommand {
   action: () => void;
 }
 
+function isPathQuery(query: string): boolean {
+  return /^(\/|~\/|~$|\.\/?|\.\.\/)/.test(query);
+}
+
 function isMonacoDefault(): boolean {
   return useStore.getState().config?.editor === "monaco";
 }
@@ -157,6 +161,13 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Path browsing state
+  const [pathResults, setPathResults] = useState<string[]>([]);
+  const [pathKind, setPathKind] = useState<"file" | "directory" | "not_found" | "error" | null>(null);
+  const [pathResolvedDir, setPathResolvedDir] = useState("");
+  const [browsingPath, setBrowsingPath] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Tracks editor type override from "Open with Neovim/Monaco" commands
   const pendingEditorTypeRef = useRef<EditorType | null>(null);
 
@@ -200,16 +211,17 @@ export function CommandPalette() {
         .sort((a, b) => b.match!.score - a.match!.score)
     : commands.map((cmd) => ({ cmd, match: { indices: [] as number[], score: 0 } }));
 
-  // Filter files
-  const filteredFiles = query
-    ? files.filter((f) => {
-        const name = f.split("/").pop() ?? f;
-        return fuzzyMatch(query, name) !== null;
-      })
-      .slice(0, 100)
-    : files.slice(0, 100);
+  // Filter files — path browsing results take priority when active
+  const displayFiles = browsingPath
+    ? pathResults.slice(0, 200)
+    : query
+      ? files.filter((f) => {
+          const name = f.split("/").pop() ?? f;
+          return fuzzyMatch(query, name) !== null;
+        }).slice(0, 100)
+      : files.slice(0, 100);
 
-  const itemCount = mode === "commands" ? filteredCommands.length : filteredFiles.length;
+  const itemCount = mode === "commands" ? filteredCommands.length : displayFiles.length;
 
   // Reset on open
   useEffect(() => {
@@ -218,6 +230,10 @@ export function CommandPalette() {
       setSelectedIndex(0);
       setMode(commandPaletteInitialMode);
       pendingEditorTypeRef.current = null;
+      setBrowsingPath(false);
+      setPathResults([]);
+      setPathKind(null);
+      setPathResolvedDir("");
       setTimeout(() => inputRef.current?.focus(), 0);
     }
   }, [visible, commandPaletteInitialMode]);
@@ -232,6 +248,50 @@ export function CommandPalette() {
       });
     }
   }, [mode, selectedWorkspacePath]);
+
+  // Debounced path browsing — fires when query looks like a filesystem path
+  useEffect(() => {
+    if (mode !== "files") return;
+
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+
+    if (!isPathQuery(query)) {
+      setBrowsingPath(false);
+      setPathResults([]);
+      setPathKind(null);
+      return;
+    }
+
+    setBrowsingPath(true);
+
+    debounceRef.current = setTimeout(async () => {
+      if (!selectedWorkspacePath) return;
+      try {
+        const result = await api.browsePath(query, selectedWorkspacePath);
+        setPathKind(result.kind);
+        setPathResolvedDir(result.resolvedPath);
+
+        if (result.kind === "file") {
+          setPathResults([result.resolvedPath]);
+        } else if (result.kind === "directory" && result.entries) {
+          setPathResults(result.entries);
+        } else {
+          setPathResults([]);
+        }
+      } catch {
+        setPathResults([]);
+        setPathKind("error");
+      }
+      setSelectedIndex(0);
+    }, 150);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query, mode, selectedWorkspacePath]);
 
   // Reset selection on query change
   useEffect(() => {
@@ -276,13 +336,20 @@ export function CommandPalette() {
         item.cmd.action();
       }
     } else if (mode === "files") {
-      const filePath = filteredFiles[selectedIndex];
-      if (filePath) {
-        dismiss();
-        openFileAsEditor(filePath);
+      const filePath = displayFiles[selectedIndex];
+      if (!filePath) return;
+
+      // Directory entry — drill into it
+      if (filePath.endsWith("/")) {
+        setQuery(filePath);
+        setSelectedIndex(0);
+        return;
       }
+
+      dismiss();
+      openFileAsEditor(filePath);
     }
-  }, [mode, filteredCommands, filteredFiles, selectedIndex, dismiss, openFileAsEditor]);
+  }, [mode, filteredCommands, displayFiles, selectedIndex, dismiss, openFileAsEditor]);
 
   const executeInPane = useCallback((direction: "left" | "right") => {
     if (mode === "commands") {
@@ -294,14 +361,14 @@ export function CommandPalette() {
         setTimeout(() => item.cmd.action(), 0);
       }
     } else if (mode === "files") {
-      const filePath = filteredFiles[selectedIndex];
-      if (filePath) {
+      const filePath = displayFiles[selectedIndex];
+      if (filePath && !filePath.endsWith("/")) {
         dismiss();
         splitPane(direction, true);
         setTimeout(() => openFileAsEditor(filePath), 0);
       }
     }
-  }, [mode, filteredCommands, filteredFiles, selectedIndex, dismiss, openFileAsEditor]);
+  }, [mode, filteredCommands, displayFiles, selectedIndex, dismiss, openFileAsEditor]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -392,7 +459,7 @@ export function CommandPalette() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={mode === "commands" ? "Search commands..." : "Search files..."}
+            placeholder={mode === "commands" ? "Search commands..." : browsingPath ? "Browsing filesystem..." : "Search files..."}
             className="flex-1 bg-transparent text-[13px] text-[var(--ctp-text)] placeholder:text-[var(--ctp-overlay0)] outline-none"
             autoFocus
           />
@@ -432,21 +499,37 @@ export function CommandPalette() {
                 />
               ))
             )
-          ) : loadingFiles ? (
+          ) : loadingFiles && !browsingPath ? (
             <div className="py-8 text-center text-[12px] text-[var(--ctp-overlay0)]">Loading files...</div>
-          ) : filteredFiles.length === 0 ? (
-            <div className="py-8 text-center text-[12px] text-[var(--ctp-overlay0)]">No files found</div>
+          ) : displayFiles.length === 0 ? (
+            <div className="py-8 text-center text-[12px] text-[var(--ctp-overlay0)]">
+              {browsingPath && pathKind === "not_found" ? "Path not found"
+                : browsingPath && pathKind === "error" ? "Cannot access path"
+                : "No files found"}
+            </div>
           ) : (
-            filteredFiles.map((filePath, index) => (
-              <FileRow
-                key={filePath}
-                filePath={filePath}
-                workspacePath={selectedWorkspacePath ?? ""}
-                isSelected={index === selectedIndex}
-                onClick={() => { dismiss(); openFileAsEditor(filePath); }}
-                onHover={() => setSelectedIndex(index)}
-              />
-            ))
+            displayFiles.map((filePath, index) => {
+              const isDir = filePath.endsWith("/");
+              return (
+                <FileRow
+                  key={filePath}
+                  filePath={filePath}
+                  workspacePath={browsingPath ? pathResolvedDir : (selectedWorkspacePath ?? "")}
+                  isDirectory={isDir}
+                  isSelected={index === selectedIndex}
+                  onClick={() => {
+                    if (isDir) {
+                      setQuery(filePath);
+                      setSelectedIndex(0);
+                    } else {
+                      dismiss();
+                      openFileAsEditor(filePath);
+                    }
+                  }}
+                  onHover={() => setSelectedIndex(index)}
+                />
+              );
+            })
           )}
         </div>
 
@@ -516,19 +599,22 @@ function CommandRow({
 function FileRow({
   filePath,
   workspacePath,
+  isDirectory,
   isSelected,
   onClick,
   onHover,
 }: {
   filePath: string;
   workspacePath: string;
+  isDirectory?: boolean;
   isSelected: boolean;
   onClick: () => void;
   onHover: () => void;
 }) {
-  const relative = filePath.startsWith(workspacePath)
-    ? filePath.slice(workspacePath.length + 1)
-    : filePath;
+  const cleanPath = isDirectory ? filePath.slice(0, -1) : filePath;
+  const relative = cleanPath.startsWith(workspacePath)
+    ? cleanPath.slice(workspacePath.length + 1)
+    : cleanPath;
   const fileName = relative.split("/").pop() ?? relative;
   const dir = relative.slice(0, relative.length - fileName.length - 1);
 
@@ -541,11 +627,17 @@ function FileRow({
         isSelected ? "bg-[var(--ctp-surface1)]" : ""
       }`}
     >
-      <svg className="w-3.5 h-3.5 text-[var(--ctp-overlay1)] flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
-        <path d="M3.75 1.5a.25.25 0 0 0-.25.25v11.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25V4.664a.25.25 0 0 0-.073-.177l-2.914-2.914a.25.25 0 0 0-.177-.073H3.75Z" />
-      </svg>
+      {isDirectory ? (
+        <svg className="w-3.5 h-3.5 text-[var(--ctp-overlay1)] flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M1.75 2.5a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25v-8.5a.25.25 0 0 0-.25-.25H7.5L6.177 2.927A1.75 1.75 0 0 0 4.931 2.5H1.75Z" />
+        </svg>
+      ) : (
+        <svg className="w-3.5 h-3.5 text-[var(--ctp-overlay1)] flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M3.75 1.5a.25.25 0 0 0-.25.25v11.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25V4.664a.25.25 0 0 0-.073-.177l-2.914-2.914a.25.25 0 0 0-.177-.073H3.75Z" />
+        </svg>
+      )}
       <div className="flex flex-col min-w-0">
-        <span className="text-[13px] font-medium text-[var(--ctp-text)] truncate">{fileName}</span>
+        <span className="text-[13px] font-medium text-[var(--ctp-text)] truncate">{fileName}{isDirectory ? "/" : ""}</span>
         {dir && <span className="text-[11px] text-[var(--ctp-overlay1)] truncate">{dir}</span>}
       </div>
     </div>

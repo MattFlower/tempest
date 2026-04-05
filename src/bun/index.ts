@@ -5,7 +5,8 @@
 // ============================================================
 
 import { readFileSync, watch, type FSWatcher } from "node:fs";
-import { join } from "node:path";
+import { readdir, stat } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { homedir, networkInterfaces } from "node:os";
 import { BrowserWindow, BrowserView, ApplicationMenu, Utils } from "electrobun/bun";
 import { PtyManager } from "./pty-manager";
@@ -132,6 +133,89 @@ async function listFilesInDir(dirPath: string): Promise<string[]> {
     console.error("[listFiles] error:", e);
   }
   return results;
+}
+
+async function browsePath(
+  query: string,
+  workspacePath: string,
+): Promise<{
+  kind: "file" | "directory" | "not_found" | "error";
+  resolvedPath: string;
+  entries?: string[];
+  error?: string;
+}> {
+  const home = homedir();
+
+  let resolved: string;
+  if (query.startsWith("~/") || query === "~") {
+    resolved = query.replace(/^~/, home);
+  } else if (query.startsWith("/")) {
+    resolved = query;
+  } else {
+    resolved = resolve(workspacePath, query);
+  }
+
+  // Normalize trailing slashes (keep root "/" intact)
+  if (resolved.length > 1 && resolved.endsWith("/")) {
+    resolved = resolved.slice(0, -1);
+  }
+
+  try {
+    const s = await stat(resolved);
+
+    if (s.isFile()) {
+      return { kind: "file", resolvedPath: resolved };
+    }
+
+    if (s.isDirectory()) {
+      return { kind: "directory", resolvedPath: resolved, entries: await listDirEntries(resolved) };
+    }
+
+    return { kind: "not_found", resolvedPath: resolved };
+  } catch (e: any) {
+    if (e.code === "ENOENT") {
+      // Path doesn't exist — try parent directory with partial filename prefix
+      const lastSlash = resolved.lastIndexOf("/");
+      if (lastSlash >= 0) {
+        const parentDir = lastSlash === 0 ? "/" : resolved.slice(0, lastSlash);
+        const partial = resolved.slice(lastSlash + 1).toLowerCase();
+        try {
+          const ps = await stat(parentDir);
+          if (ps.isDirectory()) {
+            const entries = await listDirEntries(parentDir, partial);
+            return { kind: "directory", resolvedPath: parentDir, entries };
+          }
+        } catch {
+          // parent doesn't exist either
+        }
+      }
+      return { kind: "not_found", resolvedPath: resolved };
+    }
+    if (e.code === "EACCES") {
+      return { kind: "error", resolvedPath: resolved, error: "Permission denied" };
+    }
+    return { kind: "error", resolvedPath: resolved, error: e.message ?? "Unknown error" };
+  }
+}
+
+async function listDirEntries(dirPath: string, prefix?: string): Promise<string[]> {
+  const dirents = await readdir(dirPath, { withFileTypes: true });
+  const dirs: string[] = [];
+  const files: string[] = [];
+
+  for (const d of dirents) {
+    if (prefix !== undefined && !d.name.toLowerCase().startsWith(prefix)) continue;
+    const full = resolve(dirPath, d.name);
+    if (d.isDirectory()) {
+      if (!IGNORE_DIRS.has(d.name)) dirs.push(full + "/");
+    } else if (d.isFile() || d.isSymbolicLink()) {
+      files.push(full);
+    }
+  }
+
+  dirs.sort();
+  files.sort();
+  return [...dirs, ...files];
 }
 
 /**
@@ -401,6 +485,10 @@ const rpc = BrowserView.defineRPC({
       // --- Files (Stream E) ---
       listFiles: async (params: any) => {
         return listFilesInDir((params as { workspacePath: string }).workspacePath);
+      },
+      browsePath: async (params: any) => {
+        const { query, workspacePath } = params as { query: string; workspacePath: string };
+        return browsePath(query, workspacePath);
       },
 
       // --- Onboarding (Stream F) ---

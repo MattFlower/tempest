@@ -421,6 +421,8 @@ export const api = {
   // Files
   listFiles: (workspacePath: string) =>
     rpcRequest.listFiles({ workspacePath }),
+  browsePath: (query: string, workspacePath: string) =>
+    rpcRequest.browsePath({ query, workspacePath }),
 
   // Pane tree sync
   notifyPaneTreeChanged: (workspacePath: string, tree: any) =>

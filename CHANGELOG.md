@@ -39,6 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix terminal process being killed when dragging a tab between panes
+- Fix input becoming blocked after dragging tabs quickly between panes
 - Include dotfiles and dot directories in Cmd+P file picker results
 
 ### Changed

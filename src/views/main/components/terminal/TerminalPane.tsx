@@ -14,6 +14,8 @@ import {
 } from "../../state/terminal-registry";
 import { consumePendingInput } from "../../state/pending-terminal-input";
 import { updateTabLabelByTerminalId, updateTabProgressByTerminalId, updateTabCwdByTerminalId } from "../../state/actions";
+import { useStore } from "../../state/store";
+import { allPanes } from "../../models/pane-node";
 
 interface TerminalPaneProps {
   terminalId: string;
@@ -145,6 +147,12 @@ export function TerminalPane({
       });
 
       if (!createResult.success) {
+        if (createResult.error?.includes("already exists")) {
+          // Terminal was moved between panes — PTY is still alive.
+          // Resize to match the new pane dimensions.
+          api.resizeTerminal({ id: terminalId, cols, rows });
+          return;
+        }
         console.error(
           `Failed to create terminal ${terminalId}:`,
           createResult.error,
@@ -210,6 +218,22 @@ export function TerminalPane({
       unregisterTerminal(terminalId);
       unregisterTerminalInstance(terminalId);
       instance.dispose();
+
+      // Only kill the PTY if the tab was actually closed, not moved to another
+      // pane. When a tab is dragged between panes, the Zustand store is updated
+      // before React re-renders, so the terminal ID will still be in the tree.
+      const { selectedWorkspacePath, paneTrees } = useStore.getState();
+      const tree = selectedWorkspacePath
+        ? paneTrees[selectedWorkspacePath]
+        : undefined;
+      if (tree) {
+        const panes = allPanes(tree);
+        const stillInTree = panes.some((p) =>
+          p.tabs.some((t) => t.terminalId === terminalId),
+        );
+        if (stillInTree) return;
+      }
+
       api.killTerminal({ id: terminalId });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

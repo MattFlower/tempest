@@ -45,6 +45,15 @@ export function TabButton({ tab, paneId, isSelected }: TabButtonProps) {
     e.dataTransfer.setData(TAB_DRAG_MIME, JSON.stringify(data));
     e.dataTransfer.effectAllowed = "move";
     useStore.getState().setTabDragActive(true);
+
+    // Safety net: register a one-time capture-phase listener NOW (before any
+    // DOM changes). If the source element unmounts during the drop, the React
+    // onDragEnd handler won't fire, but this document-level listener will.
+    document.addEventListener(
+      "dragend",
+      () => useStore.getState().setTabDragActive(false),
+      { capture: true, once: true },
+    );
   };
 
   const handleDragEnd = () => {

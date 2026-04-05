@@ -55,6 +55,7 @@ export function PaneDropZone({ paneId, tabCount }: PaneDropZoneProps) {
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       setActiveSide(null);
+      useStore.getState().setTabDragActive(false);
       const raw = e.dataTransfer.getData(TAB_DRAG_MIME);
       if (!raw) return;
 

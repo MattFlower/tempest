@@ -3,6 +3,7 @@ import { PaneTabKind } from "../../../../shared/ipc-types";
 import type { Pane } from "../../models/pane-node";
 import { createTab } from "../../models/pane-node";
 import { addTab, moveTab } from "../../state/actions";
+import { useStore } from "../../state/store";
 import { TabButton, TAB_DRAG_MIME, type TabDragData } from "./TabButton";
 
 function computeInsertionPoint(
@@ -58,6 +59,7 @@ export function TabBar({ pane }: TabBarProps) {
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       setDragIndicator(null);
+      useStore.getState().setTabDragActive(false);
       const raw = e.dataTransfer.getData(TAB_DRAG_MIME);
       if (!raw) return;
 

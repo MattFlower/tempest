@@ -19,7 +19,7 @@ export class TerminalInstance {
   private resizeDebounceTimer: number | null = null;
   private focusListenerCleanup: (() => void) | null = null;
   private _cwd: string | undefined;
-  private _promptMarks: { promptLine: number; exitCode: number | undefined }[] = [];
+  private _promptMarks: { promptLine: number; exitCode: number | undefined; commandLine?: string }[] = [];
   private _lastNavLine: number = -1; // line we last navigated to, -1 = at bottom
   onCwdChange: ((cwd: string) => void) | null = null;
 
@@ -291,21 +291,54 @@ export class TerminalInstance {
         return true;
       });
 
-      // OSC sequences to silently consume:
-      for (const id of [
-              // OSC 7 handled above (CWD tracking)
-              // OSC 9 handled above (notifications) + ProgressAddon (progress)
-              // OSC 22 handled above (mouse pointer shape)
-              // OSC 52 handled above (clipboard write)
-              // OSC 99 handled above (Kitty notifications)
-              // OSC 133 handled above (shell integration)
-              // OSC 1337 handled by ImageAddon (iTerm2 inline images)
-              // Sixel DCS handled by ImageAddon
-              // Kitty graphics handled by ImageAddon
-        633,  // VS Code shell integration
-      ]) {
-        this.terminal.parser.registerOscHandler(id, () => true);
-      }
+      // OSC 633: VS Code shell integration (superset of OSC 133).
+      // Markers: A/B/C/D same as 133, plus E (command text) and P (properties).
+      this.terminal.parser.registerOscHandler(633, (data) => {
+        if (!data) return true;
+        const marker = data[0];
+        const params = data.length > 1 && data[1] === ";" ? data.slice(2) : "";
+        switch (marker) {
+          case "A": {
+            const line = this.terminal.buffer.active.cursorY + this.terminal.buffer.active.baseY;
+            // Deduplicate with OSC 133: skip if most recent mark is on the same line
+            const last = this._promptMarks[this._promptMarks.length - 1];
+            if (!last || last.promptLine !== line) {
+              this._promptMarks.push({ promptLine: line, exitCode: undefined });
+            }
+            break;
+          }
+          case "D": {
+            const last = this._promptMarks[this._promptMarks.length - 1];
+            if (last) {
+              const code = params ? parseInt(params, 10) : undefined;
+              last.exitCode = code !== undefined && !Number.isNaN(code) ? code : undefined;
+            }
+            break;
+          }
+          case "E": {
+            // Command text — unescape \x3b→; and \x0a→\n
+            const last = this._promptMarks[this._promptMarks.length - 1];
+            if (last) {
+              const cmdParts = params.split(";");
+              last.commandLine = cmdParts[0]!
+                .replace(/\\x3b/g, ";")
+                .replace(/\\x0a/g, "\n")
+                .replace(/\\\\/g, "\\");
+            }
+            break;
+          }
+          case "P": {
+            // Property — handle Cwd=<path>
+            if (params.startsWith("Cwd=")) {
+              this._cwd = params.slice(4);
+              this.onCwdChange?.(this._cwd);
+            }
+            break;
+          }
+          // B, C consumed without action
+        }
+        return true;
+      });
       // Set terminfo string (DCS +p ...) — consume silently
       this.terminal.parser.registerDcsHandler(
         { intermediates: "+", final: "p" },
@@ -575,7 +608,7 @@ export class TerminalInstance {
     return this._cwd;
   }
 
-  get promptMarks(): ReadonlyArray<{ promptLine: number; exitCode: number | undefined }> {
+  get promptMarks(): ReadonlyArray<{ promptLine: number; exitCode: number | undefined; commandLine?: string }> {
     return this._promptMarks;
   }
 

@@ -9,20 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add OSC 8 hyperlink support -- terminal apps can now emit clickable hyperlinks (used by GCC,
-  cargo, gh CLI, and many other tools). Clicking opens in the system browser.
-- Add OSC 52 clipboard write support -- terminal apps like Neovim and tmux can now copy text to
-  the system clipboard via escape sequences. Read/query is denied for security.
-- Add OSC 133 shell integration (FinalTerm protocol) -- tracks prompt and command boundaries.
-  Use Cmd+Shift+Up/Down to jump between prompts in terminal scrollback.
-- Add focus event reporting (CSI ? 1004 h/l) -- apps like Neovim and tmux can now detect
-  when the terminal gains or loses focus (e.g., auto-reload files on focus).
-- Add inline image support via @xterm/addon-image -- renders Sixel graphics, iTerm2 inline
-  images (OSC 1337), and Kitty graphics protocol directly in the terminal.
-- Add desktop notification support (OSC 9, OSC 99) -- terminal apps can now trigger native
-  macOS notifications for long-running builds, test completion, etc.
-- Add mouse pointer shape support (OSC 22) -- TUI apps can now change the cursor appearance
-  (e.g., hand pointer on clickable elements).
+- Expanded terminal support to cover additional areas:
+  - Add OSC 8 hyperlink support -- terminal apps can now emit clickable hyperlinks (used by GCC,
+    cargo, gh CLI, and many other tools). Clicking opens in the system browser.
+  - Add OSC 52 clipboard write support -- terminal apps like Neovim and tmux can now copy text to
+    the system clipboard via escape sequences. Read/query is denied for security.
+  - Add OSC 133 shell integration (FinalTerm protocol) -- tracks prompt and command boundaries.
+    Use Cmd+Shift+Up/Down to jump between prompts in terminal scrollback.
+  - Add focus event reporting (CSI ? 1004 h/l) -- apps like Neovim and tmux can now detect
+    when the terminal gains or loses focus (e.g., auto-reload files on focus).
+  - Add inline image support via @xterm/addon-image -- renders Sixel graphics, iTerm2 inline
+    images (OSC 1337), and Kitty graphics protocol directly in the terminal.
+  - Add desktop notification support (OSC 9, OSC 99) -- terminal apps can now trigger native
+    macOS notifications for long-running builds, test completion, etc.
+  - Add mouse pointer shape support (OSC 22) -- TUI apps can now change the cursor appearance
+    (e.g., hand pointer on clickable elements).
+  - Add VS Code shell integration (OSC 633) -- captures command text and CWD from VS Code's
+    shell integration protocol. Deduplicates with OSC 133 prompt markers.
 - Add documentation section to the website with a keyboard shortcuts reference page
 - Add HTTP Remote Control Server -- an optional HTTP server that allows Tempest to be controlled
   remotely. Features bearer token authentication, configurable port, a web dashboard showing
@@ -107,4 +110,3 @@ foundation of Tempest.
 - Ability to Open the current PR for your git branch / jj bookmark in the browser.
 - A status indicator for each workspace indicating whether Claude is idle, working, or waiting
   for input from the user.
-

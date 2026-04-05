@@ -5,6 +5,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { SearchAddon } from "@xterm/addon-search";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { ProgressAddon } from "@xterm/addon-progress";
+import { ImageAddon } from "@xterm/addon-image";
 import { api } from "../../state/rpc-client";
 
 export class TerminalInstance {
@@ -99,6 +100,9 @@ export class TerminalInstance {
     this.terminal.loadAddon(this.progressAddon);
 
     this.terminal.open(container);
+    // ImageAddon must load after open() but before WebGL for proper integration.
+    // Handles Sixel, iTerm2 IIP (OSC 1337), and Kitty graphics protocol.
+    this.terminal.loadAddon(new ImageAddon());
     this.initWebGL();
     this.fitAddon.fit();
 
@@ -253,15 +257,15 @@ export class TerminalInstance {
               // OSC 9 handled by ProgressAddon (ConEmu progress sequences)
               // OSC 52 handled above (clipboard write)
               // OSC 133 handled above (shell integration)
+              // OSC 1337 handled by ImageAddon (iTerm2 inline images)
+              // Sixel DCS handled by ImageAddon
+              // Kitty graphics handled by ImageAddon
         22,   // Set mouse pointer shape
         99,   // Kitty notification protocol
         633,  // VS Code shell integration
-        1337, // iTerm2 proprietary (inline images, marks, badges, etc.)
       ]) {
         this.terminal.parser.registerOscHandler(id, () => true);
       }
-      // Sixel graphics (DCS q ...) — consume silently
-      this.terminal.parser.registerDcsHandler({ final: "q" }, () => true);
       // Set terminfo string (DCS +p ...) — consume silently
       this.terminal.parser.registerDcsHandler(
         { intermediates: "+", final: "p" },

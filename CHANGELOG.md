@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when the terminal gains or loses focus (e.g., auto-reload files on focus).
 - Add inline image support via @xterm/addon-image -- renders Sixel graphics, iTerm2 inline
   images (OSC 1337), and Kitty graphics protocol directly in the terminal.
+- Add desktop notification support (OSC 9, OSC 99) -- terminal apps can now trigger native
+  macOS notifications for long-running builds, test completion, etc.
 - Add documentation section to the website with a keyboard shortcuts reference page
 - Add HTTP Remote Control Server -- an optional HTTP server that allows Tempest to be controlled
   remotely. Features bearer token authentication, configurable port, a web dashboard showing

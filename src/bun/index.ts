@@ -716,6 +716,9 @@ const rpc = BrowserView.defineRPC({
         proc.stdin.write(msg.text);
         proc.stdin.end();
       },
+      showNotification: (msg: any) => {
+        Utils.showNotification({ title: msg.title, body: msg.body });
+      },
 
       // --- Pane state sync (Stream B + D) ---
       paneTreeChanged: (_msg: any) => {

@@ -326,6 +326,9 @@ export const api = {
 
   clipboardWrite: (text: string) => rpcSend.clipboardWrite({ text }),
 
+  showNotification: (title: string, body?: string) =>
+    rpcSend.showNotification({ title, body }),
+
   // Session commands
   buildClaudeCommand: (params: {
     workspacePath: string;

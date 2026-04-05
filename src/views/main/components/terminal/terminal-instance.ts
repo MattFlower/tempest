@@ -251,17 +251,42 @@ export class TerminalInstance {
         return true;
       });
 
+      // OSC 9: Desktop notification (ConEmu format).
+      // ProgressAddon handles "9;4" (progress); we handle the rest as notifications.
+      this.terminal.parser.registerOscHandler(9, (data) => {
+        if (data.startsWith("4")) return false; // let ProgressAddon handle it
+        api.showNotification(data || "Terminal notification");
+        return true;
+      });
+
+      // OSC 99: Kitty notification protocol.
+      // Format: "i=<id>:d=<done>[:p=<type>];<text>" where type is "title" or "body".
+      this.terminal.parser.registerOscHandler(99, (data) => {
+        const semi = data.indexOf(";");
+        if (semi < 0) return true;
+        const text = data.slice(semi + 1);
+        if (!text) return true;
+        const meta = data.slice(0, semi);
+        const isBody = meta.includes("p=body");
+        if (isBody) {
+          api.showNotification("Terminal", text);
+        } else {
+          api.showNotification(text);
+        }
+        return true;
+      });
+
       // OSC sequences to silently consume:
       for (const id of [
               // OSC 7 handled above (CWD tracking)
-              // OSC 9 handled by ProgressAddon (ConEmu progress sequences)
+              // OSC 9 handled above (notifications) + ProgressAddon (progress)
               // OSC 52 handled above (clipboard write)
+              // OSC 99 handled above (Kitty notifications)
               // OSC 133 handled above (shell integration)
               // OSC 1337 handled by ImageAddon (iTerm2 inline images)
               // Sixel DCS handled by ImageAddon
               // Kitty graphics handled by ImageAddon
         22,   // Set mouse pointer shape
-        99,   // Kitty notification protocol
         633,  // VS Code shell integration
       ]) {
         this.terminal.parser.registerOscHandler(id, () => true);

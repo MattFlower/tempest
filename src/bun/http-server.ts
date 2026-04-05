@@ -2,25 +2,31 @@ import { randomBytes } from "node:crypto";
 import type { WorkspaceManager } from "./workspace-manager";
 import type { SessionActivityTracker } from "./hooks/session-activity-tracker";
 import { ActivityState } from "../shared/ipc-types";
-import type { HttpServerConfig, SourceRepo, TempestWorkspace } from "../shared/ipc-types";
+import type { AppConfig, HttpServerConfig, SourceRepo, TempestWorkspace } from "../shared/ipc-types";
 
 export interface HttpServerDeps {
   workspaceManager: WorkspaceManager;
   activityTracker: SessionActivityTracker;
+  getConfig: () => Promise<AppConfig>;
 }
 
-// Pending prompts queued by the HTTP server, consumed by TerminalPane when
+// Pending data queued by the HTTP server, consumed by TerminalPane when
 // the workspace is first opened in the UI and a Claude terminal is created.
-const pendingPrompts = new Map<string, string>();
-
-export function queuePendingPrompt(workspacePath: string, prompt: string): void {
-  pendingPrompts.set(workspacePath, prompt);
+interface PendingWorkspaceData {
+  prompt?: string;
+  planMode?: boolean;
 }
 
-export function consumePendingPrompt(workspacePath: string): string | undefined {
-  const prompt = pendingPrompts.get(workspacePath);
-  if (prompt !== undefined) pendingPrompts.delete(workspacePath);
-  return prompt;
+const pendingData = new Map<string, PendingWorkspaceData>();
+
+export function queuePendingData(workspacePath: string, data: PendingWorkspaceData): void {
+  pendingData.set(workspacePath, data);
+}
+
+export function consumePendingData(workspacePath: string): PendingWorkspaceData | undefined {
+  const data = pendingData.get(workspacePath);
+  if (data !== undefined) pendingData.delete(workspacePath);
+  return data;
 }
 
 export class TempestHttpServer {
@@ -134,6 +140,7 @@ export class TempestHttpServer {
           name: string;
           prompt?: string;
           branch?: string;
+          planMode?: boolean;
         };
         return Response.json(await this.createWorkspaceAndPrompt(body));
       }
@@ -202,6 +209,7 @@ export class TempestHttpServer {
     name: string;
     prompt?: string;
     branch?: string;
+    planMode?: boolean;
   }): Promise<{
     success: boolean;
     error?: string;
@@ -223,10 +231,15 @@ export class TempestHttpServer {
 
     const workspace = result.workspace;
 
-    // Queue the prompt — it will be consumed when the workspace is opened
+    // Resolve planMode: explicit request param > config default > false
+    const config = await this.deps.getConfig();
+    const planMode = params.planMode ?? config.httpDefaultPlanMode ?? false;
+
+    // Queue prompt and mode — consumed when the workspace is opened
     // in the UI and the Claude terminal is lazily initialized.
-    if (params.prompt?.trim()) {
-      queuePendingPrompt(workspace.path, params.prompt.trim());
+    const prompt = params.prompt?.trim();
+    if (prompt || planMode) {
+      queuePendingData(workspace.path, { prompt, planMode: planMode || undefined });
     }
 
     // Auto-select the workspace in the UI so the terminal initializes
@@ -544,6 +557,10 @@ function dashboardHTML(
         <input type="text" id="ws-name" required placeholder="e.g. feature-auth" autofocus autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
         <label for="ws-prompt">Claude Prompt <span class="optional">(optional)</span></label>
         <textarea id="ws-prompt" rows="6" placeholder="e.g. Implement user authentication using JWT tokens..."></textarea>
+        <div style="margin-top:12px; display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="ws-plan-mode" style="accent-color:#89b4fa; width:16px; height:16px;">
+          <label for="ws-plan-mode" style="font-size:0.85rem; color:#cdd6f4; margin:0; cursor:pointer;">Start in plan mode</label>
+        </div>
         <div class="modal-buttons">
           <button type="button" class="btn btn-cancel" onclick="hideModal()">Cancel</button>
           <button type="submit" class="btn btn-submit" id="submit-btn">Create</button>
@@ -600,6 +617,7 @@ function dashboardHTML(
       document.getElementById('modal-repo-name').textContent = repoName;
       document.getElementById('ws-name').value = '';
       document.getElementById('ws-prompt').value = '';
+      document.getElementById('ws-plan-mode').checked = false;
       document.getElementById('modal-result').style.display = 'none';
       document.getElementById('new-ws-form').style.display = 'block';
       document.getElementById('submit-btn').disabled = false;
@@ -620,12 +638,13 @@ function dashboardHTML(
       const repoId = document.getElementById('modal-repo-id').value;
       const name = document.getElementById('ws-name').value.trim();
       const prompt = document.getElementById('ws-prompt').value.trim();
+      const planMode = document.getElementById('ws-plan-mode').checked;
 
       try {
         const resp = await fetch('/api/workspaces', {
           method: 'POST',
           headers,
-          body: JSON.stringify({ repoId, name, prompt: prompt || undefined }),
+          body: JSON.stringify({ repoId, name, prompt: prompt || undefined, planMode: planMode || undefined }),
         });
         const result = await resp.json();
         const resultEl = document.getElementById('modal-result');

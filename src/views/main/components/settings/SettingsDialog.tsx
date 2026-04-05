@@ -30,6 +30,7 @@ export function SettingsDialog() {
   const [httpPort, setHttpPort] = useState(7778);
   const [httpHostname, setHttpHostname] = useState("127.0.0.1");
   const [httpToken, setHttpToken] = useState("");
+  const [httpPlanMode, setHttpPlanMode] = useState(false);
   const [serverRunning, setServerRunning] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [networkInterfaces, setNetworkInterfaces] = useState<NetworkInterface[]>([]);
@@ -41,6 +42,7 @@ export function SettingsDialog() {
       setConfig(cfg);
       setEditor(cfg.editor === "monaco" ? "monaco" : "nvim");
       setVimMode(cfg.monacoVimMode ?? false);
+      setHttpPlanMode(cfg.httpDefaultPlanMode ?? false);
       if (cfg.httpServer) {
         setHttpEnabled(cfg.httpServer.enabled);
         setHttpPort(cfg.httpServer.port);
@@ -70,6 +72,7 @@ export function SettingsDialog() {
       ...config,
       editor,
       monacoVimMode: vimMode,
+      httpDefaultPlanMode: httpPlanMode,
       httpServer: {
         enabled: httpEnabled,
         port: httpPort,
@@ -144,6 +147,7 @@ export function SettingsDialog() {
   const isDirty = config
     ? (config.editor ?? "nvim") !== editor ||
       (config.monacoVimMode ?? false) !== vimMode ||
+      (config.httpDefaultPlanMode ?? false) !== httpPlanMode ||
       (config.httpServer?.enabled ?? false) !== httpEnabled ||
       (config.httpServer?.port ?? 7778) !== httpPort ||
       (config.httpServer?.hostname ?? "127.0.0.1") !== httpHostname ||
@@ -254,6 +258,8 @@ export function SettingsDialog() {
                 serverUrl={serverUrl}
                 onCopyUrl={handleCopyUrl}
                 copied={copied}
+                planMode={httpPlanMode}
+                setPlanMode={setHttpPlanMode}
               />
             )}
           </div>
@@ -422,6 +428,8 @@ function RemoteTab({
   serverUrl,
   onCopyUrl,
   copied,
+  planMode,
+  setPlanMode,
 }: {
   enabled: boolean;
   setEnabled: (v: boolean) => void;
@@ -437,6 +445,8 @@ function RemoteTab({
   serverUrl: string;
   onCopyUrl: () => void;
   copied: boolean;
+  planMode: boolean;
+  setPlanMode: (v: boolean) => void;
 }) {
   // Build address options
   const addressOptions = useMemo(() => {
@@ -493,6 +503,22 @@ function RemoteTab({
           {serverError}
         </div>
       )}
+
+      {/* Default Plan Mode */}
+      <div className="flex items-center justify-between gap-3 py-1">
+        <div className="flex flex-col gap-0.5">
+          <label
+            className="text-[11px] font-semibold"
+            style={{ color: "var(--ctp-subtext0)" }}
+          >
+            Default Plan Mode
+          </label>
+          <p className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
+            Start new HTTP-created workspaces in plan mode by default.
+          </p>
+        </div>
+        <ToggleSwitch value={planMode} onChange={setPlanMode} />
+      </div>
 
       {/* Listen Address */}
       <div className="flex flex-col gap-1">

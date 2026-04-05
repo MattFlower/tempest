@@ -107,6 +107,19 @@ export function TerminalPane({
     // Build the right command based on tab kind via RPC
     const createTerminalWithCommand = async () => {
       let command: string[];
+      // Consume pending HTTP data (prompt + planMode) early so we can
+      // pass planMode into the Claude command before the terminal starts.
+      let pendingPrompt: string | null = null;
+      let pendingPlanMode: boolean | null = null;
+      if (tabKindRef.current === PaneTabKind.Claude) {
+        try {
+          const pending = await api.consumePendingPrompt(cwdRef.current);
+          pendingPrompt = pending.prompt;
+          pendingPlanMode = pending.planMode;
+        } catch {
+          // Non-critical — ignore if RPC fails
+        }
+      }
 
       if (initialCommandRef.current) {
         // Pre-built command (e.g. from EditorPane)
@@ -121,6 +134,7 @@ export function TerminalPane({
             sessionId: sessionIdRef.current,
             withHooks: true,
             workspaceName,
+            planMode: pendingPlanMode ?? undefined,
           });
           command = result.command;
         } catch (e) {
@@ -172,20 +186,12 @@ export function TerminalPane({
         }, 2000);
       }
 
-      // Check for a pending prompt from the HTTP remote control server.
-      // These are keyed by workspace path and need a longer delay since
-      // Claude Code takes several seconds to fully start up.
-      if (tabKindRef.current === PaneTabKind.Claude) {
-        try {
-          const { prompt } = await api.consumePendingPrompt(cwdRef.current);
-          if (prompt) {
-            setTimeout(() => {
-              api.writeToTerminal(terminalId, prompt + "\r");
-            }, 5000);
-          }
-        } catch {
-          // Non-critical — ignore if RPC fails
-        }
+      // Send the pending prompt from the HTTP remote control server.
+      // Needs a longer delay since Claude Code takes several seconds to start.
+      if (pendingPrompt) {
+        setTimeout(() => {
+          api.writeToTerminal(terminalId, pendingPrompt + "\r");
+        }, 5000);
       }
     };
 

@@ -83,6 +83,7 @@ export interface BunRequests {
       withHooks: boolean;
       withChannel?: boolean;
       workspaceName?: string;
+      planMode?: boolean;
     };
     response: { command: string[]; settingsPath?: string };
   };
@@ -508,7 +509,7 @@ export interface BunRequests {
   };
   consumePendingPrompt: {
     params: { workspacePath: string };
-    response: { prompt: string | null };
+    response: { prompt: string | null; planMode: boolean | null };
   };
 }
 

@@ -130,6 +130,7 @@ export interface AppConfig {
   editor?: string; // e.g. "nvim", "hx", "vim", "code". Defaults to "nvim".
   monacoVimMode?: boolean; // Enable vim keybindings in Monaco editor. Defaults to false.
   httpServer?: HttpServerConfig;
+  httpDefaultPlanMode?: boolean; // Start HTTP-created workspaces in plan mode. Defaults to false.
 }
 
 // --- Hook Events ---

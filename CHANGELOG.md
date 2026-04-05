@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Auto-populate Scripts dropdown with scripts from package.json. Detects the package runner
   (bun/npm/yarn/pnpm) from lock files and runs scripts with the correct command. Refreshes
   on each dropdown open so mid-session edits to package.json are picked up.
+- Add "Default Plan Mode" setting for HTTP-created workspaces — when enabled, new workspaces
+  created via the HTTP remote control API start Claude in plan mode (`--permission-mode plan`).
+  Configurable per-request via the `planMode` field or globally in Settings > Remote.
 - Expanded terminal support to cover additional areas:
   - Add OSC 8 hyperlink support -- terminal apps can now emit clickable hyperlinks (used by GCC,
     cargo, gh CLI, and many other tools). Clicking opens in the system browser.

@@ -20,7 +20,7 @@ import { SessionActivityTracker } from "./hooks/session-activity-tracker";
 import { lookupSessionID, findSessionIDs, lookupPlanPath } from "./session-id-lookup";
 import { loadConfig, saveConfig as saveConfigFile, defaultConfig } from "./config/app-config";
 import { PathResolver } from "./config/path-resolver";
-import { TempestHttpServer, generateToken, consumePendingPrompt } from "./http-server";
+import { TempestHttpServer, generateToken, consumePendingData } from "./http-server";
 import { getUsageData } from "./usage/usage-service";
 import { HistoryStore } from "./history/history-store";
 import {
@@ -97,6 +97,7 @@ const prMonitor = new PRMonitor();
 const httpServer = new TempestHttpServer({
   workspaceManager,
   activityTracker,
+  getConfig: loadConfig,
 });
 
 // --- Terminal scrollback cache (webview sends periodic updates) ---
@@ -693,8 +694,8 @@ const rpc = BrowserView.defineRPC({
         return { running: false, ...(lastError ? { error: lastError } : {}) };
       },
       consumePendingPrompt: (params: any) => {
-        const prompt = consumePendingPrompt(params.workspacePath) ?? null;
-        return { prompt };
+        const data = consumePendingData(params.workspacePath);
+        return { prompt: data?.prompt ?? null, planMode: data?.planMode ?? null };
       },
       getNetworkInterfaces: () => {
         const ifaces = networkInterfaces();

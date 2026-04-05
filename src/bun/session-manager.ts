@@ -24,6 +24,7 @@ export class SessionManager {
     withHooks: boolean;
     withChannel?: boolean;
     workspaceName?: string;
+    planMode?: boolean;
   }): Promise<{ command: string[]; settingsPath?: string }> {
     const claudePath = this.resolveBinary(
       "claude",
@@ -57,6 +58,10 @@ export class SessionManager {
         params.workspaceName,
       );
       parts.push("--settings", settingsPath);
+    }
+
+    if (params.planMode) {
+      parts.push("--permission-mode", "plan");
     }
 
     parts.push(...this.config.claudeArgs);

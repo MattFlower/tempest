@@ -337,6 +337,7 @@ export const api = {
     withHooks: boolean;
     withChannel?: boolean;
     workspaceName?: string;
+    planMode?: boolean;
   }) => rpcRequest.buildClaudeCommand(params),
 
   buildShellCommand: (params: { workspacePath: string }) =>

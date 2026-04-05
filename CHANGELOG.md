@@ -44,6 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Show error in the Remote Server settings UI and title bar icon when the HTTP server fails to
+  start (e.g., port already in use) instead of silently failing with the status still showing
+  as enabled. The icon turns red on error, and the settings panel displays the error message.
 - Fix terminal process being killed when dragging a tab between panes
 - Fix input becoming blocked after dragging tabs quickly between panes
 - Include dotfiles and dot directories in Cmd+P file picker results

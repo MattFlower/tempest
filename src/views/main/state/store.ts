@@ -40,6 +40,8 @@ export interface TempestStore {
   commandPaletteInitialMode: "commands" | "files";
   settingsDialogVisible: boolean;
   settingsDialogInitialTab: "general" | "remote";
+  httpServerRunning: boolean;
+  httpServerError: string | null;
   newWorkspaceRepoId: string | null;
   overlayCount: number;
 
@@ -64,6 +66,7 @@ export interface TempestStore {
   openCommandPaletteFiles: () => void;
   toggleSettingsDialog: () => void;
   openSettingsTab: (tab: "general" | "remote") => void;
+  setHttpServerStatus: (running: boolean, error?: string | null) => void;
   requestNewWorkspace: (repoId: string | null) => void;
   pushOverlay: () => void;
   popOverlay: () => void;
@@ -94,6 +97,8 @@ export const useStore = create<TempestStore>((set) => ({
   commandPaletteInitialMode: "commands" as const,
   settingsDialogVisible: false,
   settingsDialogInitialTab: "general" as const,
+  httpServerRunning: false,
+  httpServerError: null,
   newWorkspaceRepoId: null,
   overlayCount: 0,
 
@@ -136,6 +141,8 @@ export const useStore = create<TempestStore>((set) => ({
     })),
   openSettingsTab: (tab) =>
     set({ settingsDialogVisible: true, settingsDialogInitialTab: tab }),
+  setHttpServerStatus: (running, error) =>
+    set({ httpServerRunning: running, httpServerError: error ?? null }),
   requestNewWorkspace: (repoId) => set({ newWorkspaceRepoId: repoId }),
   pushOverlay: () => set((s) => ({ overlayCount: s.overlayCount + 1 })),
   popOverlay: () => set((s) => ({ overlayCount: Math.max(0, s.overlayCount - 1) })),

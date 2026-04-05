@@ -492,7 +492,7 @@ export interface BunRequests {
   // --- HTTP Remote Control Server ---
   startHttpServer: {
     params: HttpServerConfig;
-    response: { port: number; hostname: string; token: string };
+    response: { port: number; hostname: string; token: string; error?: string };
   };
   stopHttpServer: {
     params: void;
@@ -500,7 +500,7 @@ export interface BunRequests {
   };
   getHttpServerStatus: {
     params: void;
-    response: { running: boolean; port?: number; hostname?: string; token?: string };
+    response: { running: boolean; port?: number; hostname?: string; token?: string; error?: string };
   };
   getNetworkInterfaces: {
     params: void;

@@ -29,6 +29,7 @@ export class TempestHttpServer {
   private token: string = "";
   private port: number = 7778;
   private hostname: string = "127.0.0.1";
+  private lastError: string | null = null;
 
   // Callback to push a "select workspace" message to the webview
   onSelectWorkspace?: (workspacePath: string) => void;
@@ -53,7 +54,11 @@ export class TempestHttpServer {
     return this.token;
   }
 
-  start(config: HttpServerConfig): { port: number; hostname: string; token: string } {
+  getLastError(): string | null {
+    return this.lastError;
+  }
+
+  start(config: HttpServerConfig): { port: number; hostname: string; token: string; error?: string } {
     if (this.server) {
       this.server.stop(true);
     }
@@ -61,12 +66,23 @@ export class TempestHttpServer {
     this.port = config.port;
     this.hostname = config.hostname || "127.0.0.1";
     this.token = config.token || randomBytes(32).toString("hex");
+    this.lastError = null;
 
-    this.server = Bun.serve({
-      port: this.port,
-      hostname: this.hostname,
-      fetch: (req) => this.handleRequest(req),
-    });
+    try {
+      this.server = Bun.serve({
+        port: this.port,
+        hostname: this.hostname,
+        fetch: (req) => this.handleRequest(req),
+      });
+    } catch (err: any) {
+      this.server = null;
+      const message = err?.code === "EADDRINUSE"
+        ? `Port ${this.port} is already in use. Stop the other process or choose a different port.`
+        : `Failed to start server: ${err?.message ?? String(err)}`;
+      this.lastError = message;
+      console.error(`[http-server] ${message}`);
+      return { port: this.port, hostname: this.hostname, token: this.token, error: message };
+    }
 
     console.log(`[http-server] Started on ${this.hostname}:${this.port}`);
     return { port: this.port, hostname: this.hostname, token: this.token };

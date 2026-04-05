@@ -37,6 +37,9 @@ export function App() {
       setShowOnboarding(true);
       setConfigLoaded(true);
     });
+    api.getHttpServerStatus().then((status: any) => {
+      useStore.getState().setHttpServerStatus(status.running, status.error);
+    });
   }, []);
 
   // All workspace paths to render: selected + any with existing trees

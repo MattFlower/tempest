@@ -4,34 +4,54 @@ import { useStore } from "../../state/store";
 
 function HttpServerIcon() {
   const httpEnabled = useStore((s) => s.config?.httpServer?.enabled ?? false);
+  const httpServerRunning = useStore((s) => s.httpServerRunning);
+  const httpServerError = useStore((s) => s.httpServerError);
   const openSettingsTab = useStore((s) => s.openSettingsTab);
-  const towerColor = httpEnabled ? "var(--ctp-subtext0)" : "var(--ctp-overlay0)";
+
+  const hasError = httpEnabled && !httpServerRunning && !!httpServerError;
+  const arcColor = hasError
+    ? "var(--ctp-red)"
+    : httpServerRunning
+      ? "var(--ctp-blue)"
+      : "var(--ctp-overlay0)";
+  const arcOpacity = httpServerRunning ? 0.6 : 1;
+  const towerColor = hasError
+    ? "var(--ctp-red)"
+    : httpServerRunning
+      ? "var(--ctp-subtext0)"
+      : "var(--ctp-overlay0)";
+
+  const title = hasError
+    ? `HTTP server error: ${httpServerError}`
+    : httpServerRunning
+      ? "HTTP server enabled"
+      : "HTTP server disabled";
 
   return (
     <button
       onClick={() => openSettingsTab("remote")}
       className="electrobun-webkit-app-region-no-drag p-1 rounded transition-colors hover:bg-[var(--ctp-surface0)]"
-      title={httpEnabled ? "HTTP server enabled" : "HTTP server disabled"}
+      title={title}
     >
       <svg
         className="w-6 h-6"
         viewBox="0 0 28 28"
         fill="none"
       >
-        {/* Outer arc — orange */}
+        {/* Outer arc */}
         <path
           d="M5.34 20 A 10 10 0 1 1 22.66 20"
-          stroke={httpEnabled ? "var(--ctp-blue)" : "var(--ctp-overlay0)"}
-          opacity={httpEnabled ? 0.6 : 1}
+          stroke={arcColor}
+          opacity={arcOpacity}
           strokeWidth="2.2"
           strokeLinecap="round"
           fill="none"
         />
-        {/* Inner arc — red */}
+        {/* Inner arc */}
         <path
           d="M8.8 18 A 6 6 0 1 1 19.2 18"
-          stroke={httpEnabled ? "var(--ctp-blue)" : "var(--ctp-overlay0)"}
-          opacity={httpEnabled ? 0.6 : 1}
+          stroke={arcColor}
+          opacity={arcOpacity}
           strokeWidth="2.2"
           strokeLinecap="round"
           fill="none"

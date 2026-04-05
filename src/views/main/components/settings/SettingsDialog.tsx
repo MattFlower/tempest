@@ -16,6 +16,7 @@ export function SettingsDialog() {
   useOverlay();
   const toggleSettingsDialog = useStore((s) => s.toggleSettingsDialog);
   const initialTab = useStore((s) => s.settingsDialogInitialTab);
+  const setHttpServerStatus = useStore((s) => s.setHttpServerStatus);
 
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
@@ -30,6 +31,7 @@ export function SettingsDialog() {
   const [httpHostname, setHttpHostname] = useState("127.0.0.1");
   const [httpToken, setHttpToken] = useState("");
   const [serverRunning, setServerRunning] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
   const [networkInterfaces, setNetworkInterfaces] = useState<NetworkInterface[]>([]);
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -53,6 +55,7 @@ export function SettingsDialog() {
         if (status.hostname) setHttpHostname(status.hostname);
         if (status.token) setHttpToken(status.token);
       }
+      if (status.error) setServerError(status.error);
     });
     api.getNetworkInterfaces().then((ifaces: NetworkInterface[]) => {
       setNetworkInterfaces(ifaces);
@@ -86,7 +89,16 @@ export function SettingsDialog() {
         token: httpToken,
       });
       setHttpToken(result.token);
+      if (result.error) {
+        setServerError(result.error);
+        setServerRunning(false);
+        setHttpServerStatus(false, result.error);
+        setSaving(false);
+        return;
+      }
+      setServerError(null);
       setServerRunning(true);
+      setHttpServerStatus(true);
     } else if (httpEnabled && serverRunning) {
       // Restart with new settings
       await api.stopHttpServer();
@@ -97,10 +109,21 @@ export function SettingsDialog() {
         token: httpToken,
       });
       setHttpToken(result.token);
+      if (result.error) {
+        setServerError(result.error);
+        setServerRunning(false);
+        setHttpServerStatus(false, result.error);
+        setSaving(false);
+        return;
+      }
+      setServerError(null);
       setServerRunning(true);
+      setHttpServerStatus(true);
     } else if (!httpEnabled && serverRunning) {
       await api.stopHttpServer();
       setServerRunning(false);
+      setServerError(null);
+      setHttpServerStatus(false);
     }
 
     setSaving(false);
@@ -227,6 +250,7 @@ export function SettingsDialog() {
                 onGenerateToken={handleGenerateToken}
                 networkInterfaces={networkInterfaces}
                 serverRunning={serverRunning}
+                serverError={serverError}
                 serverUrl={serverUrl}
                 onCopyUrl={handleCopyUrl}
                 copied={copied}
@@ -394,6 +418,7 @@ function RemoteTab({
   onGenerateToken,
   networkInterfaces,
   serverRunning,
+  serverError,
   serverUrl,
   onCopyUrl,
   copied,
@@ -408,6 +433,7 @@ function RemoteTab({
   onGenerateToken: () => void;
   networkInterfaces: NetworkInterface[];
   serverRunning: boolean;
+  serverError: string | null;
   serverUrl: string;
   onCopyUrl: () => void;
   copied: boolean;
@@ -445,6 +471,8 @@ function RemoteTab({
           <p className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
             {serverRunning ? (
               <span style={{ color: "var(--ctp-green)" }}>Running</span>
+            ) : serverError ? (
+              <span style={{ color: "var(--ctp-red)" }}>Error</span>
             ) : (
               "Not running"
             )}
@@ -452,6 +480,19 @@ function RemoteTab({
         </div>
         <ToggleSwitch value={enabled} onChange={setEnabled} />
       </div>
+
+      {serverError && (
+        <div
+          className="rounded-md px-3 py-2 text-[11px]"
+          style={{
+            background: "color-mix(in srgb, var(--ctp-red) 15%, transparent)",
+            border: "1px solid var(--ctp-red)",
+            color: "var(--ctp-red)",
+          }}
+        >
+          {serverError}
+        </div>
+      )}
 
       {/* Listen Address */}
       <div className="flex flex-col gap-1">

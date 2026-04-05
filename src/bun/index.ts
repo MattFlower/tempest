@@ -689,7 +689,8 @@ const rpc = BrowserView.defineRPC({
             token: httpServer.getToken(),
           };
         }
-        return { running: false };
+        const lastError = httpServer.getLastError();
+        return { running: false, ...(lastError ? { error: lastError } : {}) };
       },
       consumePendingPrompt: (params: any) => {
         const prompt = consumePendingPrompt(params.workspacePath) ?? null;

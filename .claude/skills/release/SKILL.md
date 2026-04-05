@@ -38,7 +38,16 @@ Run `date +%Y-%m-%d` to get today's date. Do not guess or hardcode the date.
 
 3. Verify the edit looks correct by reading the first 25 lines of CHANGELOG.md.
 
-## Step 4: Detect VCS and commit
+## Step 4: Update the app version
+
+Update the version number in both places it appears:
+
+1. **`electrobun.config.ts`** — change the `version` field in the `app` object to the new VERSION.
+2. **`src/bun/pty-manager.ts`** — change the `TERM_PROGRAM_VERSION` value to the new VERSION.
+
+Use the Edit tool for both changes.
+
+## Step 5: Detect VCS and commit
 
 1. Check whether the repo uses jujutsu or git:
    - If `.jj` directory exists: use jj commands
@@ -60,7 +69,7 @@ Run `date +%Y-%m-%d` to get today's date. Do not guess or hardcode the date.
    git push
    ```
 
-## Step 5: Tag the release
+## Step 6: Tag the release
 
 1. For **jujutsu** repos:
    ```
@@ -77,7 +86,7 @@ Run `date +%Y-%m-%d` to get today's date. Do not guess or hardcode the date.
    git push origin vVERSION
    ```
 
-## Step 6: Verify the release workflow
+## Step 7: Verify the release workflow
 
 1. Wait a few seconds, then check for the triggered workflow:
    ```

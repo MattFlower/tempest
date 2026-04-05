@@ -65,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add "PRs Assigned to Me" widget in Dashboard
 - Capture Scrollback for terminals periodically and on shutdown -- when Tempest is started back
   up, it will be easier to see what you were working on before.
+- Added ability to drag tabs to reorder panes, relocate to another pane, or drag into a new pane.
 
 ### Fixed
 

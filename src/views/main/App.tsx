@@ -3,6 +3,7 @@ import { useStore } from "./state/store";
 import { Sidebar } from "./components/sidebar/Sidebar";
 import { CommandPalette } from "./components/palette/CommandPalette";
 import { WorkspaceDetail } from "./components/layout";
+import { ViewModeBar } from "./components/layout/ViewModeBar";
 import { OnboardingDialog } from "./components/onboarding/OnboardingDialog";
 import { SettingsDialog } from "./components/settings/SettingsDialog";
 import { UsageFooter } from "./components/usage/UsageFooter";
@@ -134,7 +135,21 @@ export function App() {
         />
       )}
 
-      {/* Main content area — starts at top of window */}
+      {/* View mode selector bar — spans full width above sidebar/workspace split */}
+      {selectedWorkspacePath && (
+        <ViewModeBar workspacePath={selectedWorkspacePath} />
+      )}
+      {!selectedWorkspacePath && (
+        <div
+          className="electrobun-webkit-app-region-drag h-8 flex-shrink-0"
+          style={{ backgroundColor: "var(--ctp-mantle)" }}
+        />
+      )}
+
+      {/* Accent line below view mode bar */}
+      <div className="h-px flex-shrink-0" style={{ backgroundColor: "var(--ctp-surface0)" }} />
+
+      {/* Main content area — starts below accent line */}
       <div className="flex flex-1 min-h-0">
         {/* Sidebar */}
         {sidebarVisible && (

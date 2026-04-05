@@ -573,4 +573,9 @@ export const api = {
   getNetworkInterfaces: () => rpcRequest.getNetworkInterfaces(),
   consumePendingPrompt: (workspacePath: string) =>
     rpcRequest.consumePendingPrompt({ workspacePath }),
+
+  // Window controls
+  windowClose: () => rpcSend.windowClose(),
+  windowMinimize: () => rpcSend.windowMinimize(),
+  windowMaximize: () => rpcSend.windowMaximize(),
 };

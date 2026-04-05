@@ -748,6 +748,17 @@ const rpc = BrowserView.defineRPC({
         sessionStateManager.enrichTerminalData(scrollbackCache);
       },
 
+      // --- Window controls ---
+      windowClose: () => { win.close(); },
+      windowMinimize: () => { win.minimize(); },
+      windowMaximize: () => {
+        if (win.isMaximized()) {
+          win.unmaximize();
+        } else {
+          win.maximize();
+        }
+      },
+
       // --- Stats (optional) ---
       saveLatencyStats: (_msg: any) => {},
     },

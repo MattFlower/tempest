@@ -524,6 +524,9 @@ export interface BunMessages {
   terminalScrollbackUpdate: {
     entries: Array<{ terminalId: string; scrollback: string; cwd?: string }>;
   };
+  windowClose: void;
+  windowMinimize: void;
+  windowMaximize: void;
 }
 
 // --- Webview-side messages (Bun pushes these, no response) ---

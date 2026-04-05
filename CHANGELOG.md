@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Accent line spanning the full window width below the view mode bar. Moved ViewModeBar to 
+  App level so it sits above the sidebar/workspace split.
 - Add HTTP server status indicator icon in the workspace toolbar — shows blue when the
   HTTP server is enabled, grey when disabled. Clicking opens the Remote settings tab.
 - Auto-populate Scripts dropdown with scripts from package.json. Detects the package runner

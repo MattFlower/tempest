@@ -4,7 +4,6 @@ import type { PaneNode } from "../../models/pane-node";
 import { createPane, createTab, createLeaf, createSplit } from "../../models/pane-node";
 import { useStore } from "../../state/store";
 import { PaneTreeView } from "./PaneTreeView";
-import { ViewModeBar } from "./ViewModeBar";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
 import { DiffView } from "../diff/DiffView";
 import { PRDashboard } from "../pr/PRDashboard";
@@ -131,11 +130,6 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
 
   return (
     <div className="flex flex-col h-full w-full">
-      {/* View mode selector bar — no bottom border for seamless transition */}
-      <div style={{ borderBottom: "none" }}>
-        <ViewModeBar workspacePath={workspacePath} />
-      </div>
-
       {/* Workspace toolbar — name, status badge, action buttons */}
       <WorkspaceToolbar workspacePath={workspacePath} />
 

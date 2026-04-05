@@ -128,6 +128,14 @@ function useCommands(): PaletteCommand[] {
       addTabToFocusedPane(PaneTabKind.MarkdownViewer, name, { markdownFilePath: result.planPath });
     }},
 
+    // GitHub
+    { id: "open-repo-in-browser", label: "Open Repo in Browser", canOpenAsPane: true, action: async () => {
+      if (!selectedWorkspacePath) return;
+      const result = await api.getRepoGitHubUrl(selectedWorkspacePath);
+      if ("error" in result) return;
+      addTabToFocusedPane(PaneTabKind.Browser, "GitHub", { browserURL: result.url });
+    }},
+
     // App
     { id: "toggle-sidebar", label: "Toggle Sidebar", shortcutHint: "⌘\\", canOpenAsPane: false, action: toggleSidebar },
     { id: "toggle-devtools", label: "Toggle Developer Tools", shortcutHint: "⌘⌥I", canOpenAsPane: false, action: () => toggleDevTools() },

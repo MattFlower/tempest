@@ -6,10 +6,9 @@ import type {
   RepoSettings,
   SourceRepo,
   TempestWorkspace,
-  VCSType,
   WorkspaceSidebarInfo,
 } from "../shared/ipc-types";
-import { WorkspaceStatus } from "../shared/ipc-types";
+import { VCSType, WorkspaceStatus } from "../shared/ipc-types";
 import {
   loadConfig,
   saveConfig as saveConfigFile,
@@ -574,6 +573,73 @@ export class WorkspaceManager {
     const branch = await provider.bookmarkName(ws);
     if (!branch) return null;
     return { repoPath: repo.path, branch };
+  }
+
+  /**
+   * Build the GitHub URL for a workspace. If the current branch/bookmark has
+   * been pushed, the URL includes /tree/<branch>. Otherwise just the repo root.
+   */
+  async getRepoGitHubUrl(
+    workspacePath: string,
+  ): Promise<{ url: string } | { error: string }> {
+    const ws = this.findWorkspaceByPath(workspacePath);
+    if (!ws) return { error: "Workspace not found." };
+
+    const repo = this.repos.find((r) => r.path === ws.repoPath);
+    if (!repo) return { error: "Repository not found." };
+
+    const slugs = await this.getRemoteRepos(ws.repoPath);
+    if (slugs.length === 0) return { error: "No remote repository configured." };
+
+    const baseUrl = `https://github.com/${slugs[0]}`;
+
+    const provider = this.providers.get(repo.id);
+    if (!provider) return { url: baseUrl };
+
+    const branch = await provider.bookmarkName(ws);
+    if (!branch) return { url: baseUrl };
+
+    // Check if the branch has been pushed to origin
+    const pushed = await this.isBranchPushed(ws.repoPath, branch, provider.vcsType);
+    if (pushed) {
+      return { url: `${baseUrl}/tree/${encodeURIComponent(branch)}` };
+    }
+    return { url: baseUrl };
+  }
+
+  private async isBranchPushed(
+    repoPath: string,
+    branch: string,
+    vcsType: VCSType,
+  ): Promise<boolean> {
+    try {
+      if (vcsType === VCSType.JJ) {
+        const jjPath = new (await import("./config/path-resolver")).PathResolver().resolve(
+          "jj",
+          this.config.jjPath,
+        );
+        const proc = Bun.spawn(
+          [jjPath, "bookmark", "list", "--tracked", "-T", 'name ++ "\\n"'],
+          { cwd: repoPath, stdout: "pipe", stderr: "pipe" },
+        );
+        const stdout = await new Response(proc.stdout).text();
+        await proc.exited;
+        return stdout.split("\n").some((l) => l.trim() === branch);
+      } else {
+        const gitPath = new (await import("./config/path-resolver")).PathResolver().resolve(
+          "git",
+          this.config.gitPath,
+        );
+        const proc = Bun.spawn(
+          [gitPath, "rev-parse", "--verify", `refs/remotes/origin/${branch}`],
+          { cwd: repoPath, stdout: "pipe", stderr: "pipe" },
+        );
+        await proc.exited;
+        return proc.exitCode === 0;
+      }
+    } catch {
+      return false;
+    }
   }
 
   // --- Helpers ---

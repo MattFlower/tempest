@@ -477,6 +477,10 @@ export const api = {
   getAITimelineForFile: (filePath: string, projectPath?: string) =>
     rpcRequest.getAITimelineForFile({ filePath, projectPath }),
 
+  // Repo URL (GitHub)
+  getRepoGitHubUrl: (workspacePath: string) =>
+    rpcRequest.getRepoGitHubUrl({ workspacePath }),
+
   // PR URL Lookup
   lookupPRUrl: (workspacePath: string) =>
     rpcRequest.lookupPRUrl({ workspacePath }),

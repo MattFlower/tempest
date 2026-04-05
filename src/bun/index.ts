@@ -498,6 +498,10 @@ const rpc = BrowserView.defineRPC({
       },
 
       // --- PR URL Lookup ---
+      getRepoGitHubUrl: async (params: any) => {
+        return await workspaceManager.getRepoGitHubUrl(params.workspacePath);
+      },
+
       lookupPRUrl: async (params: any) => {
         const vcsInfo = await workspaceManager.getWorkspaceVCSInfo(params.workspacePath);
         if (!vcsInfo) {

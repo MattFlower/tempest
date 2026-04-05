@@ -321,6 +321,12 @@ export interface BunRequests {
     response: FileChangeTimeline | null;
   };
 
+  // Repo URL (GitHub)
+  getRepoGitHubUrl: {
+    params: { workspacePath: string };
+    response: { url: string } | { error: string };
+  };
+
   // PR URL lookup
   lookupPRUrl: {
     params: { workspacePath: string };

@@ -390,6 +390,8 @@ export const api = {
     scriptPath?: string;
     paramValues?: Record<string, string>;
   }) => rpcRequest.runCustomScript(params),
+  getPackageScripts: (workspacePath: string) =>
+    rpcRequest.getPackageScripts({ workspacePath }),
   browseFile: (startingFolder?: string) =>
     rpcRequest.browseFile({ startingFolder }),
   getRemoteRepos: (repoPath: string) =>

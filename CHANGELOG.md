@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Auto-populate Scripts dropdown with scripts from package.json. Detects the package runner
+  (bun/npm/yarn/pnpm) from lock files and runs scripts with the correct command. Refreshes
+  on each dropdown open so mid-session edits to package.json are picked up.
 - Expanded terminal support to cover additional areas:
   - Add OSC 8 hyperlink support -- terminal apps can now emit clickable hyperlinks (used by GCC,
     cargo, gh CLI, and many other tools). Clicking opens in the system browser.

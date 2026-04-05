@@ -9,7 +9,9 @@ interface Props {
   workspacePath: string;
   workspaceName: string;
   scripts: CustomScript[];
+  disablePackageScripts: boolean;
   onChanged: (scripts: CustomScript[]) => void;
+  onDisablePackageScriptsChanged: (disabled: boolean) => void;
   onDismiss: () => void;
 }
 
@@ -18,7 +20,9 @@ export function ScriptDialog({
   workspacePath,
   workspaceName,
   scripts,
+  disablePackageScripts,
   onChanged,
+  onDisablePackageScriptsChanged,
   onDismiss,
 }: Props) {
   useOverlay();
@@ -200,6 +204,24 @@ export function ScriptDialog({
         >
           Manage Scripts
         </h2>
+
+        {/* Auto-detect toggle */}
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!disablePackageScripts}
+            onChange={async (e) => {
+              const disabled = !e.target.checked;
+              const settings = await api.getRepoSettings(repoPath);
+              await api.saveRepoSettings(repoPath, { ...settings, disablePackageScripts: disabled });
+              onDisablePackageScriptsChanged(disabled);
+            }}
+            className="accent-[var(--ctp-blue)]"
+          />
+          <span className="text-xs" style={{ color: "var(--ctp-text)" }}>
+            Auto-detect scripts from package.json
+          </span>
+        </label>
 
         {/* Script list */}
         <div className="flex flex-col gap-1 overflow-y-auto" style={{ maxHeight: 200 }}>

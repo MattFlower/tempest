@@ -309,6 +309,7 @@ export interface RepoSettings {
   prepareScript: string;
   archiveScript: string;
   customScripts?: CustomScript[];
+  disablePackageScripts?: boolean;
 }
 
 // --- Assigned PRs ---

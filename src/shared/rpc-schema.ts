@@ -186,6 +186,10 @@ export interface BunRequests {
     };
     response: { runId: string };
   };
+  getPackageScripts: {
+    params: { workspacePath: string };
+    response: { scripts: Array<{ name: string; command: string }> };
+  };
   browseFile: {
     params: { startingFolder?: string };
     response: { path: string | null };

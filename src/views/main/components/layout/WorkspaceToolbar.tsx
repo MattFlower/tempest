@@ -65,6 +65,8 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
   const [showScriptDialog, setShowScriptDialog] = useState(false);
   const [customScripts, setCustomScripts] = useState<CustomScript[]>([]);
   const [runningScript, setRunningScript] = useState<CustomScript | null>(null);
+  const [packageScripts, setPackageScripts] = useState<Array<{ name: string; command: string }>>([]);
+  const [disablePackageScripts, setDisablePackageScripts] = useState(false);
 
   // Find workspace object to get name and status
   const workspace = useMemo(() => {
@@ -82,13 +84,29 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
     return repo?.id ?? null;
   }, [workspace, repos]);
 
-  // Load custom scripts for this repo
+  // Load custom scripts and settings for this repo
   useEffect(() => {
     if (!workspace?.repoPath) return;
-    api.getRepoSettings(workspace.repoPath).then((settings: { customScripts?: CustomScript[] }) => {
+    api.getRepoSettings(workspace.repoPath).then((settings: { customScripts?: CustomScript[]; disablePackageScripts?: boolean }) => {
       setCustomScripts(settings.customScripts ?? []);
+      setDisablePackageScripts(settings.disablePackageScripts ?? false);
     });
   }, [workspace?.repoPath]);
+
+  // Load package.json scripts for this workspace (also refreshed on dropdown open)
+  const refreshPackageScripts = useCallback(() => {
+    if (!workspacePath || disablePackageScripts) {
+      setPackageScripts([]);
+      return;
+    }
+    api.getPackageScripts(workspacePath).then((result: { scripts: Array<{ name: string; command: string }> }) => {
+      setPackageScripts(result.scripts);
+    });
+  }, [workspacePath, disablePackageScripts]);
+
+  useEffect(() => {
+    refreshPackageScripts();
+  }, [refreshPackageScripts]);
 
   // Load PR state and VCS type on mount / workspace change
   useEffect(() => {
@@ -123,6 +141,19 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
       });
     },
     [workspace, workspacePath],
+  );
+
+  const handleRunPackageScript = useCallback(
+    (ps: { name: string; command: string }) => {
+      if (!workspace) return;
+      setRunningScript({
+        id: `pkg-${ps.name}`,
+        name: ps.name,
+        script: ps.command,
+        showOutput: true,
+      });
+    },
+    [workspace],
   );
 
   // Derive effective status (activity overrides workspace.status)
@@ -300,7 +331,16 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
       label: cs.name,
       action: () => handleRunScript(cs),
     })),
-    ...(customScripts.length > 0 ? [{ separator: true } as const] : []),
+    ...(customScripts.length > 0 && packageScripts.length > 0
+      ? [{ separator: true } as const]
+      : []),
+    ...packageScripts.map((ps) => ({
+      label: ps.command,
+      action: () => handleRunPackageScript(ps),
+    })),
+    ...(customScripts.length > 0 || packageScripts.length > 0
+      ? [{ separator: true } as const]
+      : []),
     { label: "Manage Scripts", action: () => setShowScriptDialog(true) },
   ];
 
@@ -332,7 +372,12 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
           <DropdownButton label="New" items={newItems} onDefaultAction={() => addTabToFocusedPane(PaneTabKind.Shell, "Shell")} />
           <DropdownButton label="Split" items={splitItems} onDefaultAction={() => splitWithTab(PaneTabKind.Shell, "Shell")} />
           <DropdownButton label="PR" icon={PRIcon} items={prItems} />
-          <DropdownButton label="Scripts" items={scriptsItems} />
+          <DropdownButton
+            label=""
+            icon={<svg className="w-[1.375rem] h-[1.375rem]" viewBox="0 0 16 16" fill="var(--ctp-green)"><path d="M4 2l10 6-10 6V2z" /></svg>}
+            items={scriptsItems}
+            onOpen={refreshPackageScripts}
+          />
         </div>
       </div>
 
@@ -365,7 +410,11 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
           workspacePath={workspacePath}
           workspaceName={workspace.name}
           scripts={customScripts}
+          disablePackageScripts={disablePackageScripts}
           onChanged={setCustomScripts}
+          onDisablePackageScriptsChanged={(disabled) => {
+            setDisablePackageScripts(disabled);
+          }}
           onDismiss={() => setShowScriptDialog(false)}
         />
       )}

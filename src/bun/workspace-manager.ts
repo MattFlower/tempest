@@ -435,6 +435,37 @@ export class WorkspaceManager {
     return { runId };
   }
 
+  async getPackageScripts(workspacePath: string): Promise<{ scripts: Array<{ name: string; command: string }> }> {
+    try {
+      const pkgPath = join(workspacePath, "package.json");
+      if (!existsSync(pkgPath)) return { scripts: [] };
+
+      const raw = await Bun.file(pkgPath).text();
+      const pkg = JSON.parse(raw);
+      const scripts = pkg.scripts;
+      if (!scripts || typeof scripts !== "object") return { scripts: [] };
+
+      // Detect runner from lock files
+      let runner = "npm";
+      if (existsSync(join(workspacePath, "bun.lock")) || existsSync(join(workspacePath, "bun.lockb"))) {
+        runner = "bun";
+      } else if (existsSync(join(workspacePath, "yarn.lock"))) {
+        runner = "yarn";
+      } else if (existsSync(join(workspacePath, "pnpm-lock.yaml"))) {
+        runner = "pnpm";
+      }
+
+      return {
+        scripts: Object.keys(scripts).map((name) => ({
+          name,
+          command: `${runner} run ${name}`,
+        })),
+      };
+    } catch {
+      return { scripts: [] };
+    }
+  }
+
   // --- Sidebar Info ---
 
   async getSidebarInfo(workspacePath: string): Promise<WorkspaceSidebarInfo> {

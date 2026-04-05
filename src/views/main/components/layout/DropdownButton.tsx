@@ -10,9 +10,11 @@ interface DropdownButtonProps {
   items: DropdownItem[];
   /** Action fired when clicking the main button area (not the chevron). If omitted, the whole button toggles the dropdown. */
   onDefaultAction?: () => void;
+  /** Called each time the dropdown opens. Useful for refreshing dynamic items. */
+  onOpen?: () => void;
 }
 
-export function DropdownButton({ label, icon, items, onDefaultAction }: DropdownButtonProps) {
+export function DropdownButton({ label, icon, items, onDefaultAction, onOpen }: DropdownButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -45,7 +47,10 @@ export function DropdownButton({ label, icon, items, onDefaultAction }: Dropdown
       <button
         onClick={() => {
           if (!onDefaultAction) {
-            setIsOpen((o) => !o);
+            setIsOpen((o) => {
+              if (!o) onOpen?.();
+              return !o;
+            });
           }
         }}
         className="flex items-center gap-0 px-0 py-0 text-xs font-medium rounded-md border border-[var(--ctp-surface1)] text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)] transition-colors"
@@ -68,7 +73,10 @@ export function DropdownButton({ label, icon, items, onDefaultAction }: Dropdown
           onClick={(e) => {
             if (onDefaultAction) {
               e.stopPropagation();
-              setIsOpen((o) => !o);
+              setIsOpen((o) => {
+                if (!o) onOpen?.();
+                return !o;
+              });
             }
           }}
         >

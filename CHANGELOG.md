@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed settings file proliferation in `~/.tempest/` — use content-hashed filenames instead of UUIDs, with startup cleanup of stale files
+- Status indicators: only show "Working" for sessions that have received user input (`user_prompt`); 
+  auto-resuming or initializing sessions stay Idle until the user actually types something
+- Status indicators: `session_start` now maps to Idle instead of Working — Claude launching isn't active work
+- Status indicators: unknown hook event types default to Idle instead of Working
+- Status indicators: clear activity state when last Claude session ends instead of staying stuck on "Working"
+- Status indicators: immediately clean stale PIDs on stop/idle events so transitions are instant
+- Status indicators: sync activity state from backend on startup so webview reflects pre-existing sessions
 
 ### Changed
 

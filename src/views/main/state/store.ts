@@ -59,6 +59,7 @@ export interface TempestStore {
   setViewMode: (workspacePath: string, mode: ViewMode) => void;
 
   setWorkspaceActivity: (path: string, state: ActivityState) => void;
+  clearWorkspaceActivity: (path: string) => void;
 
   setSidebarWidth: (width: number) => void;
   toggleSidebar: () => void;
@@ -124,6 +125,11 @@ export const useStore = create<TempestStore>((set) => ({
 
   setWorkspaceActivity: (path, state) =>
     set((s) => ({ workspaceActivity: { ...s.workspaceActivity, [path]: state } })),
+  clearWorkspaceActivity: (path) =>
+    set((s) => {
+      const { [path]: _, ...rest } = s.workspaceActivity;
+      return { workspaceActivity: rest };
+    }),
 
   setSidebarWidth: (width) => set({ sidebarWidth: width }),
   toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),

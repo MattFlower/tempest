@@ -179,11 +179,14 @@ const rpc = Electroview.defineRPC({
         hookEventHandler?.(event);
       },
       workspaceActivityChanged: (msg: any) => {
-        if (msg.activityState !== null && msg.activityState !== undefined) {
-          import("./store").then(({ useStore }) => {
-            useStore.getState().setWorkspaceActivity(msg.workspacePath, msg.activityState);
-          });
-        }
+        import("./store").then(({ useStore }) => {
+          const store = useStore.getState();
+          if (msg.activityState !== null && msg.activityState !== undefined) {
+            store.setWorkspaceActivity(msg.workspacePath, msg.activityState);
+          } else {
+            store.clearWorkspaceActivity(msg.workspacePath);
+          }
+        });
       },
       workspacesChanged: (msg: WebviewMessages["workspacesChanged"]) => {
         // Handled by store subscription — imported dynamically to avoid circular deps
@@ -406,6 +409,9 @@ export const api = {
     rpcRequest.removeBookmark({ repoPath, bookmarkId }),
   updateBookmark: (repoPath: string, bookmarkId: string, label: string, url?: string) =>
     rpcRequest.updateBookmark({ repoPath, bookmarkId, label, url }),
+
+  // Activity state
+  getActivityState: () => rpcRequest.getActivityState(),
 
   // Session state
   loadSessionState: () => rpcRequest.loadSessionState(),

@@ -9,7 +9,7 @@ import { SettingsDialog } from "./components/settings/SettingsDialog";
 import { UsageFooter } from "./components/usage/UsageFooter";
 import { api } from "./state/rpc-client";
 import { fromNodeState } from "./models/pane-node";
-import type { AppConfig } from "../../shared/ipc-types";
+import type { ActivityState, AppConfig } from "../../shared/ipc-types";
 
 const MIN_SIDEBAR_WIDTH = 180;
 const MAX_SIDEBAR_WIDTH = 400;
@@ -41,6 +41,13 @@ export function App() {
     api.getHttpServerStatus().then((status: any) => {
       useStore.getState().setHttpServerStatus(status.running, status.error);
     });
+    // Sync activity state that may have accumulated before webview was ready
+    api.getActivityState().then((states: Record<string, ActivityState>) => {
+      const store = useStore.getState();
+      for (const [path, state] of Object.entries(states)) {
+        store.setWorkspaceActivity(path, state);
+      }
+    }).catch(() => { /* activity tracker not ready yet */ });
   }, []);
 
   // All workspace paths to render: selected + any with existing trees

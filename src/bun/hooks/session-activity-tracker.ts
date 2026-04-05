@@ -8,17 +8,29 @@ import type { HookEvent } from "../../shared/ipc-types";
 export class SessionActivityTracker {
   private sessions = new Map<number, ActivityState>();
   private sessionCWDs = new Map<number, string>();
+  /** Sessions that have received user input (user_prompt). Only activated sessions can show Working. */
+  private activatedSessions = new Set<number>();
   private cleanupTimer?: ReturnType<typeof setInterval>;
 
   handleEvent(event: HookEvent): void {
     if (event.eventType === "session_end") {
       this.sessions.delete(event.pid);
       this.sessionCWDs.delete(event.pid);
+      this.activatedSessions.delete(event.pid);
       return;
+    }
+    // A user_prompt means real user input — activate the session
+    if (event.eventType === "user_prompt") {
+      this.activatedSessions.add(event.pid);
     }
     this.sessions.set(event.pid, activityStateFromEvent(event.eventType));
     if (event.cwd) {
       this.sessionCWDs.set(event.pid, event.cwd);
+      // When transitioning to idle, clean stale sibling PIDs immediately
+      // so they don't inflate the aggregate back to Working
+      if (event.eventType === "stop" || event.eventType === "idle_prompt") {
+        this.cleanStalePidsForCWD(event.cwd);
+      }
     }
   }
 
@@ -29,6 +41,7 @@ export class SessionActivityTracker {
   removeSession(pid: number): void {
     this.sessions.delete(pid);
     this.sessionCWDs.delete(pid);
+    this.activatedSessions.delete(pid);
   }
 
   /** Returns PIDs associated with a given working directory. */
@@ -44,8 +57,14 @@ export class SessionActivityTracker {
   aggregateState(pids: number[]): ActivityState | undefined {
     let min: ActivityState | undefined;
     for (const pid of pids) {
-      const state = this.sessions.get(pid);
-      if (state !== undefined && (min === undefined || state < min)) {
+      let state = this.sessions.get(pid);
+      if (state === undefined) continue;
+      // Non-activated sessions (no user input yet) can't show Working —
+      // they may be auto-resuming or initializing, not doing real work
+      if (state === ActivityState.Working && !this.activatedSessions.has(pid)) {
+        state = ActivityState.Idle;
+      }
+      if (min === undefined || state < min) {
         min = state;
       }
     }
@@ -64,6 +83,38 @@ export class SessionActivityTracker {
     }
   }
 
+  /** Returns aggregate state for every tracked CWD. */
+  allCWDStates(): Record<string, ActivityState> {
+    // Collect unique CWDs
+    const cwds = new Set(this.sessionCWDs.values());
+    const result: Record<string, ActivityState> = {};
+    for (const cwd of cwds) {
+      const pids = this.pidsForCWD(cwd);
+      const state = this.aggregateState(pids);
+      if (state !== undefined) result[cwd] = state;
+    }
+    return result;
+  }
+
+  /** Remove dead PIDs for a specific CWD. */
+  private cleanStalePidsForCWD(cwd: string): void {
+    for (const [pid, dir] of this.sessionCWDs) {
+      if (dir !== cwd) continue;
+      try {
+        process.kill(pid, 0);
+      } catch {
+        this.sessions.delete(pid);
+        this.sessionCWDs.delete(pid);
+        this.activatedSessions.delete(pid);
+      }
+    }
+  }
+
+  /** Remove all tracked PIDs whose processes no longer exist. */
+  cleanStale(): void {
+    this.cleanStaleSessions();
+  }
+
   private cleanStaleSessions(): void {
     for (const pid of this.sessions.keys()) {
       try {
@@ -72,6 +123,7 @@ export class SessionActivityTracker {
         // Process no longer exists
         this.sessions.delete(pid);
         this.sessionCWDs.delete(pid);
+        this.activatedSessions.delete(pid);
       }
     }
   }
@@ -80,17 +132,16 @@ export class SessionActivityTracker {
 /** Map hook event type strings to ActivityState values. */
 function activityStateFromEvent(eventType: string): ActivityState {
   switch (eventType) {
-    case "session_start":
     case "user_prompt":
     case "pre_tool_use":
       return ActivityState.Working;
     case "permission_request":
     case "permission_prompt":
       return ActivityState.NeedsInput;
+    case "session_start":
     case "stop":
     case "idle_prompt":
-      return ActivityState.Idle;
     default:
-      return ActivityState.Working;
+      return ActivityState.Idle;
   }
 }

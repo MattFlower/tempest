@@ -382,6 +382,12 @@ const rpc = BrowserView.defineRPC({
         await getBookmarkManager(repoPath).update(bookmarkId, label, url);
       },
 
+      // --- Activity State ---
+      getActivityState: () => {
+        activityTracker.cleanStale();
+        return activityTracker.allCWDStates();
+      },
+
       // --- Session State (Stream D) ---
       loadSessionState: async () => {
         return await sessionStateManager.load();

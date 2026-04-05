@@ -4,6 +4,7 @@
 // ============================================================
 
 import type {
+  ActivityState,
   AppConfig,
   BinaryStatus,
   Bookmark,
@@ -216,6 +217,12 @@ export interface BunRequests {
   updateBookmark: {
     params: { repoPath: string; bookmarkId: string; label: string; url?: string };
     response: void;
+  };
+
+  // Activity state (hook-driven)
+  getActivityState: {
+    params: void;
+    response: Record<string, ActivityState>;
   };
 
   // Session state persistence

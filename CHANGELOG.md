@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the system clipboard via escape sequences. Read/query is denied for security.
 - Add OSC 133 shell integration (FinalTerm protocol) -- tracks prompt and command boundaries.
   Use Cmd+Shift+Up/Down to jump between prompts in terminal scrollback.
+- Add focus event reporting (CSI ? 1004 h/l) -- apps like Neovim and tmux can now detect
+  when the terminal gains or loses focus (e.g., auto-reload files on focus).
 - Add documentation section to the website with a keyboard shortcuts reference page
 - Add HTTP Remote Control Server -- an optional HTTP server that allows Tempest to be controlled
   remotely. Features bearer token authentication, configurable port, a web dashboard showing

@@ -16,6 +16,7 @@ export class TerminalInstance {
   private webglAddon: WebglAddon | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private resizeDebounceTimer: number | null = null;
+  private focusListenerCleanup: (() => void) | null = null;
   private _cwd: string | undefined;
   private _promptMarks: { promptLine: number; exitCode: number | undefined }[] = [];
   private _lastNavLine: number = -1; // line we last navigated to, -1 = at bottom
@@ -100,6 +101,24 @@ export class TerminalInstance {
     this.terminal.open(container);
     this.initWebGL();
     this.fitAddon.fit();
+
+    // Focus events (CSI ? 1004 h/l): when an app enables sendFocusMode,
+    // report focus gain (CSI I) and loss (CSI O) so Neovim, tmux, etc. can react.
+    if (this.terminal.element) {
+      const el = this.terminal.element;
+      const onFocusIn = () => {
+        if (this.terminal.modes.sendFocusMode) this.onInput("\x1b[I");
+      };
+      const onFocusOut = () => {
+        if (this.terminal.modes.sendFocusMode) this.onInput("\x1b[O");
+      };
+      el.addEventListener("focusin", onFocusIn);
+      el.addEventListener("focusout", onFocusOut);
+      this.focusListenerCleanup = () => {
+        el.removeEventListener("focusin", onFocusIn);
+        el.removeEventListener("focusout", onFocusOut);
+      };
+    }
 
     // Kitty keyboard protocol negotiation.
     // Apps like Claude Code send CSI ? u to query support; we respond so they
@@ -563,6 +582,7 @@ export class TerminalInstance {
       cancelAnimationFrame(this.resizeDebounceTimer);
     }
     this.resizeObserver?.disconnect();
+    this.focusListenerCleanup?.();
     this.webglAddon?.dispose();
     this.terminal.dispose();
   }

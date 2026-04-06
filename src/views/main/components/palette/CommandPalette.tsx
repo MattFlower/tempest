@@ -461,6 +461,9 @@ export function CommandPalette() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder={mode === "commands" ? "Search commands..." : browsingPath ? "Browsing filesystem..." : "Search files..."}
             className="flex-1 bg-transparent text-[13px] text-[var(--ctp-text)] placeholder:text-[var(--ctp-overlay0)] outline-none"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
             autoFocus
           />
           {/* Mode tabs */}

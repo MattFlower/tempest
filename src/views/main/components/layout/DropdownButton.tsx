@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
 export type DropdownItem =
-  | { label: string; action: () => void }
+  | { label: string; action: () => void; icon?: React.ReactNode }
   | { separator: true };
 
 interface DropdownButtonProps {
@@ -104,8 +104,9 @@ export function DropdownButton({ label, icon, items, onDefaultAction, onOpen }: 
                   close();
                   item.action();
                 }}
-                className="w-full text-left px-3 py-1.5 text-xs text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)] transition-colors"
+                className="w-full text-left px-3 py-1.5 text-xs text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)] transition-colors flex items-center gap-2"
               >
+                {item.icon}
                 {item.label}
               </button>
             ),

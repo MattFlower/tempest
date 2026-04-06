@@ -629,6 +629,11 @@ export const api = {
   jjGetRangeFileDiff: (workspacePath: string, fromRevision: string, toRevision: string, filePath: string) =>
     rpcRequest.jjGetRangeFileDiff({ workspacePath, fromRevision, toRevision, filePath }),
 
+  // Open In (external editors)
+  getInstalledEditors: () => rpcRequest.getInstalledEditors(),
+  openInEditor: (editorId: string, directory: string) =>
+    rpcRequest.openInEditor({ editorId, directory }),
+
   // HTTP Remote Control Server
   startHttpServer: (params: { enabled: boolean; port: number; hostname: string; token: string }) =>
     rpcRequest.startHttpServer(params),

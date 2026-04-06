@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- JJ VCS view: preset dropdown replacing raw revset input — "Since branch started" (range mode, default), "Recent Revisions" (single-revision mode), and "Custom revset" (manual entry) 
+- "Open In" toolbar button — quickly open the current worktree in an external editor (Cursor, IntelliJ IDEA, Neovim, VS Code, Xcode, Zed), terminal (Alacritty, Apple Terminal, Ghostty, GNOME Terminal, iTerm2, Kitty, WezTerm), or file manager (Dolphin, Explorer, Finder, Nautilus). Automatically detects which apps are installed and shows them with icons in a dropdown, grouped by category.
+- JJ VCS view: preset dropdown replacing raw revset input — "Since branch started" (range mode, default), "Recent Revisions" (single-revision mode), and "Custom revset" (manual entry)
 - Branch health indicator in sidebar: the branch icon now shows green (up to date), yellow (needs rebase), or red (has conflicts) based on the branch's relationship to trunk. Works for both Git and JJ repos. Also replaced the branch icon SVG with a cleaner design.
 - JJ VCS view: editable revset field below Revisions header (defaults to fork-point-based `heads(::@ & ::trunk())..@`) with aggregate file list and cumulative diffs across the full revision range — stable across `jj git fetch`
 - "Restore From..." right-click context menu for JJ VCS file list — right-click any changed file and restore its content from another revision, with a live diff preview before confirming

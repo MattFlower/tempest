@@ -34,6 +34,7 @@ import {
 } from "./markdown/markdown-service";
 import { getDiff } from "./diff/diff-provider";
 import { buildEditorCommand } from "./editor/editor-command";
+import { getInstalledEditors, openInEditor } from "./editor/open-in";
 import { readFileForEditor, writeFileForEditor, resolveModulePath } from "./editor/file-service";
 import { AIContextProvider } from "./diff/ai-context-provider";
 import { PRMonitor } from "./pr/pr-monitor";
@@ -815,6 +816,10 @@ const rpc = BrowserView.defineRPC({
       jjGetRangeFileDiff: async (params: any) => {
         return await jjGetRangeFileDiff(params.workspacePath, params.fromRevision, params.toRevision, params.filePath);
       },
+
+      // --- Open In (external editors) ---
+      getInstalledEditors: () => getInstalledEditors(),
+      openInEditor: (params: any) => openInEditor(params.editorId, params.directory),
 
       // --- HTTP Remote Control Server ---
       startHttpServer: (params: any) => {

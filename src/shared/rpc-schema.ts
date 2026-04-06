@@ -550,6 +550,16 @@ export interface BunRequests {
     response: VCSFileDiffResult;
   };
 
+  // --- Open In (external editors) ---
+  getInstalledEditors: {
+    params: void;
+    response: Array<{ id: string; name: string; category: "editor" | "terminal" | "file-manager" }>;
+  };
+  openInEditor: {
+    params: { editorId: string; directory: string };
+    response: { terminalCommand: string[] | null };
+  };
+
   // --- HTTP Remote Control Server ---
   startHttpServer: {
     params: HttpServerConfig;

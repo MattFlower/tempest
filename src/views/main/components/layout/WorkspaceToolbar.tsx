@@ -11,6 +11,7 @@ import { PRReviewDialog } from "../pr/PRReviewDialog";
 import { OpenPRDialog } from "../pr/OpenPRDialog";
 import { ScriptDialog } from "./ScriptDialog";
 import { ScriptRunDialog } from "./ScriptRunDialog";
+import { editorIcons } from "./editor-icons";
 
 interface WorkspaceToolbarProps {
   workspacePath: string;
@@ -67,6 +68,7 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
   const [runningScript, setRunningScript] = useState<CustomScript | null>(null);
   const [packageScripts, setPackageScripts] = useState<Array<{ name: string; command: string }>>([]);
   const [disablePackageScripts, setDisablePackageScripts] = useState(false);
+  const [installedEditors, setInstalledEditors] = useState<Array<{ id: string; name: string; category: "editor" | "terminal" | "file-manager" }>>([]);
 
   // Find workspace object to get name and status
   const workspace = useMemo(() => {
@@ -107,6 +109,26 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
   useEffect(() => {
     refreshPackageScripts();
   }, [refreshPackageScripts]);
+
+  const refreshInstalledEditors = useCallback(() => {
+    api.getInstalledEditors().then((apps: Array<{ id: string; name: string; category: "editor" | "terminal" | "file-manager" }>) => {
+      setInstalledEditors(apps);
+    });
+  }, []);
+
+  const handleOpenInEditor = useCallback(
+    async (editorId: string) => {
+      const result = await api.openInEditor(editorId, workspacePath);
+      if (result.terminalCommand) {
+        // Terminal-based editor — open in a new pane
+        splitWithTab(PaneTabKind.Shell, "Neovim", {
+          terminalId: crypto.randomUUID(),
+          shellCommand: result.terminalCommand,
+        });
+      }
+    },
+    [workspacePath],
+  );
 
   // Load PR state and VCS type on mount / workspace change
   useEffect(() => {
@@ -344,6 +366,24 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
     { label: "Manage Scripts", action: () => setShowScriptDialog(true) },
   ];
 
+  const openInItems: DropdownItem[] = (() => {
+    const groups: Array<"editor" | "terminal" | "file-manager"> = ["editor", "terminal", "file-manager"];
+    const items: DropdownItem[] = [];
+    for (const category of groups) {
+      const apps = installedEditors.filter((a) => a.category === category);
+      if (apps.length === 0) continue;
+      if (items.length > 0) items.push({ separator: true });
+      for (const app of apps) {
+        items.push({
+          label: app.name,
+          icon: editorIcons[app.id],
+          action: () => handleOpenInEditor(app.id),
+        });
+      }
+    }
+    return items;
+  })();
+
   return (
     <>
       <div
@@ -372,6 +412,11 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
           <DropdownButton label="New" items={newItems} onDefaultAction={() => addTabToFocusedPane(PaneTabKind.Shell, "Shell")} />
           <DropdownButton label="Split" items={splitItems} onDefaultAction={() => splitWithTab(PaneTabKind.Shell, "Shell")} />
           <DropdownButton label="PR" icon={PRIcon} items={prItems} />
+          <DropdownButton
+            label="Open In"
+            items={openInItems}
+            onOpen={refreshInstalledEditors}
+          />
           <DropdownButton
             label=""
             icon={<svg className="w-[1.375rem] h-[1.375rem]" viewBox="0 0 16 16" fill="var(--ctp-green)"><path d="M4 2l10 6-10 6V2z" /></svg>}

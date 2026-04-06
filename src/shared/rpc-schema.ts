@@ -533,6 +533,14 @@ export interface BunRequests {
     params: { workspacePath: string; revision: string; destination: string };
     response: { success: boolean; error?: string };
   };
+  jjGetRestorePreview: {
+    params: { workspacePath: string; targetRevision: string; sourceRevision: string; filePath: string };
+    response: VCSFileDiffResult;
+  };
+  jjRestore: {
+    params: { workspacePath: string; targetRevision: string; sourceRevision: string; filePath: string };
+    response: { success: boolean; error?: string };
+  };
 
   // --- HTTP Remote Control Server ---
   startHttpServer: {

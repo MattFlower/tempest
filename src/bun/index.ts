@@ -68,6 +68,8 @@ import {
   jjEdit,
   jjBookmarkSet,
   jjRebase,
+  jjGetRestorePreview,
+  jjRestore,
 } from "./vcs/jj-commit-provider";
 
 // --- Stream A: Terminal + Session ---
@@ -791,6 +793,18 @@ const rpc = BrowserView.defineRPC({
       },
       jjRebase: async (params: any) => {
         return await jjRebase(params.workspacePath, params.revision, params.destination);
+      },
+      jjGetRestorePreview: async (params: any) => {
+        return await jjGetRestorePreview(
+          params.workspacePath, params.targetRevision,
+          params.sourceRevision, params.filePath,
+        );
+      },
+      jjRestore: async (params: any) => {
+        return await jjRestore(
+          params.workspacePath, params.targetRevision,
+          params.sourceRevision, params.filePath,
+        );
       },
 
       // --- HTTP Remote Control Server ---

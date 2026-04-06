@@ -494,6 +494,58 @@ export async function jjRebase(
   return { success: true };
 }
 
+export async function jjGetRestorePreview(
+  workspacePath: string,
+  targetRevision: string,
+  sourceRevision: string,
+  filePath: string,
+): Promise<VCSFileDiffResult> {
+  const language = detectLanguage(filePath);
+
+  let originalContent = "";
+  let modifiedContent = "";
+
+  // Current content in target revision (what the file looks like now)
+  try {
+    const { stdout, exitCode } = await runJJ(
+      ["file", "show", "-r", targetRevision, filePath],
+      workspacePath,
+    );
+    if (exitCode === 0) originalContent = stdout;
+  } catch {
+    // File may not exist in target revision
+  }
+
+  // Content in source revision (what the file would become after restore)
+  try {
+    const { stdout, exitCode } = await runJJ(
+      ["file", "show", "-r", sourceRevision, filePath],
+      workspacePath,
+    );
+    if (exitCode === 0) modifiedContent = stdout;
+  } catch {
+    // File may not exist in source revision
+  }
+
+  return { originalContent, modifiedContent, filePath, language };
+}
+
+export async function jjRestore(
+  workspacePath: string,
+  targetRevision: string,
+  sourceRevision: string,
+  filePath: string,
+): Promise<{ success: boolean; error?: string }> {
+  const { stderr, exitCode } = await runJJ(
+    ["restore", "--from", sourceRevision, "--to", targetRevision, filePath],
+    workspacePath,
+  );
+  if (exitCode !== 0) {
+    return { success: false, error: stderr.trim() };
+  }
+  return { success: true };
+}
+
 /** Deduplicate bookmarks — prefer local over remote entries with same name. */
 function deduplicateBookmarks(bookmarks: JJBookmark[]): JJBookmark[] {
   const seen = new Map<string, JJBookmark>();

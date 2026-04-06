@@ -620,6 +620,10 @@ export const api = {
     rpcRequest.jjBookmarkSet({ workspacePath, revision, name, track }),
   jjRebase: (workspacePath: string, revision: string, destination: string) =>
     rpcRequest.jjRebase({ workspacePath, revision, destination }),
+  jjGetRestorePreview: (workspacePath: string, targetRevision: string, sourceRevision: string, filePath: string) =>
+    rpcRequest.jjGetRestorePreview({ workspacePath, targetRevision, sourceRevision, filePath }),
+  jjRestore: (workspacePath: string, targetRevision: string, sourceRevision: string, filePath: string) =>
+    rpcRequest.jjRestore({ workspacePath, targetRevision, sourceRevision, filePath }),
 
   // HTTP Remote Control Server
   startHttpServer: (params: { enabled: boolean; port: number; hostname: string; token: string }) =>

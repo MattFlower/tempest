@@ -28,8 +28,10 @@ import {
   type MonacoSelection,
 } from "./MonacoDiffViewer";
 import { JJContextMenu } from "./JJContextMenu";
+import { JJFileContextMenu } from "./JJFileContextMenu";
 import { JJBookmarkDialog } from "./JJBookmarkDialog";
 import { JJRebaseDialog } from "./JJRebaseDialog";
+import { JJRestoreFromDialog } from "./JJRestoreFromDialog";
 import { AIContextPanel } from "../diff/AIContextPanel";
 
 interface JJViewProps {
@@ -91,6 +93,18 @@ export function JJView({ workspacePath }: JJViewProps) {
   // Rebase dialog state
   const [rebaseDialog, setRebaseDialog] = useState<{
     changeId: string;
+  } | null>(null);
+
+  // File context menu state
+  const [fileContextMenu, setFileContextMenu] = useState<{
+    x: number;
+    y: number;
+    filePath: string;
+  } | null>(null);
+
+  // Restore from dialog state
+  const [restoreFromDialog, setRestoreFromDialog] = useState<{
+    filePath: string;
   } | null>(null);
 
   // Auto-dismiss toast
@@ -374,6 +388,58 @@ export function JJView({ workspacePath }: JJViewProps) {
     [workspacePath, rebaseDialog, loadLog],
   );
 
+  // --- File context menu actions ---
+
+  const handleFileContextMenu = useCallback(
+    (filePath: string, x: number, y: number) => {
+      setFileContextMenu({ x, y, filePath });
+    },
+    [],
+  );
+
+  const handleOpenRestoreFromDialog = useCallback(() => {
+    if (!fileContextMenu) return;
+    setRestoreFromDialog({ filePath: fileContextMenu.filePath });
+    setFileContextMenu(null);
+  }, [fileContextMenu]);
+
+  const handleRestore = useCallback(
+    async (sourceRevision: string) => {
+      if (!restoreFromDialog || !selectedChangeId) return;
+      const changeId = selectedChangeId;
+      const result = await api.jjRestore(
+        workspacePath,
+        changeId,
+        sourceRevision,
+        restoreFromDialog.filePath,
+      );
+      if (result.success) {
+        setToast({
+          message: `Restored ${restoreFromDialog.filePath} from ${sourceRevision}`,
+          type: "success",
+        });
+        // Reload log, then re-select the same revision and refresh its files
+        await loadLog();
+        setSelectedChangeId(changeId);
+        try {
+          const files = await api.jjGetChangedFiles(workspacePath, changeId);
+          setChangedFiles(files);
+          setSelectedFilePath(null);
+          setDiffData(null);
+        } catch {
+          // Ignore — effect will pick it up
+        }
+      } else {
+        setToast({
+          message: result.error ?? "Restore failed",
+          type: "error",
+        });
+      }
+      setRestoreFromDialog(null);
+    },
+    [workspacePath, selectedChangeId, restoreFromDialog, loadLog],
+  );
+
   // Divider drag for left panel resize
   const handleDividerDrag = useCallback(
     (e: React.MouseEvent) => {
@@ -641,6 +707,10 @@ export function JJView({ workspacePath }: JJViewProps) {
                                 : "transparent",
                             }}
                             onClick={() => setSelectedFilePath(file.path)}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              handleFileContextMenu(file.path, e.clientX, e.clientY);
+                            }}
                             onMouseEnter={(e) => {
                               if (!isSelected)
                                 (e.currentTarget as HTMLElement).style.backgroundColor =
@@ -851,6 +921,30 @@ export function JJView({ workspacePath }: JJViewProps) {
           bookmarks={bookmarks}
           onConfirm={handleRebase}
           onCancel={() => setRebaseDialog(null)}
+        />
+      )}
+
+      {/* File context menu */}
+      {fileContextMenu && (
+        <JJFileContextMenu
+          x={fileContextMenu.x}
+          y={fileContextMenu.y}
+          filePath={fileContextMenu.filePath}
+          onRestoreFrom={handleOpenRestoreFromDialog}
+          onDismiss={() => setFileContextMenu(null)}
+        />
+      )}
+
+      {/* Restore from dialog */}
+      {restoreFromDialog && selectedChangeId && (
+        <JJRestoreFromDialog
+          workspacePath={workspacePath}
+          targetRevision={selectedChangeId}
+          filePath={restoreFromDialog.filePath}
+          revisions={revisions}
+          bookmarks={bookmarks}
+          onConfirm={handleRestore}
+          onCancel={() => setRestoreFromDialog(null)}
         />
       )}
     </div>

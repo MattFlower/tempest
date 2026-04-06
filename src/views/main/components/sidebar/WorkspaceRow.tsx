@@ -7,7 +7,7 @@ import { OverlayWrapper } from "../../state/useOverlay";
 interface Props {
   workspace: TempestWorkspace;
   sidebarInfo?: WorkspaceSidebarInfo;
-  shortcutIndex?: number;
+
   isSelected: boolean;
   onSelect: () => void;
   onArchive: () => void;
@@ -63,7 +63,7 @@ function DiffStatsPill({ stats, onRefresh }: { stats: DiffStats; onRefresh: () =
   );
 }
 
-export function WorkspaceRow({ workspace, sidebarInfo, shortcutIndex, isSelected, onSelect, onArchive, onRefreshDiffStats }: Props) {
+export function WorkspaceRow({ workspace, sidebarInfo, isSelected, onSelect, onArchive, onRefreshDiffStats }: Props) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   // Hook-driven activity state overrides the workspace status for display
@@ -159,11 +159,6 @@ export function WorkspaceRow({ workspace, sidebarInfo, shortcutIndex, isSelected
           {secondaryParts}
         </span>
         <span className="flex-1" />
-        {shortcutIndex != null && (
-          <span className="text-[10px] text-[var(--ctp-overlay0)]">
-            ⌘{shortcutIndex}
-          </span>
-        )}
       </div>
     </div>
   );

@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- Removed misleading ⌘1/⌘2/etc shortcut indicators from workspace sidebar rows (these shortcuts control view tabs, not workspace selection)
+
 ## [0.9.2] - 2026-04-05
 
 ### Added

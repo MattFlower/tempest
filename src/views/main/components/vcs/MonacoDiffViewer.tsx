@@ -6,9 +6,17 @@
 // Exposes navigation via forwardRef handle.
 // ============================================================
 
-import { useRef, forwardRef, useImperativeHandle, useCallback } from "react";
+import { useRef, forwardRef, useImperativeHandle, useCallback, useEffect } from "react";
 import { DiffEditor, loader } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
+
+// Selection info exposed to parent for "Ask Claude" button positioning
+export interface MonacoSelection {
+  text: string;
+  lineNumber: number;
+  x: number;
+  y: number;
+}
 
 // Configure Monaco to load from local bundled files (same as MonacoEditorPane)
 loader.config({ paths: { vs: "./monaco-editor/min/vs" } });
@@ -60,16 +68,19 @@ interface MonacoDiffViewerProps {
   language: string;
   filePath: string;
   displayMode: "unified" | "side-by-side";
+  onTextSelection?: (sel: MonacoSelection | null) => void;
 }
 
 export const MonacoDiffViewer = forwardRef<
   MonacoDiffViewerHandle,
   MonacoDiffViewerProps
 >(function MonacoDiffViewer(
-  { originalContent, modifiedContent, language, filePath, displayMode },
+  { originalContent, modifiedContent, language, filePath, displayMode, onTextSelection },
   ref,
 ) {
   const editorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
+  const onTextSelectionRef = useRef(onTextSelection);
+  onTextSelectionRef.current = onTextSelection;
 
   // Expose navigation methods
   useImperativeHandle(ref, () => ({
@@ -129,8 +140,42 @@ export const MonacoDiffViewer = forwardRef<
     }
   }, []);
 
-  const handleMount = useCallback((editor: editor.IStandaloneDiffEditor) => {
-    editorRef.current = editor;
+  const handleMount = useCallback((diffEditor: editor.IStandaloneDiffEditor) => {
+    editorRef.current = diffEditor;
+
+    // Track text selection on the modified (new) editor for "Ask Claude"
+    const modEditor = diffEditor.getModifiedEditor();
+    modEditor.onDidChangeCursorSelection(() => {
+      const cb = onTextSelectionRef.current;
+      if (!cb) return;
+
+      const selection = modEditor.getSelection();
+      if (!selection || selection.isEmpty()) {
+        cb(null);
+        return;
+      }
+
+      const model = modEditor.getModel();
+      if (!model) { cb(null); return; }
+
+      const text = model.getValueInRange(selection);
+      if (!text.trim()) { cb(null); return; }
+
+      // Get pixel position relative to editor DOM for button placement
+      const startPos = selection.getStartPosition();
+      const scrolledPos = modEditor.getScrolledVisiblePosition(startPos);
+      const editorDom = modEditor.getDomNode();
+      if (!scrolledPos || !editorDom) { cb(null); return; }
+
+      const editorRect = editorDom.getBoundingClientRect();
+
+      cb({
+        text,
+        lineNumber: startPos.lineNumber,
+        x: editorRect.left + scrolledPos.left,
+        y: editorRect.top + scrolledPos.top,
+      });
+    });
   }, []);
 
   return (

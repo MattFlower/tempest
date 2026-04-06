@@ -14,7 +14,10 @@ import type {
   FileAIContext,
   FileChangeTimeline,
 } from "../../../../shared/ipc-types";
+import { ViewMode } from "../../../../shared/ipc-types";
 import { api } from "../../state/rpc-client";
+import { askClaudeAboutSelection } from "../../state/actions";
+import { useStore } from "../../state/store";
 import { JJRevisionLog } from "./JJRevisionLog";
 import { JJToolbar } from "./JJToolbar";
 import { JJChangeDetail } from "./JJChangeDetail";
@@ -22,6 +25,7 @@ import {
   MonacoDiffViewer,
   VCSDiffHeader,
   type MonacoDiffViewerHandle,
+  type MonacoSelection,
 } from "./MonacoDiffViewer";
 import { JJContextMenu } from "./JJContextMenu";
 import { JJBookmarkDialog } from "./JJBookmarkDialog";
@@ -56,6 +60,11 @@ export function JJView({ workspacePath }: JJViewProps) {
   const [currentChangeIndex, setCurrentChangeIndex] = useState(0);
   const [aiPanelRatio, setAiPanelRatio] = useState(0.3);
   const [fileListWidth, setFileListWidth] = useState(200);
+
+  // Ask Claude state
+  const diffContainerRef = useRef<HTMLDivElement>(null);
+  const setViewMode = useStore((s) => s.setViewMode);
+  const [monacoSelection, setMonacoSelection] = useState<MonacoSelection | null>(null);
 
   // UI state
   const [isLoading, setIsLoading] = useState(true);
@@ -448,6 +457,20 @@ export function JJView({ workspacePath }: JJViewProps) {
     [aiPanelRatio, cleanupAiDrag],
   );
 
+  // Ask Claude handler
+  const handleAskClaude = useCallback(() => {
+    if (!monacoSelection || !selectedFilePath) return;
+    const fullPath = `${workspacePath}/${selectedFilePath}`;
+    askClaudeAboutSelection(monacoSelection.text, fullPath, monacoSelection.lineNumber);
+    setMonacoSelection(null);
+    setViewMode(workspacePath, ViewMode.Terminal);
+  }, [monacoSelection, selectedFilePath, workspacePath, setViewMode]);
+
+  // Clear selection when switching files
+  useEffect(() => {
+    setMonacoSelection(null);
+  }, [selectedFilePath]);
+
   // --- Get selected revision ---
   const selectedRevision =
     revisions.find((r) => r.changeId === selectedChangeId) ?? null;
@@ -678,7 +701,7 @@ export function JJView({ workspacePath }: JJViewProps) {
                         onNextDiff={() => diffViewerRef.current?.goToNextDiff()}
                         onPrevDiff={() => diffViewerRef.current?.goToPrevDiff()}
                       />
-                      <div className="flex-1 min-h-0">
+                      <div ref={diffContainerRef} className="flex-1 min-h-0 relative">
                         <MonacoDiffViewer
                           ref={diffViewerRef}
                           originalContent={diffData.originalContent}
@@ -686,7 +709,31 @@ export function JJView({ workspacePath }: JJViewProps) {
                           language={diffData.language}
                           filePath={diffData.filePath}
                           displayMode={displayMode}
+                          onTextSelection={setMonacoSelection}
                         />
+                        {monacoSelection && diffContainerRef.current && (() => {
+                          const containerRect = diffContainerRef.current!.getBoundingClientRect();
+                          const relX = monacoSelection.x - containerRect.left;
+                          const relY = monacoSelection.y - containerRect.top;
+                          return (
+                            <button
+                              className="absolute z-50 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium shadow-lg transition-opacity hover:opacity-90"
+                              style={{
+                                left: Math.max(8, Math.min(relX - 40, containerRect.width - 100)),
+                                top: Math.max(4, relY - 32),
+                                backgroundColor: "var(--ctp-mauve)",
+                                color: "var(--ctp-base)",
+                              }}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={handleAskClaude}
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                              </svg>
+                              Ask Claude
+                            </button>
+                          );
+                        })()}
                       </div>
                     </>
                   ) : (

@@ -13,8 +13,9 @@ import type {
   FileAIContext,
   FileChangeTimeline,
 } from "../../../../shared/ipc-types";
-import { VCSType, DiffScope } from "../../../../shared/ipc-types";
+import { VCSType, DiffScope, ViewMode } from "../../../../shared/ipc-types";
 import { api } from "../../state/rpc-client";
+import { askClaudeAboutSelection } from "../../state/actions";
 import { useStore } from "../../state/store";
 import { VCSFileList } from "./VCSFileList";
 import { VCSCommitPanel } from "./VCSCommitPanel";
@@ -22,6 +23,7 @@ import {
   MonacoDiffViewer,
   VCSDiffHeader,
   type MonacoDiffViewerHandle,
+  type MonacoSelection,
 } from "./MonacoDiffViewer";
 import { JJView } from "./JJView";
 import { GitScopeSelector } from "./GitScopeSelector";
@@ -79,6 +81,8 @@ function useVCSType(
 
 function GitVCSView({ workspacePath }: { workspacePath: string }) {
   const diffViewerRef = useRef<MonacoDiffViewerHandle>(null);
+  const diffContainerRef = useRef<HTMLDivElement>(null);
+  const setViewMode = useStore((s) => s.setViewMode);
 
   // --- Scope selection state ---
   const [viewScope, setViewScope] = useState<DiffScope>(DiffScope.CurrentChange);
@@ -114,6 +118,7 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
   const [isCommitting, setIsCommitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [monacoSelection, setMonacoSelection] = useState<MonacoSelection | null>(null);
 
   // Context menu + revert confirmation
   const [contextMenu, setContextMenu] = useState<{
@@ -483,6 +488,20 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
     [aiPanelRatio, cleanupAiDrag],
   );
 
+  // Ask Claude handler
+  const handleAskClaude = useCallback(() => {
+    if (!monacoSelection || !selectedFile) return;
+    const fullPath = `${workspacePath}/${selectedFile.path}`;
+    askClaudeAboutSelection(monacoSelection.text, fullPath, monacoSelection.lineNumber);
+    setMonacoSelection(null);
+    setViewMode(workspacePath, ViewMode.Terminal);
+  }, [monacoSelection, selectedFile, workspacePath, setViewMode]);
+
+  // Clear selection when switching files
+  useEffect(() => {
+    setMonacoSelection(null);
+  }, [selectedFile]);
+
   // --- Loading/error states (only for initial status load) ---
 
   if (isLoading && viewScope === DiffScope.CurrentChange) {
@@ -612,7 +631,7 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
                 onNextDiff={() => diffViewerRef.current?.goToNextDiff()}
                 onPrevDiff={() => diffViewerRef.current?.goToPrevDiff()}
               />
-              <div className="flex-1 min-h-0">
+              <div ref={diffContainerRef} className="flex-1 min-h-0 relative">
                 <MonacoDiffViewer
                   ref={diffViewerRef}
                   originalContent={diffData.originalContent}
@@ -620,7 +639,31 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
                   language={diffData.language}
                   filePath={diffData.filePath}
                   displayMode={displayMode}
+                  onTextSelection={setMonacoSelection}
                 />
+                {monacoSelection && diffContainerRef.current && (() => {
+                  const containerRect = diffContainerRef.current!.getBoundingClientRect();
+                  const relX = monacoSelection.x - containerRect.left;
+                  const relY = monacoSelection.y - containerRect.top;
+                  return (
+                    <button
+                      className="absolute z-50 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium shadow-lg transition-opacity hover:opacity-90"
+                      style={{
+                        left: Math.max(8, Math.min(relX - 40, containerRect.width - 100)),
+                        top: Math.max(4, relY - 32),
+                        backgroundColor: "var(--ctp-mauve)",
+                        color: "var(--ctp-base)",
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={handleAskClaude}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                      </svg>
+                      Ask Claude
+                    </button>
+                  );
+                })()}
               </div>
             </>
           ) : (

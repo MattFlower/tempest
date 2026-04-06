@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Git VCS View scope selection — view changes from any commit on the branch or all changes since main/master, in addition to the existing working tree changes view
 - MCP `show_webpage` tool — Claude Code can now display HTML content (designs, mockups, diagrams) in a browser pane for visual discussions. Configurable via Settings > MCP Tools. Webpage previews persist across restarts and are cleaned up on workspace archive.
 - "Revert Change" right-click context menu for Git VCS file list — right-click any uncommitted file (staged or unstaged) and choose "Revert Change" to discard modifications with a confirmation dialog. Handles modified, added, deleted, and untracked files.
+- "Ask Claude" button in VCS View (both Git and JJ): select text in the Monaco diff viewer to ask Claude about it, matching existing Diff View functionality
 
 ### Fixed
 

@@ -624,6 +624,10 @@ export const api = {
     rpcRequest.jjGetRestorePreview({ workspacePath, targetRevision, sourceRevision, filePath }),
   jjRestore: (workspacePath: string, targetRevision: string, sourceRevision: string, filePath: string) =>
     rpcRequest.jjRestore({ workspacePath, targetRevision, sourceRevision, filePath }),
+  jjGetRangeChangedFiles: (workspacePath: string, fromRevision: string, toRevision: string) =>
+    rpcRequest.jjGetRangeChangedFiles({ workspacePath, fromRevision, toRevision }),
+  jjGetRangeFileDiff: (workspacePath: string, fromRevision: string, toRevision: string, filePath: string) =>
+    rpcRequest.jjGetRangeFileDiff({ workspacePath, fromRevision, toRevision, filePath }),
 
   // HTTP Remote Control Server
   startHttpServer: (params: { enabled: boolean; port: number; hostname: string; token: string }) =>

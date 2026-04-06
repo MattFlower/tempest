@@ -34,11 +34,121 @@ import { JJRebaseDialog } from "./JJRebaseDialog";
 import { JJRestoreFromDialog } from "./JJRestoreFromDialog";
 import { AIContextPanel } from "../diff/AIContextPanel";
 
+const DEFAULT_REVSET = "heads(::@ & ::trunk())..@";
+const DEFAULT_BOUNDS = { from: "heads(::@ & ::trunk())", to: "@" };
+
+/**
+ * Parse a JJ revset of the form "A..B" into from/to bounds.
+ * The ".." is the JJ range operator (distinct from "::" which uses colons).
+ * Returns null if the revset doesn't contain a ".." range.
+ */
+function parseRevsetBounds(revset: string): { from: string; to: string } | null {
+  // Find ".." that is NOT part of "::" — scan for standalone ".."
+  // JJ uses "::" for ancestors/descendants, ".." for ranges
+  const trimmed = revset.trim();
+  // Search for ".." not preceded or followed by another "."
+  let i = 0;
+  while (i < trimmed.length - 1) {
+    if (trimmed[i] === "." && trimmed[i + 1] === ".") {
+      // Check it's not part of "..." (three dots)
+      if (i + 2 < trimmed.length && trimmed[i + 2] === ".") {
+        i += 3;
+        continue;
+      }
+      const from = trimmed.substring(0, i).trim();
+      const to = trimmed.substring(i + 2).trim() || "@";
+      if (from) return { from, to };
+    }
+    i++;
+  }
+  return null;
+}
+
+function RevsetInput({
+  defaultValue,
+  error,
+  onSubmit,
+  onReset,
+}: {
+  defaultValue: string;
+  error: string | null;
+  onSubmit: (value: string) => void;
+  onReset: () => void;
+}) {
+  const [value, setValue] = useState(defaultValue);
+
+  // Sync when parent resets
+  useEffect(() => {
+    setValue(defaultValue);
+  }, [defaultValue]);
+
+  return (
+    <div
+      className="flex-shrink-0 px-2 py-1.5"
+      style={{
+        backgroundColor: "var(--ctp-mantle)",
+        borderBottom: "1px solid var(--ctp-surface0)",
+      }}
+    >
+      <div className="flex items-center gap-1">
+        <input
+          className="flex-1 min-w-0 px-1.5 py-0.5 rounded text-[11px] font-mono"
+          style={{
+            backgroundColor: "var(--ctp-surface0)",
+            color: "var(--ctp-text)",
+            border: error
+              ? "1px solid var(--ctp-red)"
+              : "1px solid var(--ctp-surface1)",
+            outline: "none",
+          }}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onSubmit(value.trim());
+          }}
+          placeholder={DEFAULT_REVSET}
+          spellCheck={false}
+        />
+        {value !== DEFAULT_REVSET && (
+          <button
+            className="flex-shrink-0 px-1 py-0.5 rounded text-[10px]"
+            style={{
+              backgroundColor: "var(--ctp-surface0)",
+              color: "var(--ctp-subtext0)",
+            }}
+            onClick={() => {
+              setValue(DEFAULT_REVSET);
+              onReset();
+            }}
+            title="Reset to default"
+          >
+            ↺
+          </button>
+        )}
+      </div>
+      {error && (
+        <div
+          className="text-[10px] mt-0.5 px-0.5"
+          style={{ color: "var(--ctp-red)" }}
+        >
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface JJViewProps {
   workspacePath: string;
 }
 
 export function JJView({ workspacePath }: JJViewProps) {
+  // Revset state
+  const [activeRevset, setActiveRevset] = useState(DEFAULT_REVSET);
+  const [revsetError, setRevsetError] = useState<string | null>(null);
+  const [jjViewMode, setJJViewMode] = useState<"range" | "single">("range");
+  const [rangeBounds, setRangeBounds] = useState(DEFAULT_BOUNDS);
+
   // Revision log state
   const [revisions, setRevisions] = useState<JJRevision[]>([]);
   const [currentChangeId, setCurrentChangeId] = useState("");
@@ -120,35 +230,52 @@ export function JJView({ workspacePath }: JJViewProps) {
   const loadLog = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    setRevsetError(null);
     try {
       const [logResult, bms] = await Promise.all([
-        api.jjLog(workspacePath),
+        api.jjLog(workspacePath, activeRevset),
         api.jjGetBookmarks(workspacePath),
       ]);
       setRevisions(logResult.revisions);
       setCurrentChangeId(logResult.currentChangeId);
       setBookmarks(bms);
 
-      // Auto-select current change if nothing selected
-      if (!selectedChangeId && logResult.currentChangeId) {
-        setSelectedChangeId(logResult.currentChangeId);
+      // Load range files if bounds are available
+      const bounds = parseRevsetBounds(activeRevset);
+      if (bounds) {
+        setRangeBounds(bounds);
+        try {
+          const rangeFiles = await api.jjGetRangeChangedFiles(
+            workspacePath,
+            bounds.from,
+            bounds.to,
+          );
+          // Only update files if still in range mode (user may have clicked a revision)
+          setChangedFiles((prev) => {
+            // If we're in range mode OR files haven't been loaded yet, use range files
+            return rangeFiles;
+          });
+        } catch {
+          // Range files failed — not critical
+        }
       }
     } catch (err: any) {
-      setError(err.message ?? String(err));
+      setRevsetError(err.message ?? String(err));
+      // Don't clear revisions on error — keep previous list visible
+      if (revisions.length === 0) {
+        setError(err.message ?? String(err));
+      }
     }
     setIsLoading(false);
-  }, [workspacePath]);
+  }, [workspacePath, activeRevset]);
 
   useEffect(() => {
     loadLog();
   }, [loadLog]);
 
-  // Load changed files when revision changes
+  // Load changed files when revision changes (single-revision mode only)
   useEffect(() => {
-    if (!selectedChangeId) {
-      setChangedFiles([]);
-      setSelectedFilePath(null);
-      setDiffData(null);
+    if (jjViewMode !== "single" || !selectedChangeId) {
       return;
     }
 
@@ -171,11 +298,17 @@ export function JJView({ workspacePath }: JJViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [selectedChangeId, workspacePath]);
+  }, [selectedChangeId, workspacePath, jjViewMode]);
 
   // Load file diff when file is selected
   useEffect(() => {
-    if (!selectedFilePath || !selectedChangeId) {
+    if (!selectedFilePath) {
+      setDiffData(null);
+      return;
+    }
+
+    // In single mode, need a selected revision
+    if (jjViewMode === "single" && !selectedChangeId) {
       setDiffData(null);
       return;
     }
@@ -183,11 +316,19 @@ export function JJView({ workspacePath }: JJViewProps) {
     let cancelled = false;
     (async () => {
       try {
-        const diff = await api.jjGetFileDiff(
-          workspacePath,
-          selectedChangeId,
-          selectedFilePath,
-        );
+        const diff =
+          jjViewMode === "range"
+            ? await api.jjGetRangeFileDiff(
+                workspacePath,
+                rangeBounds.from,
+                rangeBounds.to,
+                selectedFilePath,
+              )
+            : await api.jjGetFileDiff(
+                workspacePath,
+                selectedChangeId!,
+                selectedFilePath,
+              );
         if (!cancelled) setDiffData(diff);
       } catch {
         if (!cancelled) setDiffData(null);
@@ -197,7 +338,7 @@ export function JJView({ workspacePath }: JJViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [selectedFilePath, selectedChangeId, workspacePath]);
+  }, [selectedFilePath, selectedChangeId, workspacePath, jjViewMode, rangeBounds]);
 
   // Load AI context when file changes
   useEffect(() => {
@@ -292,7 +433,7 @@ export function JJView({ workspacePath }: JJViewProps) {
         setToast({ message: "Description saved", type: "success" });
         // Refresh just the log to update the description
         try {
-          const logResult = await api.jjLog(workspacePath);
+          const logResult = await api.jjLog(workspacePath, activeRevset);
           setRevisions(logResult.revisions);
           setCurrentChangeId(logResult.currentChangeId);
         } catch {
@@ -439,6 +580,62 @@ export function JJView({ workspacePath }: JJViewProps) {
     },
     [workspacePath, selectedChangeId, restoreFromDialog, loadLog],
   );
+
+  // --- Revset handlers ---
+
+  const handleRevsetSubmit = useCallback((value: string) => {
+    if (!value) return;
+    const bounds = parseRevsetBounds(value);
+    if (!bounds) {
+      setRevsetError("Revset must be a range expression (e.g., trunk()..@)");
+      return;
+    }
+    setActiveRevset(value);
+    setRangeBounds(bounds);
+    setJJViewMode("range");
+    setSelectedChangeId(null);
+    setSelectedFilePath(null);
+    setDiffData(null);
+    setRevsetError(null);
+  }, []);
+
+  const handleRevsetReset = useCallback(() => {
+    setRevsetInput(DEFAULT_REVSET);
+    setActiveRevset(DEFAULT_REVSET);
+    setRangeBounds(DEFAULT_BOUNDS);
+    setJJViewMode("range");
+    setSelectedChangeId(null);
+    setSelectedFilePath(null);
+    setDiffData(null);
+    setRevsetError(null);
+  }, []);
+
+  const handleShowRange = useCallback(() => {
+    setJJViewMode("range");
+    setSelectedChangeId(null);
+    setSelectedFilePath(null);
+    setDiffData(null);
+    // Reload range files
+    (async () => {
+      try {
+        const files = await api.jjGetRangeChangedFiles(
+          workspacePath,
+          rangeBounds.from,
+          rangeBounds.to,
+        );
+        setChangedFiles(files);
+      } catch {
+        // Range files failed
+      }
+    })();
+  }, [workspacePath, rangeBounds]);
+
+  const handleSelectRevision = useCallback((changeId: string) => {
+    setSelectedChangeId(changeId);
+    setJJViewMode("single");
+    setSelectedFilePath(null);
+    setDiffData(null);
+  }, []);
 
   // Divider drag for left panel resize
   const handleDividerDrag = useCallback(
@@ -617,13 +814,21 @@ export function JJView({ workspacePath }: JJViewProps) {
           </span>
         </div>
 
+        {/* Revset input */}
+        <RevsetInput
+          defaultValue={activeRevset}
+          error={revsetError}
+          onSubmit={handleRevsetSubmit}
+          onReset={handleRevsetReset}
+        />
+
         {/* Revision list (scrollable) */}
         <div className="flex-1 min-h-0">
           <JJRevisionLog
             revisions={revisions}
             selectedChangeId={selectedChangeId}
             currentChangeId={currentChangeId}
-            onSelectRevision={setSelectedChangeId}
+            onSelectRevision={handleSelectRevision}
             onContextMenu={handleContextMenu}
           />
         </div>
@@ -640,22 +845,73 @@ export function JJView({ workspacePath }: JJViewProps) {
         onMouseDown={handleDividerDrag}
       />
 
-      {/* Right panel — change detail + files sidebar + diff + AI context */}
+      {/* Right panel — range header or change detail + files sidebar + diff + AI context */}
       <div className="flex-1 h-full min-w-0 flex flex-col">
-        {selectedRevision ? (
+        {jjViewMode === "range" || selectedRevision ? (
           <>
-            {/* Top: change detail (header + description) */}
+            {/* Top: range header or change detail */}
             <div
               className="flex-shrink-0"
               style={{ borderBottom: "1px solid var(--ctp-surface0)" }}
             >
-              <JJChangeDetail
-                revision={selectedRevision}
-                onDescriptionSave={handleDescriptionSave}
-                onAbandon={handleAbandon}
-                isSaving={isSaving}
-              />
+              {jjViewMode === "range" ? (
+                <div
+                  className="flex items-center gap-2 px-3 py-2"
+                  style={{ backgroundColor: "var(--ctp-mantle)" }}
+                >
+                  <span
+                    className="text-xs font-mono"
+                    style={{ color: "var(--ctp-mauve)" }}
+                  >
+                    {rangeBounds.from}
+                  </span>
+                  <span
+                    className="text-[10px]"
+                    style={{ color: "var(--ctp-overlay0)" }}
+                  >
+                    ..
+                  </span>
+                  <span
+                    className="text-xs font-mono"
+                    style={{ color: "var(--ctp-mauve)" }}
+                  >
+                    {rangeBounds.to}
+                  </span>
+                  <span
+                    className="text-[10px] ml-2"
+                    style={{ color: "var(--ctp-subtext0)" }}
+                  >
+                    {revisions.length} revision{revisions.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+              ) : (
+                <JJChangeDetail
+                  revision={selectedRevision!}
+                  onDescriptionSave={handleDescriptionSave}
+                  onAbandon={handleAbandon}
+                  isSaving={isSaving}
+                />
+              )}
             </div>
+
+            {/* Show Range button when in single mode */}
+            {jjViewMode === "single" && (
+              <div
+                className="flex-shrink-0 px-3 py-1"
+                style={{
+                  backgroundColor: "var(--ctp-mantle)",
+                  borderBottom: "1px solid var(--ctp-surface0)",
+                }}
+              >
+                <button
+                  className="text-[10px] hover:underline"
+                  style={{ color: "var(--ctp-mauve)" }}
+                  onClick={handleShowRange}
+                >
+                  Show Range
+                </button>
+              </div>
+            )}
 
             {/* Content area: files sidebar + diff + AI panel */}
             <div className="flex-1 min-h-0 flex flex-col" data-jj-content-panel>
@@ -691,9 +947,6 @@ export function JJView({ workspacePath }: JJViewProps) {
                     ) : (
                       changedFiles.map((file) => {
                         const fileName = file.path.split("/").pop() ?? file.path;
-                        const dirPath = file.path.includes("/")
-                          ? file.path.slice(0, file.path.lastIndexOf("/"))
-                          : "";
                         const isSelected = selectedFilePath === file.path;
 
                         return (
@@ -814,14 +1067,14 @@ export function JJView({ workspacePath }: JJViewProps) {
                       {changedFiles.length === 0 ? (
                         <>
                           <span className="text-sm">
-                            {selectedRevision.isEmpty
+                            {jjViewMode === "single" && selectedRevision?.isEmpty
                               ? "Empty Change"
                               : "No Changed Files"}
                           </span>
                           <span className="text-xs opacity-60">
-                            {selectedRevision.isEmpty
+                            {jjViewMode === "single" && selectedRevision?.isEmpty
                               ? "This change has no modifications."
-                              : "Select a different revision to view changes."}
+                              : "No files were changed in this range."}
                           </span>
                         </>
                       ) : (

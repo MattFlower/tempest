@@ -541,6 +541,14 @@ export interface BunRequests {
     params: { workspacePath: string; targetRevision: string; sourceRevision: string; filePath: string };
     response: { success: boolean; error?: string };
   };
+  jjGetRangeChangedFiles: {
+    params: { workspacePath: string; fromRevision: string; toRevision: string };
+    response: JJChangedFile[];
+  };
+  jjGetRangeFileDiff: {
+    params: { workspacePath: string; fromRevision: string; toRevision: string; filePath: string };
+    response: VCSFileDiffResult;
+  };
 
   // --- HTTP Remote Control Server ---
   startHttpServer: {

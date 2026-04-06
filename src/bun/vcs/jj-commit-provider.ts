@@ -86,7 +86,7 @@ if(self.empty(), "true", "false") ++ "\\x00" ++
 if(self.immutable(), "true", "false") ++ "\\x03"
 `.trim().replace(/\n/g, "");
 
-const DEFAULT_REVSET = 'present(@) | ancestors(immutable_heads().., 2) | trunk()';
+const DEFAULT_REVSET = 'heads(::@ & ::trunk())..@';
 
 // --- Workspace list parsing ---
 
@@ -296,15 +296,7 @@ export async function jjAbandon(
   return { success: true };
 }
 
-export async function jjGetChangedFiles(
-  workspacePath: string,
-  revision: string,
-): Promise<JJChangedFile[]> {
-  const output = await runJJOrThrow(
-    ["diff", "--summary", "-r", revision],
-    workspacePath,
-  );
-
+function parseChangedFilesOutput(output: string): JJChangedFile[] {
   const files: JJChangedFile[] = [];
   for (const line of output.split("\n")) {
     const trimmed = line.trim();
@@ -339,6 +331,67 @@ export async function jjGetChangedFiles(
   }
 
   return files;
+}
+
+export async function jjGetChangedFiles(
+  workspacePath: string,
+  revision: string,
+): Promise<JJChangedFile[]> {
+  const output = await runJJOrThrow(
+    ["diff", "--summary", "-r", revision],
+    workspacePath,
+  );
+  return parseChangedFilesOutput(output);
+}
+
+export async function jjGetRangeChangedFiles(
+  workspacePath: string,
+  fromRevision: string,
+  toRevision: string,
+): Promise<JJChangedFile[]> {
+  const output = await runJJOrThrow(
+    ["diff", "--summary", "--from", fromRevision, "--to", toRevision],
+    workspacePath,
+  );
+  return parseChangedFilesOutput(output);
+}
+
+export async function jjGetRangeFileDiff(
+  workspacePath: string,
+  fromRevision: string,
+  toRevision: string,
+  filePath: string,
+): Promise<VCSFileDiffResult> {
+  const language = detectLanguage(filePath);
+
+  let originalContent = "";
+  let modifiedContent = "";
+
+  try {
+    const { stdout, exitCode } = await runJJ(
+      ["file", "show", "-r", fromRevision, filePath],
+      workspacePath,
+    );
+    if (exitCode === 0) {
+      originalContent = stdout;
+    }
+  } catch {
+    // File didn't exist at from revision — new file
+  }
+
+  try {
+    const { stdout, exitCode } = await runJJ(
+      ["file", "show", "-r", toRevision, filePath],
+      workspacePath,
+    );
+    if (exitCode === 0) {
+      modifiedContent = stdout;
+    }
+  } catch {
+    // File deleted at to revision
+  }
+
+  return { originalContent, modifiedContent, filePath, language };
 }
 
 export async function jjGetFileDiff(

@@ -71,6 +71,8 @@ import {
   jjRebase,
   jjGetRestorePreview,
   jjRestore,
+  jjGetRangeChangedFiles,
+  jjGetRangeFileDiff,
 } from "./vcs/jj-commit-provider";
 
 // --- Stream A: Terminal + Session ---
@@ -806,6 +808,12 @@ const rpc = BrowserView.defineRPC({
           params.workspacePath, params.targetRevision,
           params.sourceRevision, params.filePath,
         );
+      },
+      jjGetRangeChangedFiles: async (params: any) => {
+        return await jjGetRangeChangedFiles(params.workspacePath, params.fromRevision, params.toRevision);
+      },
+      jjGetRangeFileDiff: async (params: any) => {
+        return await jjGetRangeFileDiff(params.workspacePath, params.fromRevision, params.toRevision, params.filePath);
       },
 
       // --- HTTP Remote Control Server ---

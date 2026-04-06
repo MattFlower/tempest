@@ -63,6 +63,12 @@ export enum VCSType {
   JJ = "jj",
 }
 
+export enum BranchHealthStatus {
+  Ok = "ok",
+  NeedsRebase = "needsRebase",
+  HasConflicts = "hasConflicts",
+}
+
 export enum DiffScope {
   CurrentChange = "currentChange",
   SinceTrunk = "sinceTrunk",
@@ -91,6 +97,7 @@ export interface TempestWorkspace {
 export interface WorkspaceSidebarInfo {
   bookmarkName?: string;
   diffStats?: DiffStats;
+  branchHealth?: BranchHealthStatus;
 }
 
 export interface DiffStats {

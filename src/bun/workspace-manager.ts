@@ -498,11 +498,12 @@ export class WorkspaceManager {
     if (!provider) return;
 
     try {
-      const [bookmarkName, diffStats] = await Promise.all([
+      const [bookmarkName, diffStats, branchHealth] = await Promise.all([
         provider.bookmarkName(workspace),
         provider.diffStats(workspace),
+        provider.branchHealth(workspace).catch(() => undefined),
       ]);
-      const info: WorkspaceSidebarInfo = { bookmarkName, diffStats };
+      const info: WorkspaceSidebarInfo = { bookmarkName, diffStats, branchHealth };
       this.sidebarInfoCache.set(workspacePath, info);
       this.onSidebarInfoUpdated?.(workspacePath, info);
     } catch {

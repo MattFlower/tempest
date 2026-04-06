@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { TempestWorkspace, WorkspaceSidebarInfo, DiffStats } from "../../../../shared/ipc-types";
-import { WorkspaceStatus, ActivityState } from "../../../../shared/ipc-types";
+import { WorkspaceStatus, ActivityState, BranchHealthStatus } from "../../../../shared/ipc-types";
 import { useStore } from "../../state/store";
 import { OverlayWrapper } from "../../state/useOverlay";
 
@@ -20,6 +20,18 @@ const statusDotColor: Record<string, string> = {
   [WorkspaceStatus.Exited]: "var(--ctp-yellow)",
   [WorkspaceStatus.Error]: "var(--ctp-red)",
   [WorkspaceStatus.Idle]: "var(--ctp-overlay0)",
+};
+
+const branchHealthColor: Record<string, string> = {
+  [BranchHealthStatus.Ok]: "var(--ctp-green)",
+  [BranchHealthStatus.NeedsRebase]: "var(--ctp-yellow)",
+  [BranchHealthStatus.HasConflicts]: "var(--ctp-red)",
+};
+
+const branchHealthTooltip: Record<string, string> = {
+  [BranchHealthStatus.Ok]: "Up to date with trunk",
+  [BranchHealthStatus.NeedsRebase]: "Branch needs rebase onto trunk",
+  [BranchHealthStatus.HasConflicts]: "Branch has conflicts",
 };
 
 function statusLabel(workspace: TempestWorkspace): string {
@@ -111,12 +123,22 @@ export function WorkspaceRow({ workspace, sidebarInfo, shortcutIndex, isSelected
       )}
       {/* Line 1: branch icon + name + diff stats */}
       <div className="flex items-center gap-1.5 min-w-0">
-        <svg className="w-3.5 h-3.5 flex-shrink-0 text-[var(--ctp-overlay1)]" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="8" cy="13" r="1.5" />
-          <circle cx="4.5" cy="3" r="1.5" />
-          <circle cx="11.5" cy="3" r="1.5" />
-          <path d="M4.5 4.5V7.5C4.5 9 5.5 10 8 10V11.5" />
-          <path d="M11.5 4.5V7.5C11.5 9 10.5 10 8 10" />
+        <svg
+          className="w-3.5 h-3.5 flex-shrink-0"
+          style={{ color: sidebarInfo?.branchHealth ? branchHealthColor[sidebarInfo.branchHealth] : "var(--ctp-overlay1)" }}
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <title>{sidebarInfo?.branchHealth ? branchHealthTooltip[sidebarInfo.branchHealth] : ""}</title>
+          <circle cx="5" cy="3.5" r="1.5" />
+          <circle cx="5" cy="12.5" r="1.5" />
+          <circle cx="11" cy="6" r="1.5" />
+          <path d="M5 5v6" />
+          <path d="M9.5 6C8 6 5 6.5 5 8.5" />
         </svg>
         <span className="truncate text-[13px] font-semibold text-[var(--ctp-text)]">
           {workspace.name}

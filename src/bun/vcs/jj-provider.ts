@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { DiffStats, TempestWorkspace } from "../../shared/ipc-types";
-import { VCSType, WorkspaceStatus } from "../../shared/ipc-types";
+import { BranchHealthStatus, VCSType, WorkspaceStatus } from "../../shared/ipc-types";
 import type { VCSProvider, WorkspaceEntry } from "./types";
 import { PathResolver } from "../config/path-resolver";
 
@@ -89,6 +89,28 @@ export class JJProvider implements VCSProvider {
       .map((line) => line.trim())
       .filter((name) => name.length > 0)
       .sort((a, b) => a.localeCompare(b));
+  }
+
+  async branchHealth(workspace: TempestWorkspace): Promise<BranchHealthStatus | undefined> {
+    try {
+      // Check for conflicts first (highest priority)
+      const conflictOutput = await this.runJJ(
+        ["log", "-r", "@", "--no-graph", "-T", 'if(conflict, "true", "false")'],
+        workspace.path,
+      );
+      if (conflictOutput.trim() === "true") return BranchHealthStatus.HasConflicts;
+
+      // Check if trunk is an ancestor of @ (empty = trunk NOT ancestor = needs rebase)
+      const ancestorOutput = await this.runJJ(
+        ["log", "-r", "trunk() & ::@", "--no-graph", "-T", "change_id.short(8)"],
+        workspace.path,
+      );
+      if (ancestorOutput.trim() === "") return BranchHealthStatus.NeedsRebase;
+
+      return BranchHealthStatus.Ok;
+    } catch {
+      return undefined;
+    }
   }
 
   async diffStats(workspace: TempestWorkspace): Promise<DiffStats> {

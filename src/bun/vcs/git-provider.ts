@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { DiffStats, TempestWorkspace } from "../../shared/ipc-types";
-import { VCSType, WorkspaceStatus } from "../../shared/ipc-types";
+import { BranchHealthStatus, VCSType, WorkspaceStatus } from "../../shared/ipc-types";
 import type { VCSProvider, WorkspaceEntry } from "./types";
 import { PathResolver } from "../config/path-resolver";
 
@@ -102,6 +102,26 @@ export class GitProvider implements VCSProvider {
 
     branches.sort((a, b) => a.localeCompare(b));
     return branches;
+  }
+
+  async branchHealth(workspace: TempestWorkspace): Promise<BranchHealthStatus | undefined> {
+    try {
+      // Check for conflicts first (highest priority)
+      const unmerged = await this.runGit(["ls-files", "--unmerged"], workspace.path);
+      if (unmerged.trim()) return BranchHealthStatus.HasConflicts;
+
+      // Check if main/master is an ancestor of HEAD
+      const baseBranch = await this.detectBaseBranch(workspace.path);
+      try {
+        await this.runGit(["merge-base", "--is-ancestor", baseBranch, "HEAD"], workspace.path);
+        return BranchHealthStatus.Ok;
+      } catch {
+        // Exit code 1 = baseBranch is NOT an ancestor of HEAD = needs rebase
+        return BranchHealthStatus.NeedsRebase;
+      }
+    } catch {
+      return undefined;
+    }
   }
 
   async diffStats(workspace: TempestWorkspace): Promise<DiffStats> {

@@ -1,4 +1,5 @@
 import type {
+  BranchHealthStatus,
   DiffStats,
   TempestWorkspace,
   VCSType,
@@ -32,6 +33,8 @@ export interface VCSProvider {
   bookmarkName(workspace: TempestWorkspace): Promise<string | undefined>;
 
   diffStats(workspace: TempestWorkspace): Promise<DiffStats>;
+
+  branchHealth(workspace: TempestWorkspace): Promise<BranchHealthStatus | undefined>;
 
   listBranches(): Promise<string[]>;
 }

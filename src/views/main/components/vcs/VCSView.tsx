@@ -10,6 +10,8 @@ import type {
   VCSFileDiffResult,
   GitCommitEntry,
   GitScopedFileEntry,
+  FileAIContext,
+  FileChangeTimeline,
 } from "../../../../shared/ipc-types";
 import { VCSType, DiffScope } from "../../../../shared/ipc-types";
 import { api } from "../../state/rpc-client";
@@ -25,6 +27,7 @@ import { JJView } from "./JJView";
 import { GitScopeSelector } from "./GitScopeSelector";
 import { GitCommitPicker } from "./GitCommitPicker";
 import { GitScopedFileList } from "./GitScopedFileList";
+import { AIContextPanel } from "../diff/AIContextPanel";
 
 export function VCSView() {
   const selectedWorkspacePath = useStore((s) => s.selectedWorkspacePath);
@@ -94,6 +97,12 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
     path: string;
     staged: boolean;
   } | null>(null);
+
+  // --- AI Context state ---
+  const [aiContext, setAiContext] = useState<FileAIContext | null>(null);
+  const [aiTimeline, setAiTimeline] = useState<FileChangeTimeline | null>(null);
+  const [currentChangeIndex, setCurrentChangeIndex] = useState(0);
+  const [aiPanelRatio, setAiPanelRatio] = useState(0.3);
 
   // --- Shared state ---
   const [diffData, setDiffData] = useState<VCSFileDiffResult | null>(null);
@@ -259,6 +268,44 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
     };
   }, [scopedSelectedFile, workspacePath, viewScope, selectedCommitRef, isScoped]);
 
+  // --- Load AI context when selected file changes ---
+
+  const activeFilePath = isScoped ? scopedSelectedFile : selectedFile?.path ?? null;
+
+  useEffect(() => {
+    setCurrentChangeIndex(0);
+    if (!activeFilePath || !workspacePath) {
+      setAiContext(null);
+      setAiTimeline(null);
+      return;
+    }
+
+    const fullPath = `${workspacePath}/${activeFilePath}`;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const [ctx, tl] = await Promise.all([
+          api.getAIContextForFile(fullPath),
+          api.getAITimelineForFile(fullPath),
+        ]);
+        if (!cancelled) {
+          setAiContext(ctx);
+          setAiTimeline(tl);
+          const lastIdx = tl?.changes?.length ? tl.changes.length - 1 : 0;
+          setCurrentChangeIndex(lastIdx);
+        }
+      } catch {
+        if (!cancelled) {
+          setAiContext(null);
+          setAiTimeline(null);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [activeFilePath, workspacePath]);
+
   // --- Stage/unstage operations ---
 
   const handleStageFiles = useCallback(
@@ -357,6 +404,48 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
       document.addEventListener("mouseup", onUp);
     },
     [leftPanelWidth],
+  );
+
+  // --- AI panel divider drag ---
+
+  const aiDragRef = useRef<{ move: (e: MouseEvent) => void; up: () => void } | null>(null);
+
+  const cleanupAiDrag = useCallback(() => {
+    if (aiDragRef.current) {
+      document.removeEventListener("mousemove", aiDragRef.current.move);
+      document.removeEventListener("mouseup", aiDragRef.current.up);
+      aiDragRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("blur", cleanupAiDrag);
+    return () => {
+      window.removeEventListener("blur", cleanupAiDrag);
+      cleanupAiDrag();
+    };
+  }, [cleanupAiDrag]);
+
+  const handleAiDividerDrag = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const startY = e.clientY;
+      const startRatio = aiPanelRatio;
+      const container = (e.target as HTMLElement).closest("[data-git-content-panel]");
+      if (!container) return;
+      const containerHeight = container.getBoundingClientRect().height;
+
+      const move = (ev: MouseEvent) => {
+        const delta = startY - ev.clientY;
+        setAiPanelRatio(Math.min(0.6, Math.max(0.1, startRatio + delta / containerHeight)));
+      };
+      const up = () => cleanupAiDrag();
+
+      aiDragRef.current = { move, up };
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", up);
+    },
+    [aiPanelRatio, cleanupAiDrag],
   );
 
   // --- Loading/error states (only for initial status load) ---
@@ -473,51 +562,75 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
         onMouseDown={handleDividerDrag}
       />
 
-      {/* Right panel — diff viewer */}
-      <div className="flex-1 h-full min-w-0 flex flex-col">
-        {currentFilePath && diffData ? (
-          <>
-            <VCSDiffHeader
-              filePath={currentFilePath}
-              displayMode={displayMode}
-              onDisplayModeChange={setDisplayMode}
-              staged={currentFileStaged}
-              onNextDiff={() => diffViewerRef.current?.goToNextDiff()}
-              onPrevDiff={() => diffViewerRef.current?.goToPrevDiff()}
-            />
-            <div className="flex-1 min-h-0">
-              <MonacoDiffViewer
-                ref={diffViewerRef}
-                originalContent={diffData.originalContent}
-                modifiedContent={diffData.modifiedContent}
-                language={diffData.language}
-                filePath={diffData.filePath}
+      {/* Right panel — diff viewer + AI context */}
+      <div className="flex-1 h-full min-w-0 flex flex-col" data-git-content-panel>
+        {/* Diff area */}
+        <div style={{ flex: `${1 - aiPanelRatio}` }} className="min-h-0 flex flex-col">
+          {currentFilePath && diffData ? (
+            <>
+              <VCSDiffHeader
+                filePath={currentFilePath}
                 displayMode={displayMode}
+                onDisplayModeChange={setDisplayMode}
+                staged={currentFileStaged}
+                onNextDiff={() => diffViewerRef.current?.goToNextDiff()}
+                onPrevDiff={() => diffViewerRef.current?.goToPrevDiff()}
               />
+              <div className="flex-1 min-h-0">
+                <MonacoDiffViewer
+                  ref={diffViewerRef}
+                  originalContent={diffData.originalContent}
+                  modifiedContent={diffData.modifiedContent}
+                  language={diffData.language}
+                  filePath={diffData.filePath}
+                  displayMode={displayMode}
+                />
+              </div>
+            </>
+          ) : (
+            <div
+              className="flex flex-col items-center justify-center h-full gap-2"
+              style={{ color: "var(--ctp-subtext0)" }}
+            >
+              {!hasFileList ? (
+                <>
+                  <span className="text-sm">No Changes</span>
+                  <span className="text-xs opacity-60">
+                    {isScoped ? "No files in this scope." : "Working tree is clean."}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-sm">Select a File</span>
+                  <span className="text-xs opacity-60">
+                    Click a file in the sidebar to view its diff.
+                  </span>
+                </>
+              )}
             </div>
-          </>
-        ) : (
-          <div
-            className="flex flex-col items-center justify-center h-full gap-2"
-            style={{ color: "var(--ctp-subtext0)" }}
-          >
-            {!hasFileList ? (
-              <>
-                <span className="text-sm">No Changes</span>
-                <span className="text-xs opacity-60">
-                  {isScoped ? "No files in this scope." : "Working tree is clean."}
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="text-sm">Select a File</span>
-                <span className="text-xs opacity-60">
-                  Click a file in the sidebar to view its diff.
-                </span>
-              </>
-            )}
-          </div>
-        )}
+          )}
+        </div>
+
+        {/* Draggable horizontal divider for AI panel */}
+        <div
+          className="flex-shrink-0 cursor-row-resize"
+          style={{
+            height: 3,
+            background: "var(--ctp-mauve)",
+            opacity: 0.6,
+          }}
+          onMouseDown={handleAiDividerDrag}
+        />
+
+        {/* AI Context Panel */}
+        <div style={{ flex: `${aiPanelRatio}` }} className="min-h-0">
+          <AIContextPanel
+            context={aiContext}
+            timeline={aiTimeline}
+            currentChangeIndex={currentChangeIndex}
+            onChangeIndex={setCurrentChangeIndex}
+          />
+        </div>
       </div>
 
       {/* Toast notification */}

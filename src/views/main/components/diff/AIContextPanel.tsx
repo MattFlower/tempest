@@ -11,8 +11,10 @@ import type {
   FileChangeEvent,
   SessionMessage,
   ToolCallInfo,
+  ToolChangeDetail,
 } from "../../../../shared/ipc-types";
 import { renderInlineMarkdown } from "../inline-markdown";
+import { InlineDiff } from "./InlineDiff";
 
 interface AIContextPanelProps {
   context: FileAIContext | null;
@@ -141,6 +143,7 @@ export function AIContextPanel({
                       const matchingToolCall = msg.toolCalls?.find(
                         (tc) => tc.tool === event.toolName && tc.summary === event.inputSummary,
                       );
+                      const changeDetail = timeline?.changes[globalIdx]?.detail;
                       return (
                         <ToolCallWaypoint
                           key={event.id}
@@ -148,6 +151,7 @@ export function AIContextPanel({
                           isCurrent={isCurrentWaypoint(event)}
                           globalIndex={globalIdx}
                           toolCall={matchingToolCall}
+                          detail={changeDetail}
                         />
                       );
                     })}
@@ -283,15 +287,19 @@ function ToolCallWaypoint({
   isCurrent,
   globalIndex,
   toolCall,
+  detail,
 }: {
   event: FileChangeEvent;
   isCurrent: boolean;
   globalIndex: number;
   toolCall?: ToolCallInfo;
+  detail?: ToolChangeDetail;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const params = useMemo(() => parsedParams(toolCall), [toolCall]);
-  const hasDetail = params != null || toolCall?.input != null;
+
+  // Fall back to old param expansion only when no structured detail is available
+  const params = useMemo(() => (detail ? null : parsedParams(toolCall)), [detail, toolCall]);
+  const hasFallbackDetail = !detail && (params != null || toolCall?.input != null);
 
   return (
     <div
@@ -304,12 +312,12 @@ function ToolCallWaypoint({
         border: `1px solid ${isCurrent ? "var(--ctp-mauve)" : "rgba(203, 166, 247, 0.2)"}`,
       }}
     >
-      {/* Header row — clickable to expand when detail available */}
+      {/* Header row */}
       <div
-        className={`flex items-center gap-1.5 px-2 py-1.5${hasDetail ? " cursor-pointer hover:bg-white/5" : ""}`}
-        onClick={hasDetail ? () => setIsExpanded((p) => !p) : undefined}
+        className={`flex items-center gap-1.5 px-2 py-1.5${hasFallbackDetail ? " cursor-pointer hover:bg-white/5" : ""}`}
+        onClick={hasFallbackDetail ? () => setIsExpanded((p) => !p) : undefined}
       >
-        {hasDetail && (
+        {hasFallbackDetail && (
           <span
             className="text-[10px] font-mono"
             style={{ color: "var(--ctp-overlay0)" }}
@@ -345,8 +353,11 @@ function ToolCallWaypoint({
         )}
       </div>
 
-      {/* Expanded detail */}
-      {isExpanded && (
+      {/* Inline diff — always visible when detail is available */}
+      {detail && <InlineDiff detail={detail} />}
+
+      {/* Fallback: expandable raw params when no structured detail */}
+      {!detail && isExpanded && (
         <div className="pb-2">
           {params && params.length > 0 ? (
             <div

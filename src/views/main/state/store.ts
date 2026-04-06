@@ -39,7 +39,7 @@ export interface TempestStore {
   commandPaletteVisible: boolean;
   commandPaletteInitialMode: "commands" | "files";
   settingsDialogVisible: boolean;
-  settingsDialogInitialTab: "general" | "remote";
+  settingsDialogInitialTab: "general" | "remote" | "tools";
   httpServerRunning: boolean;
   httpServerError: string | null;
   newWorkspaceRepoId: string | null;
@@ -66,7 +66,7 @@ export interface TempestStore {
   toggleCommandPalette: () => void;
   openCommandPaletteFiles: () => void;
   toggleSettingsDialog: () => void;
-  openSettingsTab: (tab: "general" | "remote") => void;
+  openSettingsTab: (tab: "general" | "remote" | "tools") => void;
   setHttpServerStatus: (running: boolean, error?: string | null) => void;
   requestNewWorkspace: (repoId: string | null) => void;
   pushOverlay: () => void;

@@ -120,6 +120,10 @@ export interface NetworkInterface {
   family: "IPv4" | "IPv6";
 }
 
+export interface McpToolConfig {
+  showWebpage: boolean;
+}
+
 export interface AppConfig {
   workspaceRoot: string;
   jjPath?: string;
@@ -131,6 +135,7 @@ export interface AppConfig {
   monacoVimMode?: boolean; // Enable vim keybindings in Monaco editor. Defaults to false.
   httpServer?: HttpServerConfig;
   httpDefaultPlanMode?: boolean; // Start HTTP-created workspaces in plan mode. Defaults to false.
+  mcpTools?: McpToolConfig;
 }
 
 // --- Hook Events ---

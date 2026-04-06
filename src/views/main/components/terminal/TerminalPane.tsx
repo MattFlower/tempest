@@ -128,11 +128,13 @@ export function TerminalPane({
         try {
           const workspacePath = cwdRef.current;
           const workspaceName = workspacePath.split("/").pop() ?? "default";
+          const webpageEnabled = useStore.getState().config?.mcpTools?.showWebpage !== false;
           const result = await api.buildClaudeCommand({
             workspacePath,
             resume: resumeRef.current || !!sessionIdRef.current,
             sessionId: sessionIdRef.current,
             withHooks: true,
+            withWebpage: webpageEnabled,
             workspaceName,
             planMode: pendingPlanMode ?? undefined,
           });

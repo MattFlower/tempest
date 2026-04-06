@@ -227,6 +227,39 @@ const rpc = Electroview.defineRPC({
           useStore.getState().selectWorkspace(msg.workspacePath);
         });
       },
+      showWebpage: (msg: any) => {
+        Promise.all([
+          import("./store"),
+          import("./actions"),
+          import("../models/pane-node"),
+          import("../../../shared/ipc-types"),
+        ]).then(([{ useStore }, actions, paneNode, { PaneTabKind }]) => {
+          const store = useStore.getState();
+          const tree = store.paneTrees[msg.workspacePath];
+          if (!tree) return;
+
+          const panes = paneNode.allPanes(tree);
+          const afterPaneId = store.focusedPaneId ?? panes[0]?.id;
+          if (!afterPaneId) return;
+
+          // Ensure the workspace is selected so the user sees the new pane
+          if (store.selectedWorkspacePath !== msg.workspacePath) {
+            store.selectWorkspace(msg.workspacePath);
+          }
+
+          const tab = paneNode.createTab(PaneTabKind.Browser, msg.title, {
+            browserURL: `file://${msg.filePath}`,
+          });
+          const newPane = paneNode.createPane(tab);
+          const newTree = paneNode.addingPane(tree, newPane, afterPaneId);
+          store.setPaneTree(msg.workspacePath, newTree);
+          store.setFocusedPaneId(newPane.id);
+          // Persist
+          import("./rpc-client").then(({ api }) => {
+            api.notifyPaneTreeChanged(msg.workspacePath, paneNode.toNodeState(newTree));
+          });
+        });
+      },
       menuAction: (msg: any) => {
         Promise.all([
           import("./store"),
@@ -339,6 +372,7 @@ export const api = {
     sessionId?: string;
     withHooks: boolean;
     withChannel?: boolean;
+    withWebpage?: boolean;
     workspaceName?: string;
     planMode?: boolean;
   }) => rpcRequest.buildClaudeCommand(params),

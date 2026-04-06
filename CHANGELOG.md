@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Git VCS View scope selection — view changes from any commit on the branch or all changes since main/master, in addition to the existing working tree changes view
+- MCP `show_webpage` tool — Claude Code can now display HTML content (designs, mockups, diagrams) in a browser pane for visual discussions. Configurable via Settings > MCP Tools. Webpage previews persist across restarts and are cleaned up on workspace archive.
 
 ### Fixed
 

@@ -85,6 +85,8 @@ export interface BunRequests {
       sessionId?: string;
       withHooks: boolean;
       withChannel?: boolean;
+      withWebpage?: boolean;
+      mcpPort?: number;
       workspaceName?: string;
       planMode?: boolean;
     };
@@ -584,4 +586,5 @@ export interface WebviewMessages {
   scriptOutput: { runId: string; data: string };
   scriptExit: { runId: string; exitCode: number };
   selectWorkspace: { workspacePath: string };
+  showWebpage: { title: string; filePath: string; workspacePath: string };
 }

@@ -77,6 +77,41 @@ export class HookSettingsBuilder {
     return path;
   }
 
+  /** Write an MCP config file for use with `claude --mcp-config`. */
+  static async writeMcpConfigFile(
+    mcpPort: number,
+    mcpToken: string,
+    workspaceName: string,
+  ): Promise<string> {
+    const config = {
+      mcpServers: {
+        "tempest-webpage": {
+          type: "http",
+          url: `http://127.0.0.1:${mcpPort}/mcp/${encodeURIComponent(workspaceName)}`,
+          headers: {
+            Authorization: `Bearer ${mcpToken}`,
+          },
+        },
+      },
+    };
+
+    const json = JSON.stringify(config, null, 2);
+    const dir = join(homedir(), ".tempest");
+    await mkdir(dir, { recursive: true });
+
+    const hasher = new Bun.CryptoHasher("sha256");
+    hasher.update(json);
+    const hash = hasher.digest("hex").slice(0, 12);
+    const path = join(dir, `mcp-${hash}.json`);
+
+    const file = Bun.file(path);
+    if (!(await file.exists())) {
+      await Bun.write(path, json);
+    }
+
+    return path;
+  }
+
   /** Remove legacy UUID-named settings files and stale hash-based files. */
   static async cleanupStaleSettingsFiles(): Promise<void> {
     const dir = join(homedir(), ".tempest");
@@ -116,4 +151,5 @@ export class HookSettingsBuilder {
   static get socketPath(): string {
     return `/tmp/tempest-${process.getuid?.() ?? 501}.sock`;
   }
+
 }

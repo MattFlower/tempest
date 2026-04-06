@@ -17,6 +17,7 @@ import { SessionStateManager } from "./session-state-manager";
 import { HookEventListener } from "./hooks/hook-event-listener";
 import { HookSettingsBuilder } from "./hooks/hook-settings-builder";
 import { SessionActivityTracker } from "./hooks/session-activity-tracker";
+import { McpHttpServer } from "./mcp/mcp-http-server";
 
 import { lookupSessionID, findSessionIDs, lookupPlanPath } from "./session-id-lookup";
 import { loadConfig, saveConfig as saveConfigFile, defaultConfig } from "./config/app-config";
@@ -88,6 +89,7 @@ function getBookmarkManager(repoPath: string): BookmarkManager {
 const workspaceManager = new WorkspaceManager();
 const sessionStateManager = new SessionStateManager();
 const hookListener = new HookEventListener(HookSettingsBuilder.socketPath);
+const mcpServer = new McpHttpServer();
 HookSettingsBuilder.cleanupStaleSettingsFiles().catch((err) =>
   console.error("[main] Settings cleanup failed:", err),
 );
@@ -363,7 +365,11 @@ const rpc = BrowserView.defineRPC({
         return { planPath };
       },
 
-      buildClaudeCommand: (params: any) => sessionManager.buildClaudeCommand(params),
+      buildClaudeCommand: (params: any) => sessionManager.buildClaudeCommand({
+        ...params,
+        mcpPort: mcpServer.getPort(),
+        mcpToken: mcpServer.getToken(),
+      }),
       buildShellCommand: (params: any) => sessionManager.buildShellCommand(params),
       buildEditorCommand: async (params: any) => {
         const config = await loadConfig();
@@ -1053,6 +1059,21 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
     console.error("[main] HookEventListener start failed:", err);
   }
 
+  // Start MCP HTTP server for the show_webpage tool
+  try {
+    mcpServer.onShowWebpage = (workspaceName, title, filePath) => {
+      const all = workspaceManager.getAllWorkspaces();
+      const ws = all.find((w) => w.name === workspaceName || w.path.endsWith(`/${workspaceName}`));
+      const workspacePath = ws?.path ?? workspaceName;
+      try {
+        win.webview.rpc.send.showWebpage({ title, filePath, workspacePath });
+      } catch { /* webview not ready */ }
+    };
+    mcpServer.start();
+  } catch (err) {
+    console.error("[main] McpHttpServer start failed:", err);
+  }
+
   activityTracker.startCleanupTimer();
   startSessionsWatcher();
   sessionStateManager.startAutoSave();
@@ -1108,6 +1129,7 @@ async function shutdown() {
   unwatchAllMarkdown();
   prMonitor.shutdown();
   httpServer.stop();
+  mcpServer.stop();
 }
 
 process.on("SIGINT", () => { shutdown().then(() => process.exit(0)); });

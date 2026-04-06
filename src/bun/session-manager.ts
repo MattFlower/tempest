@@ -23,6 +23,9 @@ export class SessionManager {
     sessionId?: string;
     withHooks: boolean;
     withChannel?: boolean;
+    withWebpage?: boolean;
+    mcpPort?: number;
+    mcpToken?: string;
     workspaceName?: string;
     planMode?: boolean;
   }): Promise<{ command: string[]; settingsPath?: string }> {
@@ -58,6 +61,15 @@ export class SessionManager {
         params.workspaceName,
       );
       parts.push("--settings", settingsPath);
+    }
+
+    if (params.withWebpage && params.mcpPort && params.mcpToken) {
+      const mcpConfigPath = await HookSettingsBuilder.writeMcpConfigFile(
+        params.mcpPort,
+        params.mcpToken,
+        params.workspaceName ?? "default",
+      );
+      parts.push("--mcp-config", mcpConfigPath);
     }
 
     if (params.planMode) {

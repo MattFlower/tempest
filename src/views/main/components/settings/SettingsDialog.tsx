@@ -10,7 +10,7 @@ import { api } from "../../state/rpc-client";
 import { useStore } from "../../state/store";
 import { useOverlay } from "../../state/useOverlay";
 
-type Tab = "general" | "remote";
+type Tab = "general" | "remote" | "tools";
 
 export function SettingsDialog() {
   useOverlay();
@@ -24,6 +24,9 @@ export function SettingsDialog() {
   // General tab state
   const [editor, setEditor] = useState<"nvim" | "monaco">("nvim");
   const [vimMode, setVimMode] = useState(false);
+
+  // MCP Tools tab state
+  const [showWebpage, setShowWebpage] = useState(true);
 
   // Remote tab state
   const [httpEnabled, setHttpEnabled] = useState(false);
@@ -43,6 +46,7 @@ export function SettingsDialog() {
       setEditor(cfg.editor === "monaco" ? "monaco" : "nvim");
       setVimMode(cfg.monacoVimMode ?? false);
       setHttpPlanMode(cfg.httpDefaultPlanMode ?? false);
+      setShowWebpage(cfg.mcpTools?.showWebpage !== false);
       if (cfg.httpServer) {
         setHttpEnabled(cfg.httpServer.enabled);
         setHttpPort(cfg.httpServer.port);
@@ -73,6 +77,7 @@ export function SettingsDialog() {
       editor,
       monacoVimMode: vimMode,
       httpDefaultPlanMode: httpPlanMode,
+      mcpTools: { showWebpage },
       httpServer: {
         enabled: httpEnabled,
         port: httpPort,
@@ -148,6 +153,7 @@ export function SettingsDialog() {
     ? (config.editor ?? "nvim") !== editor ||
       (config.monacoVimMode ?? false) !== vimMode ||
       (config.httpDefaultPlanMode ?? false) !== httpPlanMode ||
+      (config.mcpTools?.showWebpage !== false) !== showWebpage ||
       (config.httpServer?.enabled ?? false) !== httpEnabled ||
       (config.httpServer?.port ?? 7778) !== httpPort ||
       (config.httpServer?.hostname ?? "127.0.0.1") !== httpHostname ||
@@ -223,6 +229,11 @@ export function SettingsDialog() {
             active={activeTab === "remote"}
             onClick={() => setActiveTab("remote")}
           />
+          <TabButton
+            label="MCP Tools"
+            active={activeTab === "tools"}
+            onClick={() => setActiveTab("tools")}
+          />
         </div>
 
         {!config ? (
@@ -240,6 +251,12 @@ export function SettingsDialog() {
                 setEditor={setEditor}
                 vimMode={vimMode}
                 setVimMode={setVimMode}
+              />
+            )}
+            {activeTab === "tools" && (
+              <McpToolsTab
+                showWebpage={showWebpage}
+                setShowWebpage={setShowWebpage}
               />
             )}
             {activeTab === "remote" && (
@@ -653,6 +670,40 @@ function RemoteTab({
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+// --- MCP Tools Tab ---
+
+function McpToolsTab({
+  showWebpage,
+  setShowWebpage,
+}: {
+  showWebpage: boolean;
+  setShowWebpage: (v: boolean) => void;
+}) {
+  return (
+    <>
+      <p className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
+        Configure MCP tools available to Claude Code sessions.
+        Changes take effect for new sessions.
+      </p>
+
+      <div className="flex items-center justify-between gap-3 py-1">
+        <div className="flex flex-col gap-0.5">
+          <label
+            className="text-[11px] font-semibold"
+            style={{ color: "var(--ctp-subtext0)" }}
+          >
+            Show Webpage
+          </label>
+          <p className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
+            Allow Claude to display HTML content in a browser pane for visual discussions.
+          </p>
+        </div>
+        <ToggleSwitch value={showWebpage} onChange={setShowWebpage} />
+      </div>
     </>
   );
 }

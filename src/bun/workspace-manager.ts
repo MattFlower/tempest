@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
+import { homedir } from "node:os";
 import type {
   AppConfig,
   RepoSettings,
@@ -235,6 +237,14 @@ export class WorkspaceManager {
         }
 
         await provider.archiveWorkspace(workspace);
+
+        // Clean up webpage preview files for this workspace
+        const wsName = workspace.name || workspace.path.split("/").pop() || "";
+        if (wsName) {
+          const previewDir = join(homedir(), ".tempest", "webpage-previews", wsName);
+          await rm(previewDir, { recursive: true, force: true }).catch(() => {});
+        }
+
         const updated = workspaces.filter((w) => w.id !== workspaceId);
         this.workspacesByRepo.set(repoId, updated);
         this.onWorkspacesChanged?.(repoId, updated);

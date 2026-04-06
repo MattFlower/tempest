@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Fixed
+
+### Changed
+
+### Removed
+
+## [0.9.2] - 2026-04-05
+
+### Added
+
 - Add filesystem path browsing to the Open File dialog (Cmd+P) -- type an absolute path
   (`/etc/hosts`), tilde path (`~/bin`), or relative path (`./src`) to browse the filesystem
   directly. Selecting a directory drills into it; clearing the query reverts to project files.
@@ -24,10 +34,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Status indicators: clear activity state when last Claude session ends instead of staying stuck on "Working"
 - Status indicators: immediately clean stale PIDs on stop/idle events so transitions are instant
 - Status indicators: sync activity state from backend on startup so webview reflects pre-existing sessions
-
-### Changed
-
-### Removed
 
 ## [0.9.1] - 2026-04-05
 

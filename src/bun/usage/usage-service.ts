@@ -8,10 +8,9 @@
 // pinned version + -O for all intermediate fetches.
 // ============================================================
 
-import { join } from "path";
-import { homedir } from "os";
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import type { UsageTokens, UsageResponse } from "../../shared/ipc-types";
+import { CCUSAGE_STATE_FILE, TEMPEST_DIR } from "../config/paths";
 
 interface CachedResult {
   data: Omit<UsageResponse, "isStale">;
@@ -28,7 +27,6 @@ interface PersistedState {
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const PRICING_REFRESH_MS = 3 * 60 * 60 * 1000; // 3 hours
-const STATE_PATH = join(homedir(), "Library", "Application Support", "Tempest", "ccusage-state.json");
 
 let cached: CachedResult | null = null;
 let lastFetchFailed = false;
@@ -39,9 +37,13 @@ let lastPricingFetchAt: number | null = null;
 /** Pinned version discovered from the last @latest call. */
 let pinnedVersion: string | null = null;
 
-function loadPersistedState(): void {
+let stateLoaded = false;
+
+function ensureStateLoaded(): void {
+  if (stateLoaded) return;
+  stateLoaded = true;
   try {
-    const raw = readFileSync(STATE_PATH, "utf-8");
+    const raw = readFileSync(CCUSAGE_STATE_FILE, "utf-8");
     const state: PersistedState = JSON.parse(raw);
     if (typeof state.lastPricingFetchAt === "number") lastPricingFetchAt = state.lastPricingFetchAt;
     if (typeof state.pinnedVersion === "string") pinnedVersion = state.pinnedVersion;
@@ -58,15 +60,12 @@ function loadPersistedState(): void {
 function savePersistedState(): void {
   try {
     const state: PersistedState = { lastPricingFetchAt, pinnedVersion, cachedResult: cached };
-    mkdirSync(join(homedir(), "Library", "Application Support", "Tempest"), { recursive: true });
-    writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
+    mkdirSync(TEMPEST_DIR, { recursive: true });
+    writeFileSync(CCUSAGE_STATE_FILE, JSON.stringify(state, null, 2));
   } catch (err) {
     console.error("[usage] Failed to persist state:", err);
   }
 }
-
-// Load on module init
-loadPersistedState();
 
 export function todayString(): string {
   const d = new Date();
@@ -227,6 +226,7 @@ function parseUsageDict(dict: Record<string, any>): UsageTokens | null {
 
 /** Non-blocking: returns cached data immediately, triggers background fetch if stale. */
 export async function getUsageData(since?: string): Promise<UsageResponse> {
+  ensureStateLoaded();
   const sinceDate = since ?? todayString();
 
   // Return fresh cache if date matches

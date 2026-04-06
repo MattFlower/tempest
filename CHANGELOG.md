@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Consolidated all application data into `~/.config/tempest/` for cross-platform compatibility. Existing data is automatically migrated from `~/.tempest/` and `~/Library/Application Support/Tempest/`.
+
 ### Removed
 
 ## [0.9.2] - 2026-04-05

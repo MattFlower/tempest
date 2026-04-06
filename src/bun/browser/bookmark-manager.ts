@@ -1,22 +1,18 @@
 // ============================================================
 // BookmarkManager — Per-repo bookmark CRUD with JSON persistence.
-// Port of Tempest/Browser/BookmarkManager.swift.
 // Storage: ~/.config/tempest/bookmarks/{sha256(repoPath)}.json
-// Uses lowercase "tempest" to share files with Tempest 1 (Swift).
 // ============================================================
 
-import { join } from "path";
-import { homedir } from "os";
 import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import type { Bookmark } from "../../shared/ipc-types";
 import { normalizeURL } from "../../shared/url-utils";
+import { BOOKMARKS_DIR } from "../config/paths";
 
 interface RepoBookmarks {
   version: number;
   bookmarks: Bookmark[];
 }
-
-const BOOKMARKS_DIR = join(homedir(), ".config", "tempest", "bookmarks");
 
 function sha256Hex(input: string): string {
   const hasher = new Bun.CryptoHasher("sha256");

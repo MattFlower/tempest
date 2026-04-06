@@ -1,6 +1,6 @@
 import { mkdir, unlink, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { homedir } from "node:os";
+import { TEMPEST_DIR } from "../config/paths";
 
 export class HookSettingsBuilder {
   static buildSettingsJSON(
@@ -61,7 +61,7 @@ export class HookSettingsBuilder {
       channelScriptPath,
       workspaceName,
     );
-    const dir = join(homedir(), ".tempest");
+    const dir = TEMPEST_DIR;
     await mkdir(dir, { recursive: true });
 
     const hasher = new Bun.CryptoHasher("sha256");
@@ -96,7 +96,7 @@ export class HookSettingsBuilder {
     };
 
     const json = JSON.stringify(config, null, 2);
-    const dir = join(homedir(), ".tempest");
+    const dir = TEMPEST_DIR;
     await mkdir(dir, { recursive: true });
 
     const hasher = new Bun.CryptoHasher("sha256");
@@ -114,7 +114,7 @@ export class HookSettingsBuilder {
 
   /** Remove legacy UUID-named settings files and stale hash-based files. */
   static async cleanupStaleSettingsFiles(): Promise<void> {
-    const dir = join(homedir(), ".tempest");
+    const dir = TEMPEST_DIR;
     const glob = new Bun.Glob("settings-*.json");
     const uuidPattern = /^settings-[0-9a-f]{8}-[0-9a-f]{4}-/;
     const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;

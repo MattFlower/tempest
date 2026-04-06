@@ -127,7 +127,7 @@ describe("HookSettingsBuilder", () => {
     const hookBinaryPath = "bun /path/to/tempest-hook.ts";
     const socketPath = "/tmp/tempest-501.sock";
 
-    it("creates a file in ~/.tempest/ directory with valid JSON", async () => {
+    it("creates a file in ~/.config/tempest/ directory with valid JSON", async () => {
       const filePath = await HookSettingsBuilder.writeSettingsFile(
         hookBinaryPath,
         socketPath,
@@ -135,7 +135,7 @@ describe("HookSettingsBuilder", () => {
       filesToCleanup.push(filePath);
 
       // Verify the path uses a content hash (12 hex chars)
-      expect(filePath).toContain("/.tempest/");
+      expect(filePath).toContain("/.config/tempest/");
       expect(filePath).toMatch(/settings-[0-9a-f]{12}\.json$/);
 
       // Verify the file contains valid JSON matching buildSettingsJSON output

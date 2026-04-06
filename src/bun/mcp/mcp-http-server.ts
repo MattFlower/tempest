@@ -6,8 +6,8 @@
 
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { homedir } from "node:os";
 import { randomBytes } from "node:crypto";
+import { WEBPAGE_PREVIEWS_DIR } from "../config/paths";
 
 const INSTRUCTIONS = `You are running inside Tempest, a developer tool with a pane-based UI. The user can see browser panes alongside their terminal.
 
@@ -191,7 +191,7 @@ export class McpHttpServer {
     };
 
     try {
-      const previewDir = join(homedir(), ".tempest", "webpage-previews", workspaceName);
+      const previewDir = join(WEBPAGE_PREVIEWS_DIR, workspaceName);
       await mkdir(previewDir, { recursive: true });
 
       const fileId = crypto.randomUUID();

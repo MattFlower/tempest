@@ -1,5 +1,4 @@
 import { mkdirSync, existsSync, renameSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import type {
   SessionState,
@@ -7,6 +6,7 @@ import type {
   OpenPRState,
   WorkspacePaneState,
 } from "../shared/ipc-types";
+import { TEMPEST_DIR } from "./config/paths";
 
 const CURRENT_VERSION = 1;
 
@@ -17,7 +17,7 @@ export class SessionStateManager {
   private autoSaveTimer?: ReturnType<typeof setInterval>;
 
   constructor(stateDir?: string) {
-    const dir = stateDir ?? join(homedir(), "Library", "Application Support", "Tempest");
+    const dir = stateDir ?? TEMPEST_DIR;
     this.stateFilePath = join(dir, "session-state.json");
   }
 

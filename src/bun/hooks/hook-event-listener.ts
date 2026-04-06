@@ -1,9 +1,7 @@
 import { unlinkSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import type { HookEvent } from "../../shared/ipc-types";
-
-const DEFAULT_SOCKET_PATH = join(homedir(), ".tempest", "hook.sock");
+import { HOOK_SOCKET } from "../config/paths";
 
 /**
  * Unix domain socket server that receives hook events from tempest-hook.
@@ -14,7 +12,7 @@ export class HookEventListener {
   private server?: ReturnType<typeof Bun.listen> | null;
 
   constructor(socketPath?: string) {
-    this.socketPath = socketPath ?? DEFAULT_SOCKET_PATH;
+    this.socketPath = socketPath ?? HOOK_SOCKET;
   }
 
   start(onEvent: (event: HookEvent) => void): void {

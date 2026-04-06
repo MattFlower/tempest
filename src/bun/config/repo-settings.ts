@@ -1,15 +1,9 @@
 import { mkdirSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import type { RepoSettings } from "../../shared/ipc-types";
-
-const CONFIG_DIR =
-  process.env.TEMPEST_CONFIG_DIR ?? join(homedir(), ".config", "tempest");
-
-const REPO_SETTINGS_PATH = join(CONFIG_DIR, "repo-settings.json");
+import { TEMPEST_DIR, REPO_SETTINGS_FILE } from "./paths";
 
 export async function loadAllRepoSettings(): Promise<Record<string, RepoSettings>> {
-  const file = Bun.file(REPO_SETTINGS_PATH);
+  const file = Bun.file(REPO_SETTINGS_FILE);
   if (!(await file.exists())) return {};
   try {
     return (await file.json()) as Record<string, RepoSettings>;
@@ -21,6 +15,6 @@ export async function loadAllRepoSettings(): Promise<Record<string, RepoSettings
 export async function saveAllRepoSettings(
   settings: Record<string, RepoSettings>,
 ): Promise<void> {
-  mkdirSync(CONFIG_DIR, { recursive: true });
-  await Bun.write(REPO_SETTINGS_PATH, JSON.stringify(settings, null, 2));
+  mkdirSync(TEMPEST_DIR, { recursive: true });
+  await Bun.write(REPO_SETTINGS_FILE, JSON.stringify(settings, null, 2));
 }

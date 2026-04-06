@@ -8,6 +8,7 @@ import { mkdirSync, readdirSync, statSync, existsSync, openSync, readSync, close
 import { homedir } from "node:os";
 import { join, basename, extname } from "node:path";
 import { parseLine } from "./jsonl-parser";
+import { HISTORY_CACHE_FILE } from "../config/paths";
 
 export interface CachedSession {
   sessionId: string;
@@ -29,8 +30,7 @@ export class HistoryMetadataCache {
 
   constructor(claudeDir?: string, cacheFilePath?: string) {
     this.claudeDir = claudeDir ?? join(homedir(), ".claude");
-    this.cacheFilePath =
-      cacheFilePath ?? join(homedir(), ".config", "tempest", "history-cache.json");
+    this.cacheFilePath = cacheFilePath ?? HISTORY_CACHE_FILE;
   }
 
   // --- Persistence ---

@@ -7,8 +7,9 @@
 // Implements MCP JSON-RPC 2.0 protocol inline (no SDK dependency).
 
 import { connect } from "net";
+import { PR_CHANNEL_SOCKET } from "../config/paths";
 
-const SOCKET_PATH = process.env.TEMPEST_SOCKET_PATH || "~/.tempest/pr-channel.sock";
+const SOCKET_PATH = process.env.TEMPEST_SOCKET_PATH || PR_CHANNEL_SOCKET;
 const WORKSPACE = process.env.TEMPEST_WORKSPACE || "default";
 const resolvedSocket = SOCKET_PATH.replace("~", process.env.HOME || "");
 

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import { homedir } from "node:os";
+
 import type {
   AppConfig,
   RepoSettings,
@@ -24,6 +24,7 @@ import {
 } from "./config/repo-settings";
 import { detectVCS, detectVCSType } from "./vcs/detector";
 import type { VCSProvider } from "./vcs/types";
+import { WEBPAGE_PREVIEWS_DIR } from "./config/paths";
 
 export class WorkspaceManager {
   private repos: SourceRepo[] = [];
@@ -241,7 +242,7 @@ export class WorkspaceManager {
         // Clean up webpage preview files for this workspace
         const wsName = workspace.name || workspace.path.split("/").pop() || "";
         if (wsName) {
-          const previewDir = join(homedir(), ".tempest", "webpage-previews", wsName);
+          const previewDir = join(WEBPAGE_PREVIEWS_DIR, wsName);
           await rm(previewDir, { recursive: true, force: true }).catch(() => {});
         }
 

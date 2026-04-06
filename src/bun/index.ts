@@ -21,6 +21,7 @@ import { McpHttpServer } from "./mcp/mcp-http-server";
 
 import { lookupSessionID, findSessionIDs, lookupPlanPath } from "./session-id-lookup";
 import { loadConfig, saveConfig as saveConfigFile, defaultConfig } from "./config/app-config";
+import { runMigration } from "./config/migrate";
 import { PathResolver } from "./config/path-resolver";
 import { TempestHttpServer, generateToken, consumePendingData } from "./http-server";
 import { getUsageData } from "./usage/usage-service";
@@ -1037,6 +1038,10 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
 
 // --- Async initialization ---
 (async () => {
+  // Migrate data from legacy directories (~/.tempest, ~/Library/Application Support/Tempest)
+  // into ~/.config/tempest. Safe to remove after a few versions.
+  runMigration();
+
   // Load config and update SessionManager
   try {
     const config = await loadConfig();

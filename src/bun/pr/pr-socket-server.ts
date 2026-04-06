@@ -8,6 +8,7 @@ import { unlinkSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Socket } from "bun";
 import type { DraftPostBody } from "./pr-models";
+import { PR_CHANNEL_SOCKET } from "../config/paths";
 
 // --- HTTP Request/Response helpers ---
 
@@ -135,9 +136,7 @@ export class PRSocketServer {
     | null = null;
 
   constructor(socketPath?: string) {
-    this.socketPath =
-      socketPath ??
-      `${process.env.HOME || "/tmp"}/.tempest/pr-channel.sock`;
+    this.socketPath = socketPath ?? PR_CHANNEL_SOCKET;
   }
 
   start(): void {

@@ -37,6 +37,26 @@ import { AIContextPanel } from "../diff/AIContextPanel";
 const DEFAULT_REVSET = "heads(::@ & ::trunk())..@";
 const DEFAULT_BOUNDS = { from: "heads(::@ & ::trunk())", to: "@" };
 
+type JJPreset = "since-branch" | "recent" | "custom";
+
+const PRESETS: Record<JJPreset, { label: string; revset: string; isRange: boolean | null }> = {
+  "since-branch": {
+    label: "Since branch started",
+    revset: "heads(::@ & ::trunk())..@",
+    isRange: true,
+  },
+  "recent": {
+    label: "Recent Revisions",
+    revset: "present(@) | ancestors(immutable_heads().., 2) | trunk()",
+    isRange: false,
+  },
+  "custom": {
+    label: "Custom revset\u2026",
+    revset: "",
+    isRange: null,
+  },
+};
+
 /**
  * Parse a JJ revset of the form "A..B" into from/to bounds.
  * The ".." is the JJ range operator (distinct from "::" which uses colons).
@@ -64,23 +84,24 @@ function parseRevsetBounds(revset: string): { from: string; to: string } | null 
   return null;
 }
 
-function RevsetInput({
-  defaultValue,
+function JJPresetSelector({
+  preset,
+  customRevset,
   error,
-  onSubmit,
-  onReset,
+  onPresetChange,
+  onCustomSubmit,
 }: {
-  defaultValue: string;
+  preset: JJPreset;
+  customRevset: string;
   error: string | null;
-  onSubmit: (value: string) => void;
-  onReset: () => void;
+  onPresetChange: (preset: JJPreset) => void;
+  onCustomSubmit: (value: string) => void;
 }) {
-  const [value, setValue] = useState(defaultValue);
+  const [customValue, setCustomValue] = useState(customRevset);
 
-  // Sync when parent resets
   useEffect(() => {
-    setValue(defaultValue);
-  }, [defaultValue]);
+    setCustomValue(customRevset);
+  }, [customRevset]);
 
   return (
     <div
@@ -90,42 +111,46 @@ function RevsetInput({
         borderBottom: "1px solid var(--ctp-surface0)",
       }}
     >
-      <div className="flex items-center gap-1">
-        <input
-          className="flex-1 min-w-0 px-1.5 py-0.5 rounded text-[11px] font-mono"
-          style={{
-            backgroundColor: "var(--ctp-surface0)",
-            color: "var(--ctp-text)",
-            border: error
-              ? "1px solid var(--ctp-red)"
-              : "1px solid var(--ctp-surface1)",
-            outline: "none",
-          }}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") onSubmit(value.trim());
-          }}
-          placeholder={DEFAULT_REVSET}
-          spellCheck={false}
-        />
-        {value !== DEFAULT_REVSET && (
-          <button
-            className="flex-shrink-0 px-1 py-0.5 rounded text-[10px]"
+      <select
+        value={preset}
+        onChange={(e) => onPresetChange(e.target.value as JJPreset)}
+        className="w-full px-1.5 py-0.5 rounded text-[11px]"
+        style={{
+          backgroundColor: "var(--ctp-surface0)",
+          color: "var(--ctp-text)",
+          border: "1px solid var(--ctp-surface1)",
+          outline: "none",
+        }}
+      >
+        {(Object.keys(PRESETS) as JJPreset[]).map((key) => (
+          <option key={key} value={key}>
+            {PRESETS[key].label}
+          </option>
+        ))}
+      </select>
+      {preset === "custom" && (
+        <div className="flex items-center gap-1 mt-1">
+          <input
+            className="flex-1 min-w-0 px-1.5 py-0.5 rounded text-[11px] font-mono"
             style={{
               backgroundColor: "var(--ctp-surface0)",
-              color: "var(--ctp-subtext0)",
+              color: "var(--ctp-text)",
+              border: error
+                ? "1px solid var(--ctp-red)"
+                : "1px solid var(--ctp-surface1)",
+              outline: "none",
             }}
-            onClick={() => {
-              setValue(DEFAULT_REVSET);
-              onReset();
+            value={customValue}
+            onChange={(e) => setCustomValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onCustomSubmit(customValue.trim());
             }}
-            title="Reset to default"
-          >
-            ↺
-          </button>
-        )}
-      </div>
+            placeholder="e.g. trunk()..@ or mine()"
+            spellCheck={false}
+            autoFocus
+          />
+        </div>
+      )}
       {error && (
         <div
           className="text-[10px] mt-0.5 px-0.5"
@@ -142,12 +167,28 @@ interface JJViewProps {
   workspacePath: string;
 }
 
+function getDefaultPreset(workspacePath: string, workspacesByRepo: Record<string, import("../../../../shared/ipc-types").TempestWorkspace[]>): JJPreset {
+  for (const workspaces of Object.values(workspacesByRepo)) {
+    const ws = workspaces.find((w) => w.path === workspacePath);
+    if (ws) return ws.name === "default" ? "recent" : "since-branch";
+  }
+  return "since-branch";
+}
+
 export function JJView({ workspacePath }: JJViewProps) {
+  const workspacesByRepo = useStore((s) => s.workspacesByRepo);
+  const defaultPreset = getDefaultPreset(workspacePath, workspacesByRepo);
+
   // Revset state
-  const [activeRevset, setActiveRevset] = useState(DEFAULT_REVSET);
+  const [activePreset, setActivePreset] = useState<JJPreset>(defaultPreset);
+  const [activeRevset, setActiveRevset] = useState(PRESETS[defaultPreset].revset);
   const [revsetError, setRevsetError] = useState<string | null>(null);
-  const [jjViewMode, setJJViewMode] = useState<"range" | "single">("range");
-  const [rangeBounds, setRangeBounds] = useState(DEFAULT_BOUNDS);
+  const [jjViewMode, setJJViewMode] = useState<"range" | "single">(
+    PRESETS[defaultPreset].isRange ? "range" : "single",
+  );
+  const [rangeBounds, setRangeBounds] = useState(
+    PRESETS[defaultPreset].isRange ? DEFAULT_BOUNDS : { from: "", to: "" },
+  );
 
   // Revision log state
   const [revisions, setRevisions] = useState<JJRevision[]>([]);
@@ -240,23 +281,24 @@ export function JJView({ workspacePath }: JJViewProps) {
       setCurrentChangeId(logResult.currentChangeId);
       setBookmarks(bms);
 
-      // Load range files if bounds are available
-      const bounds = parseRevsetBounds(activeRevset);
-      if (bounds) {
-        setRangeBounds(bounds);
-        try {
-          const rangeFiles = await api.jjGetRangeChangedFiles(
-            workspacePath,
-            bounds.from,
-            bounds.to,
-          );
-          // Only update files if still in range mode (user may have clicked a revision)
-          setChangedFiles((prev) => {
-            // If we're in range mode OR files haven't been loaded yet, use range files
-            return rangeFiles;
-          });
-        } catch {
-          // Range files failed — not critical
+      // Load range files if this is a range preset
+      const shouldLoadRange =
+        activePreset === "since-branch" ||
+        (activePreset === "custom" && parseRevsetBounds(activeRevset) !== null);
+      if (shouldLoadRange) {
+        const bounds = parseRevsetBounds(activeRevset);
+        if (bounds) {
+          setRangeBounds(bounds);
+          try {
+            const rangeFiles = await api.jjGetRangeChangedFiles(
+              workspacePath,
+              bounds.from,
+              bounds.to,
+            );
+            setChangedFiles(rangeFiles);
+          } catch {
+            // Range files failed — not critical
+          }
         }
       }
     } catch (err: any) {
@@ -267,11 +309,25 @@ export function JJView({ workspacePath }: JJViewProps) {
       }
     }
     setIsLoading(false);
-  }, [workspacePath, activeRevset]);
+  }, [workspacePath, activeRevset, activePreset]);
 
   useEffect(() => {
     loadLog();
   }, [loadLog]);
+
+  // Auto-select working copy revision in non-range modes
+  useEffect(() => {
+    if (selectedChangeId || revisions.length === 0) return;
+    const isRange =
+      activePreset === "since-branch" ||
+      (activePreset === "custom" && parseRevsetBounds(activeRevset) !== null);
+    if (isRange) return;
+    const wc = revisions.find((r) => r.isWorkingCopy);
+    const autoSelectId = wc?.changeId || currentChangeId;
+    if (autoSelectId) {
+      setSelectedChangeId(autoSelectId);
+    }
+  }, [activePreset, activeRevset, revisions, currentChangeId, selectedChangeId]);
 
   // Load changed files when revision changes (single-revision mode only)
   useEffect(() => {
@@ -581,33 +637,49 @@ export function JJView({ workspacePath }: JJViewProps) {
     [workspacePath, selectedChangeId, restoreFromDialog, loadLog],
   );
 
-  // --- Revset handlers ---
+  // --- Preset / revset handlers ---
 
-  const handleRevsetSubmit = useCallback((value: string) => {
+  const handlePresetChange = useCallback(
+    (preset: JJPreset) => {
+      setActivePreset(preset);
+      setRevsetError(null);
+      setSelectedFilePath(null);
+      setDiffData(null);
+      setSelectedChangeId(null);
+
+      if (preset !== "custom") {
+        const config = PRESETS[preset];
+        setActiveRevset(config.revset);
+        if (config.isRange) {
+          const bounds = parseRevsetBounds(config.revset);
+          if (bounds) setRangeBounds(bounds);
+          setJJViewMode("range");
+        } else {
+          setJJViewMode("single");
+          setChangedFiles([]);
+        }
+      }
+      // For "custom", wait for the user to submit a revset
+    },
+    [],
+  );
+
+  const handleCustomRevsetSubmit = useCallback((value: string) => {
     if (!value) return;
-    const bounds = parseRevsetBounds(value);
-    if (!bounds) {
-      setRevsetError("Revset must be a range expression (e.g., trunk()..@)");
-      return;
-    }
+    setRevsetError(null);
     setActiveRevset(value);
-    setRangeBounds(bounds);
-    setJJViewMode("range");
     setSelectedChangeId(null);
     setSelectedFilePath(null);
     setDiffData(null);
-    setRevsetError(null);
-  }, []);
 
-  const handleRevsetReset = useCallback(() => {
-    setRevsetInput(DEFAULT_REVSET);
-    setActiveRevset(DEFAULT_REVSET);
-    setRangeBounds(DEFAULT_BOUNDS);
-    setJJViewMode("range");
-    setSelectedChangeId(null);
-    setSelectedFilePath(null);
-    setDiffData(null);
-    setRevsetError(null);
+    const bounds = parseRevsetBounds(value);
+    if (bounds) {
+      setRangeBounds(bounds);
+      setJJViewMode("range");
+    } else {
+      setJJViewMode("single");
+      setChangedFiles([]);
+    }
   }, []);
 
   const handleShowRange = useCallback(() => {
@@ -632,10 +704,13 @@ export function JJView({ workspacePath }: JJViewProps) {
 
   const handleSelectRevision = useCallback((changeId: string) => {
     setSelectedChangeId(changeId);
-    setJJViewMode("single");
+    // Only switch to single mode if we're in a range-mode preset
+    if (jjViewMode === "range") {
+      setJJViewMode("single");
+    }
     setSelectedFilePath(null);
     setDiffData(null);
-  }, []);
+  }, [jjViewMode]);
 
   // Divider drag for left panel resize
   const handleDividerDrag = useCallback(
@@ -814,12 +889,13 @@ export function JJView({ workspacePath }: JJViewProps) {
           </span>
         </div>
 
-        {/* Revset input */}
-        <RevsetInput
-          defaultValue={activeRevset}
+        {/* Preset selector */}
+        <JJPresetSelector
+          preset={activePreset}
+          customRevset={activeRevset}
           error={revsetError}
-          onSubmit={handleRevsetSubmit}
-          onReset={handleRevsetReset}
+          onPresetChange={handlePresetChange}
+          onCustomSubmit={handleCustomRevsetSubmit}
         />
 
         {/* Revision list (scrollable) */}
@@ -894,8 +970,8 @@ export function JJView({ workspacePath }: JJViewProps) {
               )}
             </div>
 
-            {/* Show Range button when in single mode */}
-            {jjViewMode === "single" && (
+            {/* Show Range button when in single mode within a range-capable preset */}
+            {jjViewMode === "single" && (activePreset === "since-branch" || (activePreset === "custom" && parseRevsetBounds(activeRevset) !== null)) && (
               <div
                 className="flex-shrink-0 px-3 py-1"
                 style={{

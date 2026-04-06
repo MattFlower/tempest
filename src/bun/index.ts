@@ -46,6 +46,7 @@ import {
   vcsUnstageFiles,
   vcsStageAll,
   vcsUnstageAll,
+  vcsRevertFiles,
   vcsCommit,
   vcsPush,
   vcsGetFileDiff,
@@ -726,6 +727,9 @@ const rpc = BrowserView.defineRPC({
       },
       vcsUnstageAll: async (params: any) => {
         await vcsUnstageAll(params.workspacePath);
+      },
+      vcsRevertFiles: async (params: any) => {
+        return await vcsRevertFiles(params.workspacePath, params.paths);
       },
       vcsCommit: async (params: any) => {
         return await vcsCommit(params.workspacePath, params.message, params.amend);

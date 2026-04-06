@@ -449,6 +449,10 @@ export interface BunRequests {
     params: { workspacePath: string };
     response: void;
   };
+  vcsRevertFiles: {
+    params: { workspacePath: string; paths: string[] };
+    response: { success: boolean; error?: string };
+  };
   vcsCommit: {
     params: { workspacePath: string; message: string; amend: boolean };
     response: VCSCommitResult;

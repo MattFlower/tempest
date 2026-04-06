@@ -243,6 +243,65 @@ export async function vcsUnstageAll(workspacePath: string): Promise<void> {
   await runGitOrThrow(["reset", "HEAD"], workspacePath);
 }
 
+export async function vcsRevertFiles(
+  workspacePath: string,
+  paths: string[],
+): Promise<{ success: boolean; error?: string }> {
+  if (paths.length === 0) return { success: true };
+
+  try {
+    // Get status to determine each file's change type and staged state
+    const status = await getVCSStatus(workspacePath);
+    const fileMap = new Map<string, VCSFileEntry>();
+    for (const f of status.files) {
+      fileMap.set(f.path, f);
+    }
+
+    const trackedPaths: string[] = [];
+    const untrackedPaths: string[] = [];
+    const stagedPaths: string[] = [];
+
+    for (const p of paths) {
+      const entry = fileMap.get(p);
+      if (!entry) continue;
+
+      if (entry.staged) {
+        stagedPaths.push(p);
+      }
+
+      if (entry.changeType === "untracked") {
+        untrackedPaths.push(p);
+      } else {
+        trackedPaths.push(p);
+      }
+    }
+
+    // Unstage any staged files first
+    if (stagedPaths.length > 0) {
+      await runGitOrThrow(["restore", "--staged", "--", ...stagedPaths], workspacePath);
+    }
+
+    // Restore tracked files from HEAD
+    if (trackedPaths.length > 0) {
+      await runGitOrThrow(["checkout", "HEAD", "--", ...trackedPaths], workspacePath);
+    }
+
+    // Delete untracked files
+    for (const p of untrackedPaths) {
+      const fullPath = `${workspacePath}/${p}`;
+      try {
+        await Bun.file(fullPath).exists() && (await import("node:fs/promises")).unlink(fullPath);
+      } catch {
+        // Ignore individual file deletion errors
+      }
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message ?? String(err) };
+  }
+}
+
 export async function vcsCommit(
   workspacePath: string,
   message: string,

@@ -28,6 +28,7 @@ import { GitScopeSelector } from "./GitScopeSelector";
 import { GitCommitPicker } from "./GitCommitPicker";
 import { GitScopedFileList } from "./GitScopedFileList";
 import { AIContextPanel } from "../diff/AIContextPanel";
+import { GitFileContextMenu } from "./GitFileContextMenu";
 
 export function VCSView() {
   const selectedWorkspacePath = useStore((s) => s.selectedWorkspacePath);
@@ -113,6 +114,14 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
   const [isCommitting, setIsCommitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  // Context menu + revert confirmation
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    file: VCSFileEntry;
+  } | null>(null);
+  const [revertConfirm, setRevertConfirm] = useState<VCSFileEntry | null>(null);
 
   // Left panel width (resizable)
   const [leftPanelWidth, setLeftPanelWidth] = useState(280);
@@ -334,6 +343,32 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
     await loadStatus();
   }, [workspacePath, loadStatus]);
 
+  // --- Context menu + revert ---
+
+  const handleFileContextMenu = useCallback(
+    (file: VCSFileEntry, x: number, y: number) => {
+      setContextMenu({ x, y, file });
+    },
+    [],
+  );
+
+  const handleRevertConfirmed = useCallback(async () => {
+    if (!revertConfirm) return;
+    const result = await api.vcsRevertFiles(workspacePath, [revertConfirm.path]);
+    if (result.success) {
+      setToast({ message: `Reverted ${revertConfirm.path}`, type: "success" });
+      // Clear selection if the reverted file was selected
+      if (selectedFile?.path === revertConfirm.path) {
+        setSelectedFile(null);
+        setDiffData(null);
+      }
+      await loadStatus();
+    } else {
+      setToast({ message: result.error ?? "Revert failed", type: "error" });
+    }
+    setRevertConfirm(null);
+  }, [workspacePath, revertConfirm, selectedFile, loadStatus]);
+
   // --- Commit ---
 
   const handleCommit = useCallback(
@@ -524,6 +559,7 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
                 onUnstageFiles={handleUnstageFiles}
                 onStageAll={handleStageAll}
                 onUnstageAll={handleUnstageAll}
+                onContextMenu={handleFileContextMenu}
               />
             </div>
             <VCSCommitPanel
@@ -632,6 +668,63 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
           />
         </div>
       </div>
+
+      {/* Context menu */}
+      {contextMenu && (
+        <GitFileContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          filePath={contextMenu.file.path}
+          onRevert={() => {
+            setRevertConfirm(contextMenu.file);
+            setContextMenu(null);
+          }}
+          onDismiss={() => setContextMenu(null)}
+        />
+      )}
+
+      {/* Revert confirmation dialog */}
+      {revertConfirm && (
+        <div className="absolute inset-0 z-[200] flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0"
+            style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
+            onClick={() => setRevertConfirm(null)}
+          />
+          {/* Dialog */}
+          <div
+            className="relative rounded-lg shadow-xl p-4 max-w-sm"
+            style={{
+              backgroundColor: "var(--ctp-surface0)",
+              border: "1px solid var(--ctp-surface1)",
+            }}
+          >
+            <p className="text-sm mb-1" style={{ color: "var(--ctp-text)" }}>
+              Revert changes?
+            </p>
+            <p className="text-xs mb-4" style={{ color: "var(--ctp-subtext0)" }}>
+              Revert <strong>{revertConfirm.path.split("/").pop()}</strong>? This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                className="px-3 py-1 text-xs rounded"
+                style={{ background: "var(--ctp-surface1)", color: "var(--ctp-text)" }}
+                onClick={() => setRevertConfirm(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-3 py-1 text-xs rounded font-semibold"
+                style={{ background: "var(--ctp-red)", color: "var(--ctp-base)" }}
+                onClick={handleRevertConfirmed}
+              >
+                Revert
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast notification */}
       {toast && (

@@ -14,6 +14,7 @@ interface VCSFileListProps {
   onUnstageFiles: (paths: string[]) => void;
   onStageAll: () => void;
   onUnstageAll: () => void;
+  onContextMenu?: (file: VCSFileEntry, x: number, y: number) => void;
 }
 
 const CHANGE_TYPE_COLORS: Record<string, string> = {
@@ -39,11 +40,13 @@ function FileRow({
   isSelected,
   onSelect,
   onToggleStage,
+  onContextMenu,
 }: {
   file: VCSFileEntry;
   isSelected: boolean;
   onSelect: () => void;
   onToggleStage: () => void;
+  onContextMenu?: (x: number, y: number) => void;
 }) {
   const fileName = file.path.split("/").pop() ?? file.path;
   const dirPath = file.path.includes("/")
@@ -57,6 +60,12 @@ function FileRow({
         backgroundColor: isSelected ? "var(--ctp-surface0)" : "transparent",
       }}
       onClick={onSelect}
+      onContextMenu={(e) => {
+        if (onContextMenu) {
+          e.preventDefault();
+          onContextMenu(e.clientX, e.clientY);
+        }
+      }}
       onMouseEnter={(e) => {
         if (!isSelected)
           (e.currentTarget as HTMLElement).style.backgroundColor =
@@ -111,6 +120,7 @@ export function VCSFileList({
   onUnstageFiles,
   onStageAll,
   onUnstageAll,
+  onContextMenu,
 }: VCSFileListProps) {
   const stagedFiles = files.filter((f) => f.staged);
   const unstagedFiles = files.filter((f) => !f.staged);
@@ -164,6 +174,7 @@ export function VCSFileList({
               }
               onSelect={() => onSelectFile(file.path, true)}
               onToggleStage={() => handleToggleStage(file)}
+              onContextMenu={onContextMenu ? (x, y) => onContextMenu(file, x, y) : undefined}
             />
           ))
         )}
@@ -206,6 +217,7 @@ export function VCSFileList({
               }
               onSelect={() => onSelectFile(file.path, false)}
               onToggleStage={() => handleToggleStage(file)}
+              onContextMenu={onContextMenu ? (x, y) => onContextMenu(file, x, y) : undefined}
             />
           ))
         )}

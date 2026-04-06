@@ -576,6 +576,8 @@ export const api = {
     rpcRequest.vcsStageAll({ workspacePath }),
   vcsUnstageAll: (workspacePath: string) =>
     rpcRequest.vcsUnstageAll({ workspacePath }),
+  vcsRevertFiles: (workspacePath: string, paths: string[]) =>
+    rpcRequest.vcsRevertFiles({ workspacePath, paths }),
   vcsCommit: (workspacePath: string, message: string, amend: boolean) =>
     rpcRequest.vcsCommit({ workspacePath, message, amend }),
   vcsPush: (workspacePath: string) =>

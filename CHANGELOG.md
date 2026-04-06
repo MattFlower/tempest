@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Git VCS View scope selection — view changes from any commit on the branch or all changes since main/master, in addition to the existing working tree changes view
+
 ### Fixed
 
 ### Changed

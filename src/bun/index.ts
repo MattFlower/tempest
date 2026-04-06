@@ -48,6 +48,9 @@ import {
   vcsCommit,
   vcsPush,
   vcsGetFileDiff,
+  gitGetRecentCommits,
+  gitGetScopedFiles,
+  gitGetScopedFileDiff,
 } from "./vcs/git-commit-provider";
 import {
   jjLog,
@@ -726,6 +729,17 @@ const rpc = BrowserView.defineRPC({
       },
       vcsGetFileDiff: async (params: any) => {
         return await vcsGetFileDiff(params.workspacePath, params.filePath, params.staged);
+      },
+
+      // --- Git Commit/Scope Selection ---
+      gitGetRecentCommits: async (params: any) => {
+        return await gitGetRecentCommits(params.workspacePath, params.count);
+      },
+      gitGetScopedFiles: async (params: any) => {
+        return await gitGetScopedFiles(params.workspacePath, params.scope, params.commitRef);
+      },
+      gitGetScopedFileDiff: async (params: any) => {
+        return await gitGetScopedFileDiff(params.workspacePath, params.scope, params.filePath, params.commitRef);
       },
 
       // --- JJ (Jujutsu) VCS View ---

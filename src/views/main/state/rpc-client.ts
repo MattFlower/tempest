@@ -549,6 +549,14 @@ export const api = {
   vcsGetFileDiff: (workspacePath: string, filePath: string, staged: boolean) =>
     rpcRequest.vcsGetFileDiff({ workspacePath, filePath, staged }),
 
+  // Git Commit/Scope Selection
+  gitGetRecentCommits: (workspacePath: string, count?: number) =>
+    rpcRequest.gitGetRecentCommits({ workspacePath, count }),
+  gitGetScopedFiles: (workspacePath: string, scope: import("../../../shared/ipc-types").DiffScope, commitRef?: string) =>
+    rpcRequest.gitGetScopedFiles({ workspacePath, scope, commitRef }),
+  gitGetScopedFileDiff: (workspacePath: string, scope: import("../../../shared/ipc-types").DiffScope, filePath: string, commitRef?: string) =>
+    rpcRequest.gitGetScopedFileDiff({ workspacePath, scope, filePath, commitRef }),
+
   // JJ (Jujutsu) VCS View
   jjLog: (workspacePath: string, revset?: string) =>
     rpcRequest.jjLog({ workspacePath, revset }),

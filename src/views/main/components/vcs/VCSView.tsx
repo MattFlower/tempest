@@ -5,8 +5,13 @@
 // ============================================================
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { VCSFileEntry, VCSFileDiffResult } from "../../../../shared/ipc-types";
-import { VCSType } from "../../../../shared/ipc-types";
+import type {
+  VCSFileEntry,
+  VCSFileDiffResult,
+  GitCommitEntry,
+  GitScopedFileEntry,
+} from "../../../../shared/ipc-types";
+import { VCSType, DiffScope } from "../../../../shared/ipc-types";
 import { api } from "../../state/rpc-client";
 import { useStore } from "../../state/store";
 import { VCSFileList } from "./VCSFileList";
@@ -17,6 +22,9 @@ import {
   type MonacoDiffViewerHandle,
 } from "./MonacoDiffViewer";
 import { JJView } from "./JJView";
+import { GitScopeSelector } from "./GitScopeSelector";
+import { GitCommitPicker } from "./GitCommitPicker";
+import { GitScopedFileList } from "./GitScopedFileList";
 
 export function VCSView() {
   const selectedWorkspacePath = useStore((s) => s.selectedWorkspacePath);
@@ -67,6 +75,17 @@ function useVCSType(
 
 function GitVCSView({ workspacePath }: { workspacePath: string }) {
   const diffViewerRef = useRef<MonacoDiffViewerHandle>(null);
+
+  // --- Scope selection state ---
+  const [viewScope, setViewScope] = useState<DiffScope>(DiffScope.CurrentChange);
+  const [selectedCommitRef, setSelectedCommitRef] = useState<string | null>(null);
+  const [recentCommits, setRecentCommits] = useState<GitCommitEntry[]>([]);
+  const [commitsLoading, setCommitsLoading] = useState(false);
+  const [scopedFiles, setScopedFiles] = useState<GitScopedFileEntry[]>([]);
+  const [scopedSummary, setScopedSummary] = useState("");
+  const [scopedSelectedFile, setScopedSelectedFile] = useState<string | null>(null);
+
+  // --- Working changes state (existing) ---
   const [files, setFiles] = useState<VCSFileEntry[]>([]);
   const [branch, setBranch] = useState("");
   const [ahead, setAhead] = useState(0);
@@ -75,6 +94,8 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
     path: string;
     staged: boolean;
   } | null>(null);
+
+  // --- Shared state ---
   const [diffData, setDiffData] = useState<VCSFileDiffResult | null>(null);
   const [displayMode, setDisplayMode] = useState<"unified" | "side-by-side">(
     "side-by-side",
@@ -87,6 +108,8 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
   // Left panel width (resizable)
   const [leftPanelWidth, setLeftPanelWidth] = useState(280);
 
+  const isScoped = viewScope !== DiffScope.CurrentChange;
+
   // Auto-dismiss toast
   useEffect(() => {
     if (toast) {
@@ -95,7 +118,20 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
     }
   }, [toast]);
 
-  // Load status
+  // Clear selection state when scope changes
+  useEffect(() => {
+    setSelectedFile(null);
+    setScopedSelectedFile(null);
+    setDiffData(null);
+    setScopedFiles([]);
+    setScopedSummary("");
+    if (viewScope !== DiffScope.SingleCommit) {
+      setSelectedCommitRef(null);
+    }
+  }, [viewScope]);
+
+  // --- Working Changes data loading ---
+
   const loadStatus = useCallback(async () => {
     if (!workspacePath) return;
     setIsLoading(true);
@@ -116,10 +152,64 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
     loadStatus();
   }, [loadStatus]);
 
-  // Load diff for selected file
+  // --- Scoped data loading ---
+
+  // Load recent commits when switching to SingleCommit mode
   useEffect(() => {
-    if (!selectedFile || !workspacePath) {
-      setDiffData(null);
+    if (viewScope !== DiffScope.SingleCommit || !workspacePath) return;
+    let cancelled = false;
+    setCommitsLoading(true);
+    (async () => {
+      try {
+        const result = await api.gitGetRecentCommits(workspacePath);
+        if (!cancelled) {
+          setRecentCommits(result.commits);
+          // Auto-select first commit if none selected
+          if (!selectedCommitRef && result.commits.length > 0) {
+            setSelectedCommitRef(result.commits[0]!.hash);
+          }
+        }
+      } catch {
+        if (!cancelled) setRecentCommits([]);
+      }
+      if (!cancelled) setCommitsLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [viewScope, workspacePath]);
+
+  // Load scoped files when scope/commitRef changes
+  useEffect(() => {
+    if (viewScope === DiffScope.CurrentChange || !workspacePath) return;
+    if (viewScope === DiffScope.SingleCommit && !selectedCommitRef) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await api.gitGetScopedFiles(
+          workspacePath,
+          viewScope,
+          selectedCommitRef ?? undefined,
+        );
+        if (!cancelled) {
+          setScopedFiles(result.files);
+          setScopedSummary(result.summary);
+          setScopedSelectedFile(null);
+          setDiffData(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setScopedFiles([]);
+          setScopedSummary("Error loading files");
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [viewScope, selectedCommitRef, workspacePath]);
+
+  // Load diff for selected file (working changes mode)
+  useEffect(() => {
+    if (isScoped || !selectedFile || !workspacePath) {
+      if (!isScoped) setDiffData(null);
       return;
     }
 
@@ -140,9 +230,37 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
     return () => {
       cancelled = true;
     };
-  }, [selectedFile, workspacePath]);
+  }, [selectedFile, workspacePath, isScoped]);
 
-  // Stage/unstage operations
+  // Load diff for selected file (scoped mode)
+  useEffect(() => {
+    if (!isScoped || !scopedSelectedFile || !workspacePath) {
+      if (isScoped) setDiffData(null);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const diff = await api.gitGetScopedFileDiff(
+          workspacePath,
+          viewScope,
+          scopedSelectedFile,
+          selectedCommitRef ?? undefined,
+        );
+        if (!cancelled) setDiffData(diff);
+      } catch {
+        if (!cancelled) setDiffData(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [scopedSelectedFile, workspacePath, viewScope, selectedCommitRef, isScoped]);
+
+  // --- Stage/unstage operations ---
+
   const handleStageFiles = useCallback(
     async (paths: string[]) => {
       await api.vcsStageFiles(workspacePath, paths);
@@ -169,7 +287,8 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
     await loadStatus();
   }, [workspacePath, loadStatus]);
 
-  // Commit
+  // --- Commit ---
+
   const handleCommit = useCallback(
     async (message: string, amend: boolean) => {
       setIsCommitting(true);
@@ -189,7 +308,6 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
     [workspacePath, loadStatus],
   );
 
-  // Commit and Push
   const handleCommitAndPush = useCallback(
     async (message: string, amend: boolean) => {
       setIsCommitting(true);
@@ -219,7 +337,8 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
     [workspacePath, loadStatus],
   );
 
-  // Divider drag for left panel resize
+  // --- Divider drag ---
+
   const handleDividerDrag = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
@@ -240,7 +359,9 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
     [leftPanelWidth],
   );
 
-  if (isLoading) {
+  // --- Loading/error states (only for initial status load) ---
+
+  if (isLoading && viewScope === DiffScope.CurrentChange) {
     return (
       <div
         className="flex items-center justify-center h-full"
@@ -251,7 +372,7 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
     );
   }
 
-  if (error) {
+  if (error && viewScope === DiffScope.CurrentChange) {
     return (
       <div
         className="flex flex-col items-center justify-center h-full gap-2"
@@ -277,36 +398,68 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
 
   const stagedCount = files.filter((f) => f.staged).length;
 
+  // Determine the current file path and staged state for the diff header
+  const currentFilePath = isScoped ? scopedSelectedFile : selectedFile?.path ?? null;
+  const currentFileStaged = isScoped ? undefined : selectedFile?.staged;
+  const hasFileList = isScoped ? scopedFiles.length > 0 : files.length > 0;
+
   return (
     <div className="flex h-full w-full relative">
-      {/* Left panel — file list + commit panel */}
+      {/* Left panel — scope selector + file list + commit panel */}
       <div
         className="flex flex-col h-full flex-shrink-0"
         style={{ width: leftPanelWidth, borderRight: "1px solid var(--ctp-surface0)" }}
       >
-        {/* File list (scrollable) */}
-        <div className="flex-1 min-h-0">
-          <VCSFileList
-            files={files}
-            selectedFile={selectedFile}
-            onSelectFile={(path, staged) => setSelectedFile({ path, staged })}
-            onStageFiles={handleStageFiles}
-            onUnstageFiles={handleUnstageFiles}
-            onStageAll={handleStageAll}
-            onUnstageAll={handleUnstageAll}
-          />
-        </div>
+        {/* Scope selector (always shown) */}
+        <GitScopeSelector scope={viewScope} onScopeChange={setViewScope} />
 
-        {/* Commit panel (fixed at bottom) */}
-        <VCSCommitPanel
-          branch={branch}
-          ahead={ahead}
-          behind={behind}
-          stagedCount={stagedCount}
-          onCommit={handleCommit}
-          onCommitAndPush={handleCommitAndPush}
-          isCommitting={isCommitting}
-        />
+        {/* Commit picker (SingleCommit mode only) */}
+        {viewScope === DiffScope.SingleCommit && (
+          <GitCommitPicker
+            commits={recentCommits}
+            selectedHash={selectedCommitRef}
+            onSelect={setSelectedCommitRef}
+            isLoading={commitsLoading}
+          />
+        )}
+
+        {/* Working changes: file list + commit panel */}
+        {viewScope === DiffScope.CurrentChange && (
+          <>
+            <div className="flex-1 min-h-0">
+              <VCSFileList
+                files={files}
+                selectedFile={selectedFile}
+                onSelectFile={(path, staged) => setSelectedFile({ path, staged })}
+                onStageFiles={handleStageFiles}
+                onUnstageFiles={handleUnstageFiles}
+                onStageAll={handleStageAll}
+                onUnstageAll={handleUnstageAll}
+              />
+            </div>
+            <VCSCommitPanel
+              branch={branch}
+              ahead={ahead}
+              behind={behind}
+              stagedCount={stagedCount}
+              onCommit={handleCommit}
+              onCommitAndPush={handleCommitAndPush}
+              isCommitting={isCommitting}
+            />
+          </>
+        )}
+
+        {/* Scoped modes: read-only file list */}
+        {isScoped && (
+          <div className="flex-1 min-h-0">
+            <GitScopedFileList
+              files={scopedFiles}
+              selectedFilePath={scopedSelectedFile}
+              onSelectFile={setScopedSelectedFile}
+              summary={scopedSummary}
+            />
+          </div>
+        )}
       </div>
 
       {/* Resizable divider */}
@@ -322,13 +475,13 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
 
       {/* Right panel — diff viewer */}
       <div className="flex-1 h-full min-w-0 flex flex-col">
-        {selectedFile && diffData ? (
+        {currentFilePath && diffData ? (
           <>
             <VCSDiffHeader
-              filePath={selectedFile.path}
+              filePath={currentFilePath}
               displayMode={displayMode}
               onDisplayModeChange={setDisplayMode}
-              staged={selectedFile.staged}
+              staged={currentFileStaged}
               onNextDiff={() => diffViewerRef.current?.goToNextDiff()}
               onPrevDiff={() => diffViewerRef.current?.goToPrevDiff()}
             />
@@ -348,11 +501,11 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
             className="flex flex-col items-center justify-center h-full gap-2"
             style={{ color: "var(--ctp-subtext0)" }}
           >
-            {files.length === 0 ? (
+            {!hasFileList ? (
               <>
                 <span className="text-sm">No Changes</span>
                 <span className="text-xs opacity-60">
-                  Working tree is clean.
+                  {isScoped ? "No files in this scope." : "Working tree is clean."}
                 </span>
               </>
             ) : (

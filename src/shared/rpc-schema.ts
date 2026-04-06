@@ -37,6 +37,8 @@ import type {
   DiffScope,
   FileAIContext,
   FileChangeTimeline,
+  GitCommitLogResult,
+  GitScopedFilesResult,
   OpenPRState,
   PRDraftSummary,
 } from "./ipc-types";
@@ -455,6 +457,20 @@ export interface BunRequests {
   };
   vcsGetFileDiff: {
     params: { workspacePath: string; filePath: string; staged: boolean };
+    response: VCSFileDiffResult;
+  };
+
+  // --- Git Commit/Scope Selection ---
+  gitGetRecentCommits: {
+    params: { workspacePath: string; count?: number };
+    response: GitCommitLogResult;
+  };
+  gitGetScopedFiles: {
+    params: { workspacePath: string; scope: DiffScope; commitRef?: string };
+    response: GitScopedFilesResult;
+  };
+  gitGetScopedFileDiff: {
+    params: { workspacePath: string; scope: DiffScope; filePath: string; commitRef?: string };
     response: VCSFileDiffResult;
   };
 

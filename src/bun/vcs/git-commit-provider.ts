@@ -11,7 +11,12 @@ import type {
   VCSStatusResult,
   VCSCommitResult,
   VCSFileDiffResult,
+  GitCommitEntry,
+  GitCommitLogResult,
+  GitScopedFileEntry,
+  GitScopedFilesResult,
 } from "../../shared/ipc-types";
+import { DiffScope } from "../../shared/ipc-types";
 
 const pathResolver = new PathResolver();
 
@@ -340,6 +345,179 @@ export async function vcsGetFileDiff(
     }
   } catch {
     // Fallback: return empty strings
+  }
+
+  return { originalContent, modifiedContent, filePath, language };
+}
+
+// --- Git Commit/Scope Selection ---
+
+async function detectGitBaseBranch(workspacePath: string): Promise<string> {
+  try {
+    await runGitOrThrow(["rev-parse", "--verify", "main"], workspacePath);
+    return "main";
+  } catch {
+    return "master";
+  }
+}
+
+export async function gitGetRecentCommits(
+  workspacePath: string,
+  count?: number,
+): Promise<GitCommitLogResult> {
+  const n = count ?? 50;
+  const format = "%h%x00%H%x00%s%x00%an%x00%ar";
+  const output = await runGitOrThrow(
+    ["log", `--pretty=format:${format}`, `-n`, `${n}`],
+    workspacePath,
+  );
+
+  const commits: GitCommitEntry[] = [];
+  for (const line of output.split("\n")) {
+    if (!line.trim()) continue;
+    const parts = line.split("\x00");
+    if (parts.length < 5) continue;
+    commits.push({
+      hash: parts[0]!,
+      fullHash: parts[1]!,
+      message: parts[2]!,
+      author: parts[3]!,
+      date: parts[4]!,
+    });
+  }
+
+  const branchOutput = await runGitOrThrow(
+    ["rev-parse", "--abbrev-ref", "HEAD"],
+    workspacePath,
+  );
+
+  return { commits, branch: branchOutput.trim() };
+}
+
+function parseNameStatus(output: string): GitScopedFileEntry[] {
+  const files: GitScopedFileEntry[] = [];
+  for (const line of output.split("\n")) {
+    if (!line.trim()) continue;
+    const parts = line.split("\t");
+    if (parts.length < 2) continue;
+
+    const statusCode = parts[0]!;
+    if (statusCode.startsWith("R") || statusCode.startsWith("C")) {
+      // Rename/copy: R100\told\tnew
+      files.push({
+        path: parts[2] ?? parts[1]!,
+        oldPath: parts[1],
+        changeType: statusCode.startsWith("R") ? "renamed" : "copied",
+      });
+    } else {
+      files.push({
+        path: parts[1]!,
+        changeType: statusCharToChangeType(statusCode[0] ?? "M"),
+      });
+    }
+  }
+  return files;
+}
+
+export async function gitGetScopedFiles(
+  workspacePath: string,
+  scope: DiffScope,
+  commitRef?: string,
+): Promise<GitScopedFilesResult> {
+  if (scope === DiffScope.SingleCommit && commitRef) {
+    const output = await runGitOrThrow(
+      ["diff-tree", "--no-commit-id", "-r", "--name-status", commitRef],
+      workspacePath,
+    );
+    const files = parseNameStatus(output);
+
+    // Get commit message for summary
+    const msgOutput = await runGitOrThrow(
+      ["log", "--format=%h — %s", "-n", "1", commitRef],
+      workspacePath,
+    );
+
+    return { files, summary: msgOutput.trim() };
+  }
+
+  if (scope === DiffScope.SinceTrunk) {
+    const baseBranch = await detectGitBaseBranch(workspacePath);
+    const mergeBase = (
+      await runGitOrThrow(["merge-base", "HEAD", baseBranch], workspacePath)
+    ).trim();
+
+    const output = await runGitOrThrow(
+      ["diff", "--name-status", `${mergeBase}..HEAD`],
+      workspacePath,
+    );
+    const files = parseNameStatus(output);
+
+    // Count commits since trunk
+    const countOutput = await runGitOrThrow(
+      ["rev-list", "--count", `${mergeBase}..HEAD`],
+      workspacePath,
+    );
+    const count = parseInt(countOutput.trim(), 10);
+
+    return {
+      files,
+      summary: `${count} commit${count !== 1 ? "s" : ""} since ${baseBranch}`,
+    };
+  }
+
+  // CurrentChange — shouldn't be called for this scope, but handle gracefully
+  return { files: [], summary: "" };
+}
+
+export async function gitGetScopedFileDiff(
+  workspacePath: string,
+  scope: DiffScope,
+  filePath: string,
+  commitRef?: string,
+): Promise<VCSFileDiffResult> {
+  const language = detectLanguage(filePath);
+  let originalContent = "";
+  let modifiedContent = "";
+
+  if (scope === DiffScope.SingleCommit && commitRef) {
+    try {
+      originalContent = await runGitOrThrow(
+        ["show", `${commitRef}~1:${filePath}`],
+        workspacePath,
+      );
+    } catch {
+      // New file in this commit
+    }
+    try {
+      modifiedContent = await runGitOrThrow(
+        ["show", `${commitRef}:${filePath}`],
+        workspacePath,
+      );
+    } catch {
+      // Deleted in this commit
+    }
+  } else if (scope === DiffScope.SinceTrunk) {
+    const baseBranch = await detectGitBaseBranch(workspacePath);
+    const mergeBase = (
+      await runGitOrThrow(["merge-base", "HEAD", baseBranch], workspacePath)
+    ).trim();
+
+    try {
+      originalContent = await runGitOrThrow(
+        ["show", `${mergeBase}:${filePath}`],
+        workspacePath,
+      );
+    } catch {
+      // New file since trunk
+    }
+    try {
+      modifiedContent = await runGitOrThrow(
+        ["show", `HEAD:${filePath}`],
+        workspacePath,
+      );
+    } catch {
+      // Deleted since trunk
+    }
   }
 
   return { originalContent, modifiedContent, filePath, language };

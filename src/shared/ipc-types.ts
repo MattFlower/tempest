@@ -393,6 +393,32 @@ export interface VCSFileDiffResult {
   language: string;
 }
 
+// --- Git Commit/Scope Selection ---
+
+export interface GitCommitEntry {
+  hash: string;
+  fullHash: string;
+  message: string;
+  author: string;
+  date: string;
+}
+
+export interface GitCommitLogResult {
+  commits: GitCommitEntry[];
+  branch: string;
+}
+
+export interface GitScopedFileEntry {
+  path: string;
+  oldPath?: string;
+  changeType: VCSFileChangeType;
+}
+
+export interface GitScopedFilesResult {
+  files: GitScopedFileEntry[];
+  summary: string;
+}
+
 // --- JJ (Jujutsu) VCS View ---
 
 export interface JJRevision {

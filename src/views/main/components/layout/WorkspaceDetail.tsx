@@ -86,23 +86,19 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
           addTab(focusedPaneId, tab);
         }
       }
-      // View mode shortcuts: Cmd+1 = Terminal, Cmd+2 = Diff, Cmd+3 = Dashboard
+      // View mode shortcuts: Cmd+1 = Terminal, Cmd+2 = Diff, Cmd+3 = Dashboard, Cmd+4 = VCS
       if (e.metaKey && !e.shiftKey && !e.altKey) {
-        if (e.key === "1") {
+        const modeForKey: Record<string, ViewMode> = {
+          "1": ViewMode.Terminal,
+          "2": ViewMode.Diff,
+          "3": ViewMode.Dashboard,
+          "4": ViewMode.VCS,
+        };
+        const mode = modeForKey[e.key];
+        if (mode) {
           e.preventDefault();
-          setViewMode(workspacePath, ViewMode.Terminal);
-        }
-        if (e.key === "2") {
-          e.preventDefault();
-          setViewMode(workspacePath, ViewMode.Diff);
-        }
-        if (e.key === "3") {
-          e.preventDefault();
-          setViewMode(workspacePath, ViewMode.Dashboard);
-        }
-        if (e.key === "4") {
-          e.preventDefault();
-          setViewMode(workspacePath, ViewMode.VCS);
+          useStore.getState().setProgressViewActive(false);
+          setViewMode(workspacePath, mode);
         }
       }
     };

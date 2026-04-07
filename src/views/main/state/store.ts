@@ -34,6 +34,10 @@ export interface TempestStore {
   isTabDragActive: boolean;
   setTabDragActive: (active: boolean) => void;
 
+  // --- Progress view (app-level, cross-workspace) ---
+  progressViewActive: boolean;
+  setProgressViewActive: (active: boolean) => void;
+
   // --- UI state ---
   sidebarWidth: number;
   sidebarVisible: boolean;
@@ -98,6 +102,9 @@ export const useStore = create<TempestStore>((set) => ({
   isTabDragActive: false,
   setTabDragActive: (active) => set({ isTabDragActive: active }),
 
+  progressViewActive: false,
+  setProgressViewActive: (active) => set({ progressViewActive: active }),
+
   sidebarWidth: 240,
   sidebarVisible: true,
   commandPaletteVisible: false,
@@ -116,7 +123,7 @@ export const useStore = create<TempestStore>((set) => ({
     set((s) => ({
       workspacesByRepo: { ...s.workspacesByRepo, [repoId]: workspaces },
     })),
-  selectWorkspace: (path) =>
+  selectWorkspace: (path) => {
     set((s) => {
       let focusMap = s.focusedPaneIds;
       // Save current focus for the departing workspace
@@ -129,7 +136,13 @@ export const useStore = create<TempestStore>((set) => ({
         focusedPaneId: path ? (focusMap[path] ?? null) : null,
         focusedPaneIds: focusMap,
       };
-    }),
+    });
+    if (path) {
+      import("./rpc-client").then(({ api }) => {
+        api.notifyWorkspaceOpened(path).catch(() => {});
+      });
+    }
+  },
   setSidebarInfo: (path, info) =>
     set((s) => ({ sidebarInfo: { ...s.sidebarInfo, [path]: info } })),
   setConfig: (config) => set({ config }),

@@ -4,6 +4,7 @@ import { Sidebar } from "./components/sidebar/Sidebar";
 import { CommandPalette } from "./components/palette/CommandPalette";
 import { WorkspaceDetail } from "./components/layout";
 import { ViewModeBar } from "./components/layout/ViewModeBar";
+import { ProgressView } from "./components/progress/ProgressView";
 import { OnboardingDialog } from "./components/onboarding/OnboardingDialog";
 import { SettingsDialog } from "./components/settings/SettingsDialog";
 import { UsageFooter } from "./components/usage/UsageFooter";
@@ -23,6 +24,7 @@ export function App() {
   const paneTrees = useStore((s) => s.paneTrees);
   const config = useStore((s) => s.config);
   const settingsDialogVisible = useStore((s) => s.settingsDialogVisible);
+  const progressViewActive = useStore((s) => s.progressViewActive);
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [configLoaded, setConfigLoaded] = useState(false);
@@ -89,6 +91,19 @@ export function App() {
     });
   }, []);
 
+  // Cmd+5 toggles Progress view
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.metaKey && !e.shiftKey && !e.altKey && e.key === "5") {
+        e.preventDefault();
+        const store = useStore.getState();
+        store.setProgressViewActive(!store.progressViewActive);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
+
   const [isDragging, setIsDragging] = useState(false);
   const startX = useRef(0);
   const startWidth = useRef(0);
@@ -145,75 +160,74 @@ export function App() {
       )}
 
       {/* View mode selector bar — spans full width above sidebar/workspace split */}
-      {selectedWorkspacePath && (
-        <ViewModeBar workspacePath={selectedWorkspacePath} />
-      )}
-      {!selectedWorkspacePath && (
-        <div
-          className="electrobun-webkit-app-region-drag h-8 flex-shrink-0"
-          style={{ backgroundColor: "var(--ctp-mantle)" }}
-        />
-      )}
+      <ViewModeBar workspacePath={selectedWorkspacePath} />
 
       {/* Accent line below view mode bar */}
       <div className="h-px flex-shrink-0" style={{ backgroundColor: "var(--ctp-surface0)" }} />
 
       {/* Main content area — starts below accent line */}
       <div className="flex flex-1 min-h-0">
-        {/* Sidebar */}
-        {sidebarVisible && (
+        {progressViewActive ? (
+          /* Progress view — full width, hides sidebar */
+          <ProgressView />
+        ) : (
           <>
-            <div
-              className="flex-shrink-0"
-              style={{ width: sidebarWidth }}
-            >
-              <Sidebar />
-            </div>
+            {/* Sidebar */}
+            {sidebarVisible && (
+              <>
+                <div
+                  className="flex-shrink-0"
+                  style={{ width: sidebarWidth }}
+                >
+                  <Sidebar />
+                </div>
 
-            {/* Draggable divider */}
-            <div
-              className="w-px flex-shrink-0 cursor-col-resize"
-              style={{
-                backgroundColor: isDragging ? "var(--ctp-surface2)" : "var(--ctp-surface0)",
-                opacity: isDragging ? 1 : 0.5,
-                padding: "0 2px",
-                margin: "0 -2px",
-              }}
-              onMouseDown={onDividerMouseDown}
-            />
+                {/* Draggable divider */}
+                <div
+                  className="w-px flex-shrink-0 cursor-col-resize"
+                  style={{
+                    backgroundColor: isDragging ? "var(--ctp-surface2)" : "var(--ctp-surface0)",
+                    opacity: isDragging ? 1 : 0.5,
+                    padding: "0 2px",
+                    margin: "0 -2px",
+                  }}
+                  onMouseDown={onDividerMouseDown}
+                />
+              </>
+            )}
+
+            {/* Workspace Detail — all visited workspaces rendered simultaneously,
+                hidden with opacity pattern to preserve terminal state. */}
+            <div className="flex-1 min-w-0 flex flex-col relative">
+              {/* Workspace views — stacked, only selected is visible.
+                  Includes selected workspace (even if no tree yet) plus all
+                  previously visited workspaces (to keep their terminals alive). */}
+              {allWorkspacePaths.map((wsPath) => (
+                <div
+                  key={wsPath}
+                  className={`absolute inset-0 ${
+                    wsPath === selectedWorkspacePath
+                      ? "opacity-100"
+                      : "opacity-0 pointer-events-none"
+                  }`}
+                >
+                  <WorkspaceDetail workspacePath={wsPath} />
+                </div>
+              ))}
+
+              {/* Empty state — shown when no workspace selected */}
+              {!selectedWorkspacePath && (
+                <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--ctp-overlay0)]">
+                  <svg className="w-10 h-10" viewBox="0 0 24 24" fill="currentColor" opacity={0.3}>
+                    <path d="M4 17.27V4h16v13.27l-2-1.15-2 1.15-2-1.15-2 1.15-2-1.15-2 1.15-2-1.15-2 1.15ZM2 2v18l4-2.3 2 1.15 2-1.15 2 1.15 2-1.15 2 1.15 2-1.15L22 20V2H2Z" />
+                  </svg>
+                  <span className="text-sm">No Workspace Selected</span>
+                  <span className="text-xs">Select a workspace from the sidebar or create a new one.</span>
+                </div>
+              )}
+            </div>
           </>
         )}
-
-        {/* Workspace Detail — all visited workspaces rendered simultaneously,
-            hidden with opacity pattern to preserve terminal state. */}
-        <div className="flex-1 min-w-0 flex flex-col relative">
-          {/* Workspace views — stacked, only selected is visible.
-              Includes selected workspace (even if no tree yet) plus all
-              previously visited workspaces (to keep their terminals alive). */}
-          {allWorkspacePaths.map((wsPath) => (
-            <div
-              key={wsPath}
-              className={`absolute inset-0 ${
-                wsPath === selectedWorkspacePath
-                  ? "opacity-100"
-                  : "opacity-0 pointer-events-none"
-              }`}
-            >
-              <WorkspaceDetail workspacePath={wsPath} />
-            </div>
-          ))}
-
-          {/* Empty state — shown when no workspace selected */}
-          {!selectedWorkspacePath && (
-            <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--ctp-overlay0)]">
-              <svg className="w-10 h-10" viewBox="0 0 24 24" fill="currentColor" opacity={0.3}>
-                <path d="M4 17.27V4h16v13.27l-2-1.15-2 1.15-2-1.15-2 1.15-2-1.15-2 1.15-2-1.15-2 1.15ZM2 2v18l4-2.3 2 1.15 2-1.15 2 1.15 2-1.15 2 1.15 2-1.15L22 20V2H2Z" />
-              </svg>
-              <span className="text-sm">No Workspace Selected</span>
-              <span className="text-xs">Select a workspace from the sidebar or create a new one.</span>
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Usage footer — token counts and costs */}

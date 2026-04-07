@@ -25,6 +25,9 @@ export const CCUSAGE_STATE_FILE = join(TEMPEST_DIR, "ccusage-state.json");
 // History cache
 export const HISTORY_CACHE_FILE = join(TEMPEST_DIR, "history-cache.json");
 
+// Progress view cache
+export const PROGRESS_CACHE_FILE = join(TEMPEST_DIR, "progress-cache.json");
+
 // Runtime sockets
 export const HOOK_SOCKET = join(TEMPEST_DIR, "hook.sock");
 export const PR_CHANNEL_SOCKET = join(TEMPEST_DIR, "pr-channel.sock");

@@ -65,10 +65,10 @@ function HttpServerIcon() {
 }
 
 interface ViewModeBarProps {
-  workspacePath: string;
+  workspacePath: string | null;
 }
 
-const modes: { mode: ViewMode; label: string }[] = [
+const workspaceModes: { mode: ViewMode; label: string }[] = [
   { mode: ViewMode.Dashboard, label: "Dashboard" },
   { mode: ViewMode.Terminal, label: "Terminal" },
   { mode: ViewMode.Diff, label: "Diff View" },
@@ -77,16 +77,23 @@ const modes: { mode: ViewMode; label: string }[] = [
 
 export function ViewModeBar({ workspacePath }: ViewModeBarProps) {
   const viewMode = useStore(
-    (s) => s.workspaceViewMode[workspacePath] ?? ViewMode.Terminal,
+    (s) => workspacePath ? (s.workspaceViewMode[workspacePath] ?? ViewMode.Terminal) : ViewMode.Terminal,
   );
   const setViewMode = useStore((s) => s.setViewMode);
+  const progressActive = useStore((s) => s.progressViewActive);
+  const setProgressActive = useStore((s) => s.setProgressViewActive);
 
-  const handleSelect = useCallback(
+  const handleSelectWorkspaceMode = useCallback(
     (mode: ViewMode) => {
-      setViewMode(workspacePath, mode);
+      if (progressActive) setProgressActive(false);
+      if (workspacePath) setViewMode(workspacePath, mode);
     },
-    [workspacePath, setViewMode],
+    [workspacePath, setViewMode, progressActive, setProgressActive],
   );
+
+  const handleToggleProgress = useCallback(() => {
+    setProgressActive(!progressActive);
+  }, [progressActive, setProgressActive]);
 
   return (
     <div
@@ -98,16 +105,28 @@ export function ViewModeBar({ workspacePath }: ViewModeBarProps) {
         className="electrobun-webkit-app-region-no-drag flex items-center rounded-full overflow-hidden border border-[var(--ctp-surface0)]"
         style={{ backgroundColor: "var(--ctp-crust)" }}
       >
-        {modes.map(({ mode, label }) => {
-          const isActive = viewMode === mode;
+        {/* Progress pill — always first */}
+        <button
+          onClick={handleToggleProgress}
+          className="px-4 py-2 text-xs font-medium rounded-full transition-colors duration-100"
+          style={{
+            backgroundColor: progressActive ? "var(--ctp-surface0)" : "transparent",
+            color: "var(--ctp-text)",
+          }}
+        >
+          Progress
+        </button>
+        {/* Workspace view mode pills */}
+        {workspaceModes.map(({ mode, label }) => {
+          const isActive = !progressActive && viewMode === mode;
           return (
             <button
               key={mode}
-              onClick={() => handleSelect(mode)}
+              onClick={() => handleSelectWorkspaceMode(mode)}
               className="px-4 py-2 text-xs font-medium rounded-full transition-colors duration-100"
               style={{
                 backgroundColor: isActive ? "var(--ctp-surface0)" : "transparent",
-                color: "var(--ctp-text)",
+                color: progressActive ? "var(--ctp-overlay1)" : "var(--ctp-text)",
               }}
             >
               {label}

@@ -41,6 +41,8 @@ import type {
   GitScopedFilesResult,
   OpenPRState,
   PRDraftSummary,
+  PRDetailInfo,
+  WorkspaceProgressInfo,
 } from "./ipc-types";
 
 // --- Bun-side handlers (Webview calls these) ---
@@ -443,6 +445,20 @@ export interface BunRequests {
   };
   updateDraftText: {
     params: { draftId: string; text: string };
+    response: void;
+  };
+
+  // --- Progress View ---
+  getProgressData: {
+    params: { forceRefresh?: boolean };
+    response: WorkspaceProgressInfo[];
+  };
+  getPRDetail: {
+    params: { repoPath: string; branch: string };
+    response: PRDetailInfo | null;
+  };
+  notifyWorkspaceOpened: {
+    params: { workspacePath: string };
     response: void;
   };
 

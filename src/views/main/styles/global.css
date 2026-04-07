@@ -125,6 +125,12 @@ button {
   background: transparent;
 }
 
+/* Spin animation for refresh icons */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* Drag region for titlebar — Electrobun uses class-based detection,
    not CSS -webkit-app-region. Use .electrobun-webkit-app-region-drag
    and .electrobun-webkit-app-region-no-drag classes directly. */

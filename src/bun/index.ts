@@ -39,6 +39,7 @@ import { readFileForEditor, writeFileForEditor, resolveModulePath } from "./edit
 import { AIContextProvider } from "./diff/ai-context-provider";
 import { PRMonitor } from "./pr/pr-monitor";
 import { lookupPRUrl } from "./pr/pr-url-lookup";
+import { getPRDetail, getPRDetailCached, clearPRDetailCache, getWorkspaceMeta, setWorkspaceLastOpened, resolveWorkspaceCreatedAt } from "./pr/pr-detail";
 import { getDefaultTitleAndBody, openPR as openPRAction, updatePR as updatePRAction } from "./pr/pr-open";
 import { getAssignedPRs, refreshAssignedPRs } from "./pr/pr-assigned";
 import { startPRReview } from "./pr/pr-review-coordinator";
@@ -693,6 +694,114 @@ const rpc = BrowserView.defineRPC({
         sessionStateManager.savePRState(params.workspacePath, params.prState);
       },
 
+      // --- Progress View ---
+      getProgressData: async (params: any) => {
+        const forceRefresh = params?.forceRefresh ?? false;
+        if (forceRefresh) clearPRDetailCache();
+
+        const repos = workspaceManager.getRepos();
+        const results: any[] = [];
+        const allActivityStates = activityTracker.allCWDStates();
+        const backgroundRefreshes: Promise<void>[] = [];
+
+        for (const repo of repos) {
+          const workspaces = workspaceManager.getWorkspaces(repo.id);
+          for (const ws of workspaces) {
+            const sidebarInfo = await workspaceManager.getSidebarInfo(ws.path);
+            const prState = sessionStateManager.getPRState(ws.path);
+            const monitorConfig = prMonitor.getMonitorConfig(ws.path);
+            const activity = allActivityStates[ws.path];
+            const hasDiffChanges =
+              (sidebarInfo.diffStats?.additions ?? 0) +
+                (sidebarInfo.diffStats?.deletions ?? 0) >
+              0;
+
+            // Determine stage
+            let stage: string;
+            let prDetail = undefined;
+            let prURL = prState?.prURL;
+            const branch = sidebarInfo.bookmarkName;
+
+            if (forceRefresh && branch) {
+              // Force refresh: fetch fresh PR data synchronously for all workspaces with branches
+              const detail = await getPRDetail(ws.repoPath, branch);
+              if (detail) {
+                prDetail = detail;
+                prURL = prURL ?? detail.prURL;
+                stage = detail.state === "merged" ? "merged" : "pullRequest";
+              } else if (prState?.prURL) {
+                stage = "pullRequest";
+              } else if (hasDiffChanges || activity !== undefined) {
+                stage = "inDevelopment";
+              } else {
+                stage = "new";
+              }
+            } else {
+              // Normal path: use cached PR data for instant response
+              const cachedPR = branch ? getPRDetailCached(ws.repoPath, branch) : null;
+
+              if (prState?.prURL || cachedPR) {
+                if (cachedPR) {
+                  prDetail = cachedPR;
+                  prURL = prURL ?? cachedPR.prURL;
+                  stage = cachedPR.state === "merged" ? "merged" : "pullRequest";
+                } else if (branch) {
+                  stage = "pullRequest";
+                  backgroundRefreshes.push(
+                    getPRDetail(ws.repoPath, branch).then(() => {}),
+                  );
+                } else {
+                  stage = "pullRequest";
+                }
+              } else if (hasDiffChanges || activity !== undefined) {
+                stage = "inDevelopment";
+                if (branch) {
+                  backgroundRefreshes.push(
+                    getPRDetail(ws.repoPath, branch).then(() => {}),
+                  );
+                }
+              } else {
+                stage = "new";
+              }
+            }
+
+            // Workspace metadata (created date from filesystem, last opened from cache)
+            const meta = getWorkspaceMeta(ws.path);
+            const createdAt = await resolveWorkspaceCreatedAt(ws.path);
+
+            results.push({
+              workspaceId: ws.id,
+              workspacePath: ws.path,
+              workspaceName: ws.name,
+              repoName: repo.name,
+              repoPath: ws.repoPath,
+              stage,
+              branchName: sidebarInfo.bookmarkName,
+              diffStats: sidebarInfo.diffStats,
+              activityState: activity,
+              prDetail,
+              isMonitored: !!monitorConfig,
+              prURL,
+              createdAt,
+              lastOpenedAt: meta.lastOpenedAt,
+            });
+          }
+        }
+
+        // Let background fetches run without blocking the response
+        if (backgroundRefreshes.length > 0) {
+          Promise.all(backgroundRefreshes).catch(() => {});
+        }
+
+        return results;
+      },
+      getPRDetail: async (params: any) => {
+        return await getPRDetail(params.repoPath, params.branch);
+      },
+      notifyWorkspaceOpened: (params: any) => {
+        setWorkspaceLastOpened(params.workspacePath);
+      },
+
       // --- PR Review (create workspace for PR) ---
       startPRReview: async (params: any) => {
         return await startPRReview(workspaceManager, params.repoId, params.prNumber);
@@ -1054,6 +1163,7 @@ ApplicationMenu.setApplicationMenu([
       { label: "Toggle Sidebar", action: "toggle-sidebar", accelerator: "Cmd+\\" },
       { label: "Command Palette", action: "command-palette", accelerator: "Cmd+Shift+P" },
       { type: "separator" },
+      { label: "Progress", action: "view-progress", accelerator: "Cmd+5" },
       { label: "Terminal", action: "view-terminal", accelerator: "Cmd+1" },
       { label: "Diff", action: "view-diff", accelerator: "Cmd+2" },
       { label: "Dashboard", action: "view-dashboard", accelerator: "Cmd+3" },

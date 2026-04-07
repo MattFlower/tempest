@@ -309,22 +309,29 @@ const rpc = Electroview.defineRPC({
               // Ensure sidebar is visible so user can use the Add Repository button
               if (!store.sidebarVisible) store.toggleSidebar();
               break;
+            case "view-progress":
+              store.setProgressViewActive(!store.progressViewActive);
+              break;
             case "view-terminal":
+              if (store.progressViewActive) store.setProgressViewActive(false);
               if (store.selectedWorkspacePath) {
                 store.setViewMode(store.selectedWorkspacePath, ViewMode.Terminal);
               }
               break;
             case "view-diff":
+              if (store.progressViewActive) store.setProgressViewActive(false);
               if (store.selectedWorkspacePath) {
                 store.setViewMode(store.selectedWorkspacePath, ViewMode.Diff);
               }
               break;
             case "view-dashboard":
+              if (store.progressViewActive) store.setProgressViewActive(false);
               if (store.selectedWorkspacePath) {
                 store.setViewMode(store.selectedWorkspacePath, ViewMode.Dashboard);
               }
               break;
             case "view-vcs":
+              if (store.progressViewActive) store.setProgressViewActive(false);
               if (store.selectedWorkspacePath) {
                 store.setViewMode(store.selectedWorkspacePath, ViewMode.VCS);
               }
@@ -525,6 +532,14 @@ export const api = {
   // Repo URL (GitHub)
   getRepoGitHubUrl: (workspacePath: string) =>
     rpcRequest.getRepoGitHubUrl({ workspacePath }),
+
+  // Progress View
+  getProgressData: (forceRefresh?: boolean) =>
+    rpcRequest.getProgressData({ forceRefresh }),
+  getPRDetail: (repoPath: string, branch: string) =>
+    rpcRequest.getPRDetail({ repoPath, branch }),
+  notifyWorkspaceOpened: (workspacePath: string) =>
+    rpcRequest.notifyWorkspaceOpened({ workspacePath }),
 
   // PR URL Lookup
   lookupPRUrl: (workspacePath: string) =>

@@ -157,6 +157,53 @@ export interface HookEvent {
   toolName?: string;
 }
 
+// --- Progress View ---
+
+export enum WorkspaceStage {
+  New = "new",
+  InDevelopment = "inDevelopment",
+  PullRequest = "pullRequest",
+  Merged = "merged",
+}
+
+export interface PRDetailInfo {
+  prNumber: number;
+  prURL: string;
+  state: "open" | "draft" | "merged" | "closed";
+  title: string;
+  openedAt: string;
+  mergedAt?: string;
+  reviewSummary: {
+    approved: number;
+    changesRequested: number;
+    pending: number;
+  };
+  comments: {
+    noResponse: number;
+    unresolved: number;
+    resolved: number;
+  };
+  checksPassed: number;
+  checksFailed: number;
+}
+
+export interface WorkspaceProgressInfo {
+  workspaceId: string;
+  workspacePath: string;
+  workspaceName: string;
+  repoName: string;
+  repoPath: string;
+  stage: WorkspaceStage;
+  branchName?: string;
+  diffStats?: DiffStats;
+  activityState?: ActivityState;
+  prDetail?: PRDetailInfo;
+  isMonitored: boolean;
+  prURL?: string;
+  createdAt?: string;
+  lastOpenedAt?: string;
+}
+
 // --- Open PR State ---
 
 export interface OpenPRState {

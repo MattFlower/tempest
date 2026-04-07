@@ -68,6 +68,7 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
   const [runningScript, setRunningScript] = useState<CustomScript | null>(null);
   const [packageScripts, setPackageScripts] = useState<Array<{ name: string; command: string }>>([]);
   const [disablePackageScripts, setDisablePackageScripts] = useState(false);
+  const [hiddenPackageScripts, setHiddenPackageScripts] = useState<string[]>([]);
   const [installedEditors, setInstalledEditors] = useState<Array<{ id: string; name: string; category: "editor" | "terminal" | "file-manager" }>>([]);
 
   // Find workspace object to get name and status
@@ -92,6 +93,7 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
     api.getRepoSettings(workspace.repoPath).then((settings: { customScripts?: CustomScript[]; disablePackageScripts?: boolean }) => {
       setCustomScripts(settings.customScripts ?? []);
       setDisablePackageScripts(settings.disablePackageScripts ?? false);
+      setHiddenPackageScripts(settings.hiddenPackageScripts ?? []);
     });
   }, [workspace?.repoPath]);
 
@@ -348,19 +350,23 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
     },
   ];
 
+  const visiblePackageScripts = packageScripts.filter(
+    (ps) => !hiddenPackageScripts.includes(ps.name)
+  );
+
   const scriptsItems: DropdownItem[] = [
     ...customScripts.map((cs) => ({
       label: cs.name,
       action: () => handleRunScript(cs),
     })),
-    ...(customScripts.length > 0 && packageScripts.length > 0
+    ...(customScripts.length > 0 && visiblePackageScripts.length > 0
       ? [{ separator: true } as const]
       : []),
-    ...packageScripts.map((ps) => ({
+    ...visiblePackageScripts.map((ps) => ({
       label: ps.command,
       action: () => handleRunPackageScript(ps),
     })),
-    ...(customScripts.length > 0 || packageScripts.length > 0
+    ...(customScripts.length > 0 || visiblePackageScripts.length > 0
       ? [{ separator: true } as const]
       : []),
     { label: "Manage Scripts", action: () => setShowScriptDialog(true) },
@@ -456,10 +462,13 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
           workspaceName={workspace.name}
           scripts={customScripts}
           disablePackageScripts={disablePackageScripts}
+          packageScripts={packageScripts}
+          hiddenPackageScripts={hiddenPackageScripts}
           onChanged={setCustomScripts}
           onDisablePackageScriptsChanged={(disabled) => {
             setDisablePackageScripts(disabled);
           }}
+          onHiddenPackageScriptsChanged={setHiddenPackageScripts}
           onDismiss={() => setShowScriptDialog(false)}
         />
       )}

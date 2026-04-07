@@ -88,8 +88,8 @@ export function DropdownButton({ label, icon, items, onDefaultAction, onOpen }: 
 
       {isOpen && (
         <div
-          className="absolute right-0 top-full mt-1 min-w-[160px] rounded-lg border border-[var(--ctp-surface1)] bg-[var(--ctp-surface0)] shadow-lg overflow-hidden"
-          style={{ zIndex: 30 }}
+          className="absolute right-0 top-full mt-1 min-w-[160px] rounded-lg border border-[var(--ctp-surface1)] bg-[var(--ctp-surface0)] shadow-lg overflow-y-auto overflow-x-hidden"
+          style={{ zIndex: 30, maxHeight: 'calc(100vh - 80px)' }}
         >
           {items.map((item, i) =>
             "separator" in item ? (

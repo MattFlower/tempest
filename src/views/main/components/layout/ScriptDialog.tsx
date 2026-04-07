@@ -10,8 +10,11 @@ interface Props {
   workspaceName: string;
   scripts: CustomScript[];
   disablePackageScripts: boolean;
+  packageScripts: Array<{ name: string; command: string }>;
+  hiddenPackageScripts: string[];
   onChanged: (scripts: CustomScript[]) => void;
   onDisablePackageScriptsChanged: (disabled: boolean) => void;
+  onHiddenPackageScriptsChanged: (hidden: string[]) => void;
   onDismiss: () => void;
 }
 
@@ -21,8 +24,11 @@ export function ScriptDialog({
   workspaceName,
   scripts,
   disablePackageScripts,
+  packageScripts,
+  hiddenPackageScripts,
   onChanged,
   onDisablePackageScriptsChanged,
+  onHiddenPackageScriptsChanged,
   onDismiss,
 }: Props) {
   useOverlay();
@@ -63,6 +69,15 @@ export function ScriptDialog({
       customScripts: updated,
     });
     onChanged(updated);
+  };
+
+  const persistHiddenScripts = async (hidden: string[]) => {
+    const settings = await api.getRepoSettings(repoPath);
+    await api.saveRepoSettings(repoPath, {
+      ...settings,
+      hiddenPackageScripts: hidden,
+    });
+    onHiddenPackageScriptsChanged(hidden);
   };
 
   const handleDelete = async (id: string) => {
@@ -222,6 +237,65 @@ export function ScriptDialog({
             Auto-detect scripts from package.json
           </span>
         </label>
+
+        {/* Package scripts visibility */}
+        {!disablePackageScripts && packageScripts.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold" style={{ color: "var(--ctp-subtext0)" }}>
+                Package Scripts ({packageScripts.length})
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => persistHiddenScripts([])}
+                  className="text-[11px] font-semibold transition-colors"
+                  style={{ color: "var(--ctp-blue)" }}
+                >
+                  Select All
+                </button>
+                <button
+                  onClick={() => persistHiddenScripts(packageScripts.map((ps) => ps.name))}
+                  className="text-[11px] font-semibold transition-colors"
+                  style={{ color: "var(--ctp-blue)" }}
+                >
+                  Deselect All
+                </button>
+              </div>
+            </div>
+            <div
+              className="flex flex-col gap-0.5 overflow-y-auto rounded"
+              style={{ maxHeight: 200, backgroundColor: "var(--ctp-surface0)", border: "1px solid var(--ctp-surface1)" }}
+            >
+              {packageScripts.map((ps) => {
+                const isVisible = !hiddenPackageScripts.includes(ps.name);
+                return (
+                  <label
+                    key={ps.name}
+                    className="flex items-center gap-2 px-3 py-1 cursor-pointer hover:bg-[var(--ctp-surface1)] transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isVisible}
+                      onChange={() => {
+                        const updated = isVisible
+                          ? [...hiddenPackageScripts, ps.name]
+                          : hiddenPackageScripts.filter((n) => n !== ps.name);
+                        persistHiddenScripts(updated);
+                      }}
+                      className="accent-[var(--ctp-blue)] shrink-0"
+                    />
+                    <span className="text-xs font-semibold truncate" style={{ color: "var(--ctp-text)" }}>
+                      {ps.name}
+                    </span>
+                    <span className="text-[11px] font-mono truncate ml-auto" style={{ color: "var(--ctp-overlay0)" }}>
+                      {ps.command}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Script list */}
         <div className="flex flex-col gap-1 overflow-y-auto" style={{ maxHeight: 200 }}>

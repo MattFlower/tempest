@@ -4,7 +4,10 @@
 // worktrees in them.
 // ============================================================
 
-import { access } from "node:fs/promises";
+import { accessSync } from "node:fs";
+import { PathResolver } from "../config/path-resolver";
+
+const pathResolver = new PathResolver();
 
 export type AppCategory = "editor" | "terminal" | "file-manager";
 
@@ -175,49 +178,48 @@ const APP_SPECS: AppSpec[] = [
   },
 ];
 
-async function isAppInstalled(appPaths: string[]): Promise<boolean> {
+function isAppInstalled(appPaths: string[]): boolean {
   for (const p of appPaths) {
     try {
-      await access(p);
+      accessSync(p);
       return true;
     } catch { /* not found */ }
   }
   return false;
 }
 
-async function isCLIAvailable(binaries: string[]): Promise<boolean> {
+function isCLIAvailable(binaries: string[]): boolean {
   for (const bin of binaries) {
     try {
-      // Use a login shell so the user's PATH is available
-      const proc = Bun.spawn(["/bin/zsh", "-lic", `which ${bin}`], {
-        stdout: "ignore",
-        stderr: "ignore",
-      });
-      const code = await proc.exited;
-      if (code === 0) return true;
+      pathResolver.resolve(bin);
+      return true;
     } catch { /* not found */ }
   }
   return false;
 }
 
+let cachedEditors: InstalledApp[] | null = null;
+let cacheTimestamp = 0;
+const CACHE_TTL_MS = 30_000;
+
 /**
  * Detect which supported apps are installed on the system.
- * Results are sorted alphabetically by name.
+ * Results are cached for 30 seconds and sorted alphabetically by name.
  */
-export async function getInstalledEditors(): Promise<InstalledApp[]> {
-  const checks = APP_SPECS.map(async (spec) => {
-    const hasApp = await isAppInstalled(spec.appPaths);
-    if (hasApp) return spec;
-    const hasCLI = await isCLIAvailable(spec.cliBinaries);
-    if (hasCLI) return spec;
-    return null;
-  });
+export function getInstalledEditors(): InstalledApp[] {
+  const now = Date.now();
+  if (cachedEditors && now - cacheTimestamp < CACHE_TTL_MS) {
+    return cachedEditors;
+  }
 
-  const results = await Promise.all(checks);
-  return results
-    .filter((s): s is AppSpec => s !== null)
+  const editors = APP_SPECS
+    .filter((spec) => isAppInstalled(spec.appPaths) || isCLIAvailable(spec.cliBinaries))
     .map((s) => ({ id: s.id, name: s.name, category: s.category }))
     .sort((a, b) => a.name.localeCompare(b.name));
+
+  cachedEditors = editors;
+  cacheTimestamp = now;
+  return editors;
 }
 
 /**

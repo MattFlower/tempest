@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Scripts dropdown no longer overflows the screen when a workspace has many package.json scripts. The dropdown now scrolls and "Manage Scripts" is always reachable.
+- "Open In" dropdown now opens instantly — replaced per-binary shell spawning with PathResolver lookups and added a 30-second result cache
 
 ### Changed
 

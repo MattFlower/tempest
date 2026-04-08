@@ -10,6 +10,7 @@ import { UsageFooter } from "./components/usage/UsageFooter";
 import { api } from "./state/rpc-client";
 import { fromNodeState } from "./models/pane-node";
 import type { ActivityState, AppConfig } from "../../shared/ipc-types";
+import { applyTheme } from "./state/theme";
 
 const MIN_SIDEBAR_WIDTH = 180;
 const MAX_SIDEBAR_WIDTH = 400;
@@ -30,6 +31,7 @@ export function App() {
   useEffect(() => {
     api.getConfig().then((cfg: AppConfig) => {
       useStore.getState().setConfig(cfg);
+      applyTheme(cfg.theme ?? "dark");
       if (!cfg.workspaceRoot || cfg.workspaceRoot.trim() === "") {
         setShowOnboarding(true);
       }

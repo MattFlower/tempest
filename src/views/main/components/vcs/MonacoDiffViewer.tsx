@@ -9,7 +9,8 @@
 import { useRef, forwardRef, useImperativeHandle, useCallback, useEffect } from "react";
 import { DiffEditor, loader } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
-import { tempestTheme, TEMPEST_THEME_NAME } from "../editor/tempest-theme";
+import { tempestTheme, TEMPEST_THEME_NAME, tempestLightTheme, TEMPEST_LIGHT_THEME_NAME } from "../editor/tempest-theme";
+import { useStore } from "../../state/store";
 
 // Selection info exposed to parent for "Ask Claude" button positioning
 export interface MonacoSelection {
@@ -22,7 +23,6 @@ export interface MonacoSelection {
 // Configure Monaco to load from local bundled files (same as MonacoEditorPane)
 loader.config({ paths: { vs: "./monaco-editor/min/vs" } });
 
-const THEME_NAME = TEMPEST_THEME_NAME;
 let themeRegistered = false;
 
 // --- Public handle for navigation ---
@@ -48,6 +48,9 @@ export const MonacoDiffViewer = forwardRef<
   { originalContent, modifiedContent, language, filePath, displayMode, onTextSelection },
   ref,
 ) {
+  const themeMode = useStore((s) => s.config?.theme ?? "dark");
+  const monacoThemeName = themeMode === "light" ? TEMPEST_LIGHT_THEME_NAME : TEMPEST_THEME_NAME;
+
   const editorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
   const onTextSelectionRef = useRef(onTextSelection);
   onTextSelectionRef.current = onTextSelection;
@@ -105,7 +108,8 @@ export const MonacoDiffViewer = forwardRef<
 
   const handleBeforeMount = useCallback((monaco: any) => {
     if (!themeRegistered) {
-      monaco.editor.defineTheme(THEME_NAME, tempestTheme);
+      monaco.editor.defineTheme(TEMPEST_THEME_NAME, tempestTheme);
+      monaco.editor.defineTheme(TEMPEST_LIGHT_THEME_NAME, tempestLightTheme);
       themeRegistered = true;
     }
   }, []);
@@ -154,7 +158,7 @@ export const MonacoDiffViewer = forwardRef<
       original={originalContent}
       modified={modifiedContent}
       language={language}
-      theme={THEME_NAME}
+      theme={monacoThemeName}
       beforeMount={handleBeforeMount}
       onMount={handleMount}
       options={{

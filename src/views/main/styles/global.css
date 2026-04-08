@@ -28,6 +28,36 @@
   --ctp-crust: #2a2a2a;
 }
 
+/* macOS light mode palette */
+:root[data-theme="light"] {
+  --ctp-rosewater: #d47766;
+  --ctp-flamingo: #d4615a;
+  --ctp-pink: #d44fa0;
+  --ctp-mauve: #8839ef;
+  --ctp-red: #d20f39;
+  --ctp-maroon: #c5354b;
+  --ctp-peach: #e06c24;
+  --ctp-yellow: #d4970b;
+  --ctp-green: #2c9e2c;
+  --ctp-teal: #179299;
+  --ctp-sky: #0f8ab5;
+  --ctp-sapphire: #1074b5;
+  --ctp-blue: #1a6fdb;
+  --ctp-lavender: #5c6bc0;
+  --ctp-text: #1a1a1a;
+  --ctp-subtext1: #333333;
+  --ctp-subtext0: #555555;
+  --ctp-overlay2: #777777;
+  --ctp-overlay1: #8c8c8c;
+  --ctp-overlay0: #9ca0a0;
+  --ctp-surface2: #b8b8b8;
+  --ctp-surface1: #cccccc;
+  --ctp-surface0: #dfdfdf;
+  --ctp-base: #f0f0f0;
+  --ctp-mantle: #e5e5e5;
+  --ctp-crust: #dcdcdc;
+}
+
 html,
 body,
 #root {
@@ -77,6 +107,14 @@ html {
 /* Subtle text-shadow on headers for depth */
 h1, h2, h3, h4, h5, h6 {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+:root[data-theme="light"] h1,
+:root[data-theme="light"] h2,
+:root[data-theme="light"] h3,
+:root[data-theme="light"] h4,
+:root[data-theme="light"] h5,
+:root[data-theme="light"] h6 {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 /* Button base styles — native feel */

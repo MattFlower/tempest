@@ -7,6 +7,7 @@ import { SerializeAddon } from "@xterm/addon-serialize";
 import { ProgressAddon } from "@xterm/addon-progress";
 import { ImageAddon } from "@xterm/addon-image";
 import { api } from "../../state/rpc-client";
+import { getTerminalTheme, getCurrentTheme } from "../../state/theme";
 
 export class TerminalInstance {
   readonly terminal: Terminal;
@@ -63,30 +64,7 @@ export class TerminalInstance {
         },
       },
 
-      // Ghostty default palette with neutral gray background
-      theme: {
-        background: "#242424",
-        foreground: "#ffffff",
-        cursor: "#ffffff",
-        selectionBackground: "#ffffff",
-        selectionForeground: "#2e2e2e",
-        black: "#1d1f21",
-        red: "#cc6666",
-        green: "#b5bd68",
-        yellow: "#f0c674",
-        blue: "#81a2be",
-        magenta: "#b294bb",
-        cyan: "#8abeb7",
-        white: "#c5c8c6",
-        brightBlack: "#666666",
-        brightRed: "#d54e53",
-        brightGreen: "#b9ca4a",
-        brightYellow: "#e7c547",
-        brightBlue: "#7aa6da",
-        brightMagenta: "#c397d8",
-        brightCyan: "#70c0b1",
-        brightWhite: "#eaeaea",
-      },
+      theme: getTerminalTheme(getCurrentTheme()),
     });
 
     this.fitAddon = new FitAddon();

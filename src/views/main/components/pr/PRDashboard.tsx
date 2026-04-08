@@ -104,9 +104,8 @@ export function PRDashboard() {
     };
   }, [selectedWorkspacePath]);
 
-  // Fetch assigned PRs when not monitoring
+  // Fetch assigned PRs once on mount (global query, not workspace-specific)
   useEffect(() => {
-    if (monitoring || !selectedWorkspacePath) return;
     let cancelled = false;
     setLoadingAssigned(true);
     api.getAssignedPRs().then((prs: AssignedPR[]) => {
@@ -117,7 +116,19 @@ export function PRDashboard() {
       if (!cancelled) setLoadingAssigned(false);
     });
     return () => { cancelled = true; };
-  }, [monitoring, selectedWorkspacePath]);
+  }, []);
+
+  const handleRefreshAssigned = useCallback(async () => {
+    setLoadingAssigned(true);
+    try {
+      const prs = await api.refreshAssignedPRs();
+      setAssignedPRs(prs);
+    } catch (err) {
+      console.error("[PRDashboard] refresh assigned PRs error:", err);
+    } finally {
+      setLoadingAssigned(false);
+    }
+  }, []);
 
   const handleReviewPR = useCallback(async (pr: AssignedPR) => {
     if (!selectedWorkspacePath) return;
@@ -358,11 +369,26 @@ export function PRDashboard() {
 
           {/* Right: Assigned PRs list */}
           <div className="flex flex-col w-1/2 overflow-y-auto px-6 py-6">
-            <div
-              className="text-xs font-semibold uppercase tracking-wider mb-3"
-              style={{ color: "var(--ctp-subtext0)" }}
-            >
-              PRs Assigned to Me
+            <div className="flex items-center gap-2 mb-3">
+              <div
+                className="text-xs font-semibold uppercase tracking-wider"
+                style={{ color: "var(--ctp-subtext0)" }}
+              >
+                PRs Assigned to Me
+              </div>
+              <button
+                onClick={handleRefreshAssigned}
+                disabled={loadingAssigned}
+                className="text-xs px-1.5 py-0.5 rounded"
+                style={{
+                  color: "var(--ctp-subtext0)",
+                  backgroundColor: "var(--ctp-surface0)",
+                  opacity: loadingAssigned ? 0.5 : 1,
+                }}
+                title="Refresh"
+              >
+                ↻
+              </button>
             </div>
             {loadingAssigned ? (
               <div className="text-xs" style={{ color: "var(--ctp-overlay0)" }}>

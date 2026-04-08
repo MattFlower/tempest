@@ -539,6 +539,7 @@ export const api = {
 
   // Assigned PRs
   getAssignedPRs: () => rpcRequest.getAssignedPRs(),
+  refreshAssignedPRs: () => rpcRequest.refreshAssignedPRs(),
 
   // PR Feedback
   getPRMonitorStatus: (workspacePath: string) =>

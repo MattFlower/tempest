@@ -40,7 +40,7 @@ import { AIContextProvider } from "./diff/ai-context-provider";
 import { PRMonitor } from "./pr/pr-monitor";
 import { lookupPRUrl } from "./pr/pr-url-lookup";
 import { getDefaultTitleAndBody, openPR as openPRAction, updatePR as updatePRAction } from "./pr/pr-open";
-import { getAssignedPRs } from "./pr/pr-assigned";
+import { getAssignedPRs, refreshAssignedPRs } from "./pr/pr-assigned";
 import { startPRReview } from "./pr/pr-review-coordinator";
 import {
   getVCSStatus,
@@ -673,6 +673,9 @@ const rpc = BrowserView.defineRPC({
       // --- Assigned PRs ---
       getAssignedPRs: async () => {
         return await getAssignedPRs();
+      },
+      refreshAssignedPRs: async () => {
+        return await refreshAssignedPRs();
       },
 
       // --- PR Feedback (Feature 3) ---

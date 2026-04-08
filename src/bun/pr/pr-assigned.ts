@@ -2,6 +2,9 @@
 // PR Assigned — Fetches PRs assigned to the current GitHub user.
 // Uses `gh search prs` to find open PRs where the user is
 // a requested reviewer or assignee.
+//
+// Results are cached after the first fetch. Call refreshAssignedPRs()
+// to clear the cache and re-fetch (e.g. from a UI refresh button).
 // ============================================================
 
 import type { AssignedPR } from "../../shared/ipc-types";
@@ -16,7 +19,10 @@ interface GHSearchResult {
   repository: { nameWithOwner: string };
 }
 
-export async function getAssignedPRs(): Promise<AssignedPR[]> {
+let cachedResult: AssignedPR[] | null = null;
+let fetchPromise: Promise<AssignedPR[]> | null = null;
+
+async function fetchFromGH(): Promise<AssignedPR[]> {
   let ghPath: string;
   try {
     ghPath = pathResolver.resolve("gh");
@@ -43,7 +49,7 @@ export async function getAssignedPRs(): Promise<AssignedPR[]> {
   await proc.exited;
 
   if (proc.exitCode !== 0) {
-    console.error("[pr-assigned] gh search failed, exit code:", proc.exitCode);
+    console.warn("[pr-assigned] gh search failed, exit code:", proc.exitCode);
     return [];
   }
 
@@ -60,7 +66,27 @@ export async function getAssignedPRs(): Promise<AssignedPR[]> {
       };
     });
   } catch (err) {
-    console.error("[pr-assigned] Failed to parse gh output:", err);
+    console.warn("[pr-assigned] Failed to parse gh output:", err);
     return [];
   }
+}
+
+export async function getAssignedPRs(): Promise<AssignedPR[]> {
+  if (cachedResult !== null) return cachedResult;
+
+  if (fetchPromise) return fetchPromise;
+
+  fetchPromise = fetchFromGH().then((result) => {
+    cachedResult = result;
+    fetchPromise = null;
+    return result;
+  });
+
+  return fetchPromise;
+}
+
+export async function refreshAssignedPRs(): Promise<AssignedPR[]> {
+  cachedResult = null;
+  fetchPromise = null;
+  return getAssignedPRs();
 }

@@ -389,6 +389,10 @@ export interface BunRequests {
     params: void;
     response: AssignedPR[];
   };
+  refreshAssignedPRs: {
+    params: void;
+    response: AssignedPR[];
+  };
 
   // PR Feedback
   getPRMonitorStatus: {

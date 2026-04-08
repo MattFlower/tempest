@@ -12,10 +12,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Selective package script management — "Manage Scripts" dialog now lists all detected package.json scripts with checkboxes, "Select All" and "Deselect All" buttons. Users can choose exactly which package scripts appear in the scripts dropdown.
 - "Add Remote Repository" — clone a git or jj repo from a remote URL via the sidebar ellipsis menu or command palette. Supports Git and Jujutsu (with optional --colocate), auto-derives local path from URL, and adds the cloned repo to the sidebar on success.
 
-### Changed
-
-- Renamed "Archive Workspace" to "Delete Workspace" in the workspace context menu
-
 ### Fixed
 
 - Scripts dropdown no longer overflows the screen when a workspace has many package.json scripts. The dropdown now scrolls and "Manage Scripts" is always reachable.
@@ -27,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Unified Monaco editor theme ("Tempest") for both file editor and diff viewer, derived from the application's neutral-grey palette and accent colors so editors blend seamlessly with the rest of the UI
 - Upgrade diff dependency to 8.0.3
+- Renamed "Archive Workspace" to "Delete Workspace" in the workspace context menu
 
 ### Removed
 

@@ -649,7 +649,7 @@ const rpc = BrowserView.defineRPC({
           if (!ws) return { error: "Workspace not found." };
           const vcsType = workspaceManager.getVCSType(ws.repoPath);
           return await getDefaultTitleAndBody(
-            params.workspacePath, ws.repoPath, vcsType, params.bookmarkName,
+            params.workspacePath, ws.repoPath, vcsType,
           );
         } catch (err: any) {
           return { error: err.message ?? String(err) };

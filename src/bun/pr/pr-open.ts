@@ -50,28 +50,53 @@ async function currentChangeIsEmpty(jjPath: string, workspacePath: string): Prom
   return output === "true";
 }
 
+const EXCLUDED_BOOKMARKS = new Set(["main", "master"]);
+
 /**
- * Compute the default PR title and body for the given workspace.
+ * Resolve the bookmark (jj) or branch (git) for the current workspace.
+ * For jj: checks @ first, then @- if @ is empty. Filters out main/master.
+ */
+async function resolveBookmark(
+  workspacePath: string,
+  vcsType: VCSType,
+): Promise<string | undefined> {
+  if (vcsType === VCSType.JJ) {
+    const jjPath = await getJJPath();
+    const isEmpty = await currentChangeIsEmpty(jjPath, workspacePath);
+    const revision = isEmpty ? "@-" : "@";
+    const output = await run(
+      jjPath,
+      ["log", "-r", revision, "--no-graph", "-T", "bookmarks"],
+      workspacePath,
+    );
+    const bookmarks = output.trim().split(/\s+/).filter(Boolean);
+    return bookmarks.find((b) => !EXCLUDED_BOOKMARKS.has(b));
+  }
+  return undefined;
+}
+
+/**
+ * Compute the default PR title, body, and bookmark for the given workspace.
  */
 export async function getDefaultTitleAndBody(
   workspacePath: string,
   repoPath: string,
   vcsType: VCSType,
-  bookmarkName?: string,
-): Promise<{ title: string; body: string }> {
+): Promise<{ title: string; body: string; bookmarkName?: string }> {
   if (vcsType === VCSType.JJ) {
+    const jjPath = await getJJPath();
+    const bookmarkName = await resolveBookmark(workspacePath, vcsType);
     const title = (bookmarkName ?? "")
       .replace(/-/g, " ")
       .replace(/_/g, " ");
 
-    const jjPath = await getJJPath();
     const revision = (await currentChangeIsEmpty(jjPath, workspacePath)) ? "@-" : "@";
     const body = await run(
       jjPath,
       ["log", "-r", revision, "--no-graph", "-T", "description"],
       workspacePath,
     );
-    return { title, body };
+    return { title, body, bookmarkName };
   } else {
     const gitPath = await getGitPath();
     const title = await run(gitPath, ["log", "--format=%s", "-1"], workspacePath);
@@ -97,7 +122,7 @@ export async function openPR(
     await pushGit(workspacePath);
   }
 
-  return await createDraftPR(repoPath, bookmarkName, title, body);
+  return await createDraftPR(repoPath, workspacePath, bookmarkName, title, body);
 }
 
 /**
@@ -148,6 +173,7 @@ async function pushGit(workspacePath: string): Promise<void> {
 
 async function createDraftPR(
   repoPath: string,
+  workspacePath: string,
   bookmarkName: string | undefined,
   title: string,
   body: string,
@@ -164,8 +190,12 @@ async function createDraftPR(
   const args = ["pr", "create", "--draft", "--repo", ownerRepo];
 
   if (bookmarkName) {
-    // For jj repos: specify --head since jj worktrees lack .git
+    // JJ: bookmark name was provided by the caller
     args.push("--head", bookmarkName);
+  } else {
+    // Git: resolve the branch checked out in the workspace (worktree)
+    const branch = await run(gitPath, ["rev-parse", "--abbrev-ref", "HEAD"], workspacePath);
+    args.push("--head", branch);
   }
 
   args.push("--title", title, "--body", body);

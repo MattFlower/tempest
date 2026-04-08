@@ -531,8 +531,8 @@ export const api = {
     rpcRequest.lookupPRUrl({ workspacePath }),
 
   // Open PR
-  getDefaultPRTitleBody: (workspacePath: string, bookmarkName?: string) =>
-    rpcRequest.getDefaultPRTitleBody({ workspacePath, bookmarkName }),
+  getDefaultPRTitleBody: (workspacePath: string) =>
+    rpcRequest.getDefaultPRTitleBody({ workspacePath }),
   openPR: (workspacePath: string, title: string, body: string, bookmarkName?: string) =>
     rpcRequest.openPR({ workspacePath, bookmarkName, title, body }),
   updatePR: (workspacePath: string) =>

@@ -362,8 +362,8 @@ export interface BunRequests {
 
   // Open PR — push and create a draft PR
   getDefaultPRTitleBody: {
-    params: { workspacePath: string; bookmarkName?: string };
-    response: { title: string; body: string } | { error: string };
+    params: { workspacePath: string };
+    response: { title: string; body: string; bookmarkName?: string } | { error: string };
   };
   openPR: {
     params: {

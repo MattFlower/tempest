@@ -16,7 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Git workspace names are now derived from the directory name rather than the branch name, making workspace names independent of branches (consistent with how JJ workspaces already work)
-
+- Open PR now correctly uses the workspace's current branch as the head branch for Git repos, instead of defaulting to "main"
+- Open PR dialog now resolves the JJ bookmark from the current change (or parent if empty) instead of assuming the workspace name is the bookmark. Excludes main/master from auto-detection.
 - Scripts dropdown no longer overflows the screen when a workspace has many package.json scripts. The dropdown now scrolls and "Manage Scripts" is always reachable.
 - "Open In" dropdown now opens instantly — replaced per-binary shell spawning with PathResolver lookups and added a 30-second result cache
 - Restore pane/tab focus when switching workspaces via sidebar

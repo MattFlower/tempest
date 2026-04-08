@@ -14,7 +14,7 @@ interface Props {
 export function OpenPRDialog({ workspacePath, workspaceName, vcsType, onCreated, onDismiss }: Props) {
   useOverlay();
 
-  const [bookmarkName, setBookmarkName] = useState(workspaceName);
+  const [bookmarkName, setBookmarkName] = useState("");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -25,21 +25,21 @@ export function OpenPRDialog({ workspacePath, workspaceName, vcsType, onCreated,
   const isJJ = vcsType === VCSType.JJ;
   const canSubmit = !isLoading && !isLoadingDefaults && title.trim() !== "" && (!isJJ || bookmarkName.trim() !== "");
 
-  // Load default title/body on mount
+  // Load default title/body/bookmark on mount
   useEffect(() => {
     setIsLoadingDefaults(true);
-    const bookmark = isJJ ? workspaceName : undefined;
-    api.getDefaultPRTitleBody(workspacePath, bookmark).then((result: any) => {
+    api.getDefaultPRTitleBody(workspacePath).then((result: any) => {
       if ("error" in result) {
         // Non-fatal — user can still type manually
       } else {
         setTitle(result.title);
         setBody(result.body);
+        if (result.bookmarkName) setBookmarkName(result.bookmarkName);
       }
       setIsLoadingDefaults(false);
       setTimeout(() => titleRef.current?.focus(), 0);
     });
-  }, [workspacePath, workspaceName, isJJ]);
+  }, [workspacePath]);
 
   const handleSubmit = async () => {
     if (!canSubmit) return;

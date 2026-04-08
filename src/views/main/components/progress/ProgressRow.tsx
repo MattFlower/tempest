@@ -468,7 +468,7 @@ export function ProgressRow({
               Open Session →
             </button>
           )}
-          {ws.stage === WorkspaceStage.Merged && (
+          {ws.stage === WorkspaceStage.Merged && ws.workspaceName !== "default" && (
             <button
               onClick={handleArchive}
               className="text-[11px] font-medium px-2.5 py-0.5 rounded transition-colors"
@@ -477,7 +477,7 @@ export function ProgressRow({
                 color: "var(--ctp-subtext0)",
               }}
             >
-              Archive Workspace
+              Delete Workspace
             </button>
           )}
         </span>

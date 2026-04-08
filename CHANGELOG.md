@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Fixed
+
+### Changed
+
+### Removed
+
+## [0.11.0] - 2026-04-07
+
+### Added
+
 - Progress view (Cmd+5) — cross-workspace dashboard showing all workspaces grouped by lifecycle stage (Merged, Pull Request, In Development, New). Full-screen view with compact expandable rows, PR detail with review/check/comment status from GitHub, and quick navigation to workspace views.
 - Light theme and Appearance settings tab — switch between dark and light modes via Settings → Appearance. Theme applies to all UI surfaces, terminal emulator, and Monaco editors, and persists across restarts.
 - Selective package script management — "Manage Scripts" dialog now lists all detected package.json scripts with checkboxes, "Select All" and "Deselect All" buttons. Users can choose exactly which package scripts appear in the scripts dropdown.

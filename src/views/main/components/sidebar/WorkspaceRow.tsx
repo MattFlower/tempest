@@ -114,7 +114,7 @@ export function WorkspaceRow({ workspace, sidebarInfo, isSelected, onSelect, onA
                   onClick={() => { setContextMenu(null); onArchive(); }}
                   className="w-full text-left px-3 py-1.5 text-[12px] text-[var(--ctp-red)] hover:bg-[var(--ctp-surface1)]"
                 >
-                  Archive Workspace
+                  Delete Workspace
                 </button>
               </>
             )}

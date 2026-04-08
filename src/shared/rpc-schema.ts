@@ -141,6 +141,16 @@ export interface BunRequests {
     params: { workspaceId: string };
     response: { success: boolean; error?: string };
   };
+  renameWorkspace: {
+    params: { workspaceId: string; newName: string };
+    response: {
+      success: boolean;
+      error?: string;
+      workspace?: TempestWorkspace;
+      oldPath?: string;
+      newPath?: string;
+    };
+  };
   refreshWorkspaces: {
     params: { repoId: string };
     response: TempestWorkspace[];
@@ -616,6 +626,7 @@ export interface WebviewMessages {
   hookEvent: HookEvent;
   workspaceActivityChanged: { workspacePath: string; activityState: number | null; pid: number };
   workspacesChanged: { repoId: string; workspaces: TempestWorkspace[] };
+  workspaceRenamed: { repoId: string; oldPath: string; newPath: string; workspace: TempestWorkspace };
   sidebarInfoUpdated: { workspacePath: string; info: WorkspaceSidebarInfo };
   configChanged: AppConfig;
   menuAction: { action: string };

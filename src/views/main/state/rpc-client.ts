@@ -194,6 +194,11 @@ const rpc = Electroview.defineRPC({
           useStore.getState().setWorkspaces(msg.repoId, msg.workspaces);
         });
       },
+      workspaceRenamed: (msg: WebviewMessages["workspaceRenamed"]) => {
+        import("./store").then(({ useStore }) => {
+          useStore.getState().migrateWorkspacePath(msg.oldPath, msg.newPath);
+        });
+      },
       sidebarInfoUpdated: (msg: WebviewMessages["sidebarInfoUpdated"]) => {
         import("./store").then(({ useStore }) => {
           useStore.getState().setSidebarInfo(msg.workspacePath, msg.info);
@@ -400,6 +405,8 @@ export const api = {
   }) => rpcRequest.createWorkspace(params),
   archiveWorkspace: (workspaceId: string) =>
     rpcRequest.archiveWorkspace({ workspaceId }),
+  renameWorkspace: (workspaceId: string, newName: string) =>
+    rpcRequest.renameWorkspace({ workspaceId, newName }),
 
   // Sidebar
   getSidebarInfo: (workspacePath: string) =>

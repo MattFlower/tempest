@@ -11,6 +11,7 @@ interface Props {
   showDivider: boolean;
   onSelectWorkspace: (path: string) => void;
   onArchiveWorkspace: (workspace: TempestWorkspace) => void;
+  onRenameWorkspace: (workspace: TempestWorkspace) => void;
   onToggleExpanded: () => void;
   onNewWorkspace: () => void;
   onRefreshWorkspaces: () => void;
@@ -27,6 +28,7 @@ export function RepoSection({
   showDivider,
   onSelectWorkspace,
   onArchiveWorkspace,
+  onRenameWorkspace,
   onToggleExpanded,
   onNewWorkspace,
   onRefreshWorkspaces,
@@ -120,6 +122,7 @@ export function RepoSection({
               isSelected={ws.path === selectedWorkspacePath}
               onSelect={() => onSelectWorkspace(ws.path)}
               onArchive={() => onArchiveWorkspace(ws)}
+              onRename={() => onRenameWorkspace(ws)}
               onRefreshDiffStats={() => onRefreshSidebarInfo(ws.path)}
             />
           ))}

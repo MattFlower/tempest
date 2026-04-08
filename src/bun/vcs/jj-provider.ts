@@ -59,6 +59,21 @@ export class JJProvider implements VCSProvider {
     }));
   }
 
+  async renameWorkspace(
+    workspace: TempestWorkspace,
+    newName: string,
+    newPath: string,
+  ): Promise<void> {
+    await this.runJJ(
+      ["workspace", "rename", newName],
+      workspace.path,
+    );
+    if (workspace.path !== newPath) {
+      const { rename } = await import("node:fs/promises");
+      await rename(workspace.path, newPath);
+    }
+  }
+
   async archiveWorkspace(workspace: TempestWorkspace): Promise<void> {
     await this.runJJ(["workspace", "forget", workspace.name], this.repoPath);
     if (existsSync(workspace.path)) {

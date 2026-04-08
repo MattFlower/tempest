@@ -11,8 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Selective package script management — "Manage Scripts" dialog now lists all detected package.json scripts with checkboxes, "Select All" and "Deselect All" buttons. Users can choose exactly which package scripts appear in the scripts dropdown.
 - "Add Remote Repository" — clone a git or jj repo from a remote URL via the sidebar ellipsis menu or command palette. Supports Git and Jujutsu (with optional --colocate), auto-derives local path from URL, and adds the cloned repo to the sidebar on success.
+- Rename workspace — right-click a non-default workspace and select "Rename..." to change its name. Works for both git (moves worktree) and jj (renames workspace + moves directory). Pane layout, selection, and all workspace state are preserved across the rename.
 
 ### Fixed
+
+- Git workspace names are now derived from the directory name rather than the branch name, making workspace names independent of branches (consistent with how JJ workspaces already work)
 
 - Scripts dropdown no longer overflows the screen when a workspace has many package.json scripts. The dropdown now scrolls and "Manage Scripts" is always reachable.
 - "Open In" dropdown now opens instantly — replaced per-binary shell spawning with PathResolver lookups and added a 30-second result cache

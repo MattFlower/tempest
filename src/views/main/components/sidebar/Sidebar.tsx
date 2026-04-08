@@ -7,6 +7,7 @@ import { RepoSection } from "./RepoSection";
 import { SidebarToolbar } from "./SidebarToolbar";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { RepoSettingsDialog } from "./RepoSettingsDialog";
+import { RenameWorkspaceDialog } from "./RenameWorkspaceDialog";
 import { CloneRepoDialog } from "./CloneRepoDialog";
 
 export function Sidebar() {
@@ -28,6 +29,7 @@ export function Sidebar() {
   const [addRepoError, setAddRepoError] = useState<string | null>(null);
   const [newWorkspaceRepo, setNewWorkspaceRepo] = useState<SourceRepo | null>(null);
   const [settingsRepo, setSettingsRepo] = useState<SourceRepo | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{ workspace: TempestWorkspace; repo: SourceRepo } | null>(null);
 
   // Load repos and their workspaces on mount
   useEffect(() => {
@@ -144,6 +146,7 @@ export function Sidebar() {
               showDivider={index > 0}
               onSelectWorkspace={selectWorkspace}
               onArchiveWorkspace={handleArchiveWorkspace}
+              onRenameWorkspace={(workspace) => setRenameTarget({ workspace, repo })}
               onToggleExpanded={() => handleToggleExpanded(index)}
               onNewWorkspace={() => setNewWorkspaceRepo(repo)}
               onRefreshWorkspaces={() => {
@@ -176,6 +179,18 @@ export function Sidebar() {
             selectWorkspace(workspace.path);
           }}
           onDismiss={() => setNewWorkspaceRepo(null)}
+        />
+      )}
+
+      {renameTarget && (
+        <RenameWorkspaceDialog
+          workspace={renameTarget.workspace}
+          existingWorkspaces={workspacesByRepo[renameTarget.repo.id] ?? []}
+          onRenamed={(_workspace, newPath) => {
+            setRenameTarget(null);
+            selectWorkspace(newPath);
+          }}
+          onDismiss={() => setRenameTarget(null)}
         />
       )}
 

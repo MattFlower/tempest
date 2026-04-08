@@ -72,6 +72,7 @@ export interface TempestStore {
   showCloneRepoDialog: () => void;
   hideCloneRepoDialog: () => void;
   setHttpServerStatus: (running: boolean, error?: string | null) => void;
+  migrateWorkspacePath: (oldPath: string, newPath: string) => void;
   requestNewWorkspace: (repoId: string | null) => void;
   pushOverlay: () => void;
   popOverlay: () => void;
@@ -175,6 +176,36 @@ export const useStore = create<TempestStore>((set) => ({
   hideCloneRepoDialog: () => set({ cloneRepoDialogVisible: false }),
   setHttpServerStatus: (running, error) =>
     set({ httpServerRunning: running, httpServerError: error ?? null }),
+  migrateWorkspacePath: (oldPath, newPath) =>
+    set((s) => {
+      const result: Partial<TempestStore> = {};
+
+      if (s.selectedWorkspacePath === oldPath) {
+        result.selectedWorkspacePath = newPath;
+      }
+      if (s.paneTrees[oldPath]) {
+        const { [oldPath]: tree, ...rest } = s.paneTrees;
+        result.paneTrees = { ...rest, [newPath]: tree! };
+      }
+      if (s.sidebarInfo[oldPath]) {
+        const { [oldPath]: info, ...rest } = s.sidebarInfo;
+        result.sidebarInfo = { ...rest, [newPath]: info! };
+      }
+      if (s.workspaceActivity[oldPath] !== undefined) {
+        const { [oldPath]: activity, ...rest } = s.workspaceActivity;
+        result.workspaceActivity = { ...rest, [newPath]: activity! };
+      }
+      if (s.focusedPaneIds[oldPath] !== undefined) {
+        const { [oldPath]: focusId, ...rest } = s.focusedPaneIds;
+        result.focusedPaneIds = { ...rest, [newPath]: focusId! };
+      }
+      if (s.workspaceViewMode[oldPath]) {
+        const { [oldPath]: mode, ...rest } = s.workspaceViewMode;
+        result.workspaceViewMode = { ...rest, [newPath]: mode! };
+      }
+
+      return result;
+    }),
   requestNewWorkspace: (repoId) => set({ newWorkspaceRepoId: repoId }),
   pushOverlay: () => set((s) => ({ overlayCount: s.overlayCount + 1 })),
   popOverlay: () => set((s) => ({ overlayCount: Math.max(0, s.overlayCount - 1) })),

@@ -417,6 +417,31 @@ const rpc = BrowserView.defineRPC({
         if (result.success) await sessionStateManager.flush();
         return result;
       },
+      renameWorkspace: async (_params: any) => {
+        const result = await workspaceManager.renameWorkspace(
+          _params.workspaceId,
+          _params.newName,
+        );
+        if (result.success && result.oldPath && result.newPath && result.repoId) {
+          sessionStateManager.migrateWorkspacePath(result.oldPath, result.newPath);
+          await sessionStateManager.flush();
+          try {
+            win.webview.rpc.send.workspaceRenamed({
+              repoId: result.repoId,
+              oldPath: result.oldPath,
+              newPath: result.newPath,
+              workspace: result.workspace!,
+            });
+          } catch { /* webview not ready yet */ }
+        }
+        return {
+          success: result.success,
+          error: result.error,
+          workspace: result.workspace,
+          oldPath: result.oldPath,
+          newPath: result.newPath,
+        };
+      },
       refreshWorkspaces: async (_params: any) => {
         return await workspaceManager.refreshWorkspaces(_params.repoId);
       },

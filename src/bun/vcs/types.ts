@@ -30,6 +30,12 @@ export interface VCSProvider {
 
   archiveWorkspace(workspace: TempestWorkspace): Promise<void>;
 
+  renameWorkspace(
+    workspace: TempestWorkspace,
+    newName: string,
+    newPath: string,
+  ): Promise<void>;
+
   bookmarkName(workspace: TempestWorkspace): Promise<string | undefined>;
 
   diffStats(workspace: TempestWorkspace): Promise<DiffStats>;

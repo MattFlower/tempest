@@ -124,6 +124,23 @@ export class SessionStateManager {
     this.dirty = true;
   }
 
+  migrateWorkspacePath(oldPath: string, newPath: string): void {
+    if (!this.state) return;
+
+    const wsState = this.state.workspaces[oldPath];
+    if (wsState) {
+      delete this.state.workspaces[oldPath];
+      wsState.workspacePath = newPath;
+      this.state.workspaces[newPath] = wsState;
+    }
+
+    if (this.state.selectedWorkspacePath === oldPath) {
+      this.state.selectedWorkspacePath = newPath;
+    }
+
+    this.dirty = true;
+  }
+
   private ensureState(): void {
     if (!this.state) {
       this.state = {

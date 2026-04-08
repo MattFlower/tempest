@@ -47,6 +47,17 @@ export class GitProvider implements VCSProvider {
     return parseWorktreeList(output);
   }
 
+  async renameWorkspace(
+    workspace: TempestWorkspace,
+    _newName: string,
+    newPath: string,
+  ): Promise<void> {
+    await this.runGit(
+      ["worktree", "move", workspace.path, newPath],
+      this.repoPath,
+    );
+  }
+
   async archiveWorkspace(workspace: TempestWorkspace): Promise<void> {
     if (workspace.path === this.repoPath) {
       throw new Error("Cannot archive main worktree");
@@ -166,8 +177,8 @@ export class GitProvider implements VCSProvider {
 /**
  * Parse `git worktree list --porcelain` output into workspace entries.
  * First block = main worktree ("default") with its actual path.
- * Subsequent: branch name from `branch refs/heads/<name>`, or last path component if detached,
- * paired with the actual worktree path from the porcelain output.
+ * Subsequent: workspace name is the last path component of the worktree directory,
+ * keeping workspace names independent of branch names.
  */
 export function parseWorktreeList(output: string): WorkspaceEntry[] {
   const blocks = output
@@ -186,13 +197,7 @@ export function parseWorktreeList(output: string): WorkspaceEntry[] {
       continue;
     }
 
-    const branchLine = lines.find((l) => l.startsWith("branch refs/heads/"));
-    if (branchLine) {
-      entries.push({
-        name: branchLine.slice("branch refs/heads/".length),
-        path,
-      });
-    } else if (path) {
+    if (path) {
       entries.push({
         name: path.split("/").pop() ?? path,
         path,

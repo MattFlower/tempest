@@ -11,6 +11,7 @@ interface Props {
   isSelected: boolean;
   onSelect: () => void;
   onArchive: () => void;
+  onRename: () => void;
   onRefreshDiffStats: () => void;
 }
 
@@ -63,7 +64,7 @@ function DiffStatsPill({ stats, onRefresh }: { stats: DiffStats; onRefresh: () =
   );
 }
 
-export function WorkspaceRow({ workspace, sidebarInfo, isSelected, onSelect, onArchive, onRefreshDiffStats }: Props) {
+export function WorkspaceRow({ workspace, sidebarInfo, isSelected, onSelect, onArchive, onRename, onRefreshDiffStats }: Props) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   // Hook-driven activity state overrides the workspace status for display
@@ -109,6 +110,12 @@ export function WorkspaceRow({ workspace, sidebarInfo, isSelected, onSelect, onA
             </button>
             {workspace.name !== "default" && (
               <>
+                <button
+                  onClick={() => { setContextMenu(null); onRename(); }}
+                  className="w-full text-left px-3 py-1.5 text-[12px] text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)]"
+                >
+                  Rename...
+                </button>
                 <div className="h-px bg-[var(--ctp-surface1)] mx-2 my-1" />
                 <button
                   onClick={() => { setContextMenu(null); onArchive(); }}

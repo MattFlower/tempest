@@ -265,6 +265,103 @@ export class WorkspaceManager {
     }
   }
 
+  async renameWorkspace(
+    workspaceId: string,
+    newName: string,
+  ): Promise<{
+    success: boolean;
+    error?: string;
+    workspace?: TempestWorkspace;
+    oldPath?: string;
+    newPath?: string;
+    repoId?: string;
+  }> {
+    const invalidChars = /[/\\:*?"<>|. ]/;
+    if (invalidChars.test(newName)) {
+      return { success: false, error: "Name contains invalid characters" };
+    }
+
+    for (const [repoId, workspaces] of this.workspacesByRepo) {
+      const workspace = workspaces.find((w) => w.id === workspaceId);
+      if (!workspace) continue;
+
+      if (workspace.name === "default") {
+        return { success: false, error: "Cannot rename the default workspace" };
+      }
+
+      if (workspace.name === newName) {
+        return { success: false, error: "New name is the same as the current name" };
+      }
+
+      if (workspaces.some((w) => w.name === newName && w.id !== workspaceId)) {
+        return { success: false, error: "A workspace with that name already exists" };
+      }
+
+      const provider = this.providers.get(repoId);
+      if (!provider) return { success: false, error: "Provider not found" };
+
+      const repo = this.repos.find((r) => r.id === repoId);
+      if (!repo) return { success: false, error: "Repository not found" };
+
+      const newPath = join(
+        this.config.workspaceRoot,
+        repoSlug(repo.path),
+        newName,
+      );
+      const oldPath = workspace.path;
+
+      if (existsSync(newPath)) {
+        return { success: false, error: "A directory with that name already exists" };
+      }
+
+      try {
+        await provider.renameWorkspace(workspace, newName, newPath);
+
+        // Migrate sidebarInfoCache
+        const cachedInfo = this.sidebarInfoCache.get(oldPath);
+        if (cachedInfo) {
+          this.sidebarInfoCache.delete(oldPath);
+          this.sidebarInfoCache.set(newPath, cachedInfo);
+        }
+
+        // Move webpage previews directory
+        const oldPreviewDir = join(WEBPAGE_PREVIEWS_DIR, workspace.name);
+        const newPreviewDir = join(WEBPAGE_PREVIEWS_DIR, newName);
+        if (existsSync(oldPreviewDir)) {
+          const { rename } = await import("node:fs/promises");
+          await rename(oldPreviewDir, newPreviewDir).catch(() => {});
+        }
+
+        // Update in-memory workspace list
+        const updated = workspaces.map((w) =>
+          w.id === workspaceId
+            ? {
+                ...w,
+                id: stableId(newPath),
+                name: newName,
+                path: newPath,
+              }
+            : w,
+        );
+        this.workspacesByRepo.set(repoId, updated);
+        const renamedWorkspace = updated.find((w) => w.path === newPath)!;
+
+        this.onWorkspacesChanged?.(repoId, updated);
+
+        return {
+          success: true,
+          workspace: renamedWorkspace,
+          oldPath,
+          newPath,
+          repoId,
+        };
+      } catch (err: any) {
+        return { success: false, error: err.message ?? String(err) };
+      }
+    }
+    return { success: false, error: "Workspace not found" };
+  }
+
   async archiveWorkspace(
     workspaceId: string,
   ): Promise<{ success: boolean; error?: string }> {

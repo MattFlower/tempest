@@ -34,13 +34,13 @@ import { useStore } from "../../state/store";
 import { PaneTabKind, EditorType } from "../../../../shared/ipc-types";
 import { createTab } from "../../models/pane-node";
 import { addTab } from "../../state/actions";
-import { espressoLibreTheme } from "./espresso-libre-theme";
+import { tempestTheme, TEMPEST_THEME_NAME } from "./tempest-theme";
 import { ImportLinkProvider, TEMPEST_FILE_SCHEME } from "./import-link-provider";
 
 // Configure Monaco to load from local bundled files
 loader.config({ paths: { vs: "./monaco-editor/min/vs" } });
 
-const THEME_NAME = "espresso-libre";
+const THEME_NAME = TEMPEST_THEME_NAME;
 
 interface MonacoEditorPaneProps {
   filePath: string;
@@ -168,7 +168,7 @@ export function MonacoEditorPane({
 
     // Register the Espresso Libre theme once
     if (!themeRegistered.current) {
-      monaco.editor.defineTheme(THEME_NAME, espressoLibreTheme);
+      monaco.editor.defineTheme(THEME_NAME, tempestTheme);
       themeRegistered.current = true;
 
       // Disable semantic validation — Monaco's TS service doesn't have access

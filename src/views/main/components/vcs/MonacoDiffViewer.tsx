@@ -9,6 +9,7 @@
 import { useRef, forwardRef, useImperativeHandle, useCallback, useEffect } from "react";
 import { DiffEditor, loader } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
+import { tempestTheme, TEMPEST_THEME_NAME } from "../editor/tempest-theme";
 
 // Selection info exposed to parent for "Ask Claude" button positioning
 export interface MonacoSelection {
@@ -21,38 +22,7 @@ export interface MonacoSelection {
 // Configure Monaco to load from local bundled files (same as MonacoEditorPane)
 loader.config({ paths: { vs: "./monaco-editor/min/vs" } });
 
-// Catppuccin Mocha theme for Monaco
-const CATPPUCCIN_THEME: editor.IStandaloneThemeData = {
-  base: "vs-dark",
-  inherit: true,
-  rules: [
-    { token: "comment", foreground: "6c7086", fontStyle: "italic" },
-    { token: "keyword", foreground: "cba6f7" },
-    { token: "string", foreground: "a6e3a1" },
-    { token: "number", foreground: "fab387" },
-    { token: "type", foreground: "f9e2af" },
-    { token: "function", foreground: "89b4fa" },
-    { token: "variable", foreground: "cdd6f4" },
-    { token: "operator", foreground: "89dceb" },
-  ],
-  colors: {
-    "editor.background": "#1e1e2e",
-    "editor.foreground": "#cdd6f4",
-    "editor.lineHighlightBackground": "#313244",
-    "editor.selectionBackground": "#585b7044",
-    "editorLineNumber.foreground": "#6c7086",
-    "editorLineNumber.activeForeground": "#cdd6f4",
-    "editor.inactiveSelectionBackground": "#45475a44",
-    "editorWidget.background": "#181825",
-    "editorWidget.border": "#313244",
-    "diffEditor.insertedTextBackground": "#a6e3a120",
-    "diffEditor.removedTextBackground": "#f38ba820",
-    "diffEditor.insertedLineBackground": "#a6e3a110",
-    "diffEditor.removedLineBackground": "#f38ba810",
-  },
-};
-
-const THEME_NAME = "catppuccin-mocha";
+const THEME_NAME = TEMPEST_THEME_NAME;
 let themeRegistered = false;
 
 // --- Public handle for navigation ---
@@ -135,7 +105,7 @@ export const MonacoDiffViewer = forwardRef<
 
   const handleBeforeMount = useCallback((monaco: any) => {
     if (!themeRegistered) {
-      monaco.editor.defineTheme(THEME_NAME, CATPPUCCIN_THEME);
+      monaco.editor.defineTheme(THEME_NAME, tempestTheme);
       themeRegistered = true;
     }
   }, []);

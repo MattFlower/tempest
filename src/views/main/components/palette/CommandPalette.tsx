@@ -111,6 +111,10 @@ function useCommands(): PaletteCommand[] {
       }
     }},
 
+    { id: "clone-repo", label: "Add Remote Repository", canOpenAsPane: false, action: () => {
+      useStore.getState().showCloneRepoDialog();
+    }},
+
     // Claude plans
     { id: "open-plan", label: "Open Current Plan", canOpenAsPane: true, action: async () => {
       const state = useStore.getState();

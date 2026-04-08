@@ -386,6 +386,8 @@ export const api = {
   getRepos: () => rpcRequest.getRepos(),
   addRepo: (path: string) => rpcRequest.addRepo({ path }),
   removeRepo: (repoId: string) => rpcRequest.removeRepo({ repoId }),
+  cloneRepo: (params: { vcsType: string; url: string; localPath: string; colocate?: boolean }) =>
+    rpcRequest.cloneRepo(params),
 
   // Workspaces
   getBranches: (repoId: string) => rpcRequest.getBranches({ repoId }),

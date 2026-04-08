@@ -41,6 +41,7 @@ export interface TempestStore {
   commandPaletteInitialMode: "commands" | "files";
   settingsDialogVisible: boolean;
   settingsDialogInitialTab: "general" | "remote" | "tools";
+  cloneRepoDialogVisible: boolean;
   httpServerRunning: boolean;
   httpServerError: string | null;
   newWorkspaceRepoId: string | null;
@@ -68,6 +69,8 @@ export interface TempestStore {
   openCommandPaletteFiles: () => void;
   toggleSettingsDialog: () => void;
   openSettingsTab: (tab: "general" | "remote" | "tools") => void;
+  showCloneRepoDialog: () => void;
+  hideCloneRepoDialog: () => void;
   setHttpServerStatus: (running: boolean, error?: string | null) => void;
   requestNewWorkspace: (repoId: string | null) => void;
   pushOverlay: () => void;
@@ -100,6 +103,7 @@ export const useStore = create<TempestStore>((set) => ({
   commandPaletteInitialMode: "commands" as const,
   settingsDialogVisible: false,
   settingsDialogInitialTab: "general" as const,
+  cloneRepoDialogVisible: false,
   httpServerRunning: false,
   httpServerError: null,
   newWorkspaceRepoId: null,
@@ -167,6 +171,8 @@ export const useStore = create<TempestStore>((set) => ({
     })),
   openSettingsTab: (tab) =>
     set({ settingsDialogVisible: true, settingsDialogInitialTab: tab }),
+  showCloneRepoDialog: () => set({ cloneRepoDialogVisible: true }),
+  hideCloneRepoDialog: () => set({ cloneRepoDialogVisible: false }),
   setHttpServerStatus: (running, error) =>
     set({ httpServerRunning: running, httpServerError: error ?? null }),
   requestNewWorkspace: (repoId) => set({ newWorkspaceRepoId: repoId }),

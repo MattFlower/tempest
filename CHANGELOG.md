@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Selective package script management — "Manage Scripts" dialog now lists all detected package.json scripts with checkboxes, "Select All" and "Deselect All" buttons. Users can choose exactly which package scripts appear in the scripts dropdown.
+- "Add Remote Repository" — clone a git or jj repo from a remote URL via the sidebar ellipsis menu or command palette. Supports Git and Jujutsu (with optional --colocate), auto-derives local path from URL, and adds the cloned repo to the sidebar on success.
 
 ### Fixed
 

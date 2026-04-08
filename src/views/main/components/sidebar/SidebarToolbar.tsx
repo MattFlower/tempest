@@ -1,9 +1,38 @@
+import { useState, useRef, useEffect, useCallback } from "react";
+
 interface Props {
   onAddRepo: () => void;
-  onOpenSettings: () => void;
+  onCloneRepo: () => void;
 }
 
-export function SidebarToolbar({ onAddRepo, onOpenSettings }: Props) {
+export function SidebarToolbar({ onAddRepo, onCloneRepo }: Props) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const close = useCallback(() => setMenuOpen(false), []);
+
+  // Close on click outside
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        close();
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpen, close]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [menuOpen, close]);
+
   return (
     <div className="flex items-center px-3 py-2 border-t border-[var(--ctp-surface0)] bg-[var(--ctp-mantle)]">
       <button
@@ -17,15 +46,36 @@ export function SidebarToolbar({ onAddRepo, onOpenSettings }: Props) {
         Add repository
       </button>
       <span className="flex-1" />
-      <button
-        onClick={onOpenSettings}
-        className="text-[var(--ctp-text)] hover:text-[var(--ctp-text)] transition-colors"
-        title="Settings"
-      >
-        <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
-          <path fillRule="evenodd" d="M7.429 1.525a3.187 3.187 0 0 1 1.142 0l.272.043a1.4 1.4 0 0 1 1.074.834l.11.28a1 1 0 0 0 .94.616h.003a1 1 0 0 0 .857-.489l.156-.247a1.4 1.4 0 0 1 1.228-.573l.275.022a3.2 3.2 0 0 1 .808.468l.223.164a1.4 1.4 0 0 1 .499 1.259l-.038.276a1 1 0 0 0 .412 1.005l.003.002a1 1 0 0 0 .94.148l.266-.085a1.4 1.4 0 0 1 1.345.261l.173.212c.252.31.443.67.56 1.059l.085.27a1.4 1.4 0 0 1-.345 1.347l-.19.205a1 1 0 0 0-.217.98v.004a1 1 0 0 0 .654.674l.258.1a1.4 1.4 0 0 1 .764 1.112l.01.277a3.2 3.2 0 0 1-.225.94l-.105.252a1.4 1.4 0 0 1-1.104.82l-.277.037a1 1 0 0 0-.834.57l-.001.003a1 1 0 0 0 .043.99l.153.248a1.4 1.4 0 0 1-.09 1.36l-.149.235c-.272.428-.617.8-1.012 1.098l-.227.163a1.4 1.4 0 0 1-1.336.162l-.257-.1a1 1 0 0 0-.987.108l-.002.002a1 1 0 0 0-.438.849v.27a1.4 1.4 0 0 1-.665 1.198l-.246.148a3.2 3.2 0 0 1-.927.407l-.27.076a1.4 1.4 0 0 1-1.302-.373l-.2-.196a1 1 0 0 0-.705-.29h-.004a1 1 0 0 0-.705.29l-.2.196a1.4 1.4 0 0 1-1.301.373l-.271-.076a3.2 3.2 0 0 1-.927-.407l-.246-.148A1.4 1.4 0 0 1 3.2 14.73v-.27a1 1 0 0 0-.438-.85l-.002-.001a1 1 0 0 0-.987-.108l-.257.1a1.4 1.4 0 0 1-1.336-.163l-.227-.162a3.2 3.2 0 0 1-1.012-1.098l-.149-.236a1.4 1.4 0 0 1-.09-1.36l.153-.247a1 1 0 0 0 .043-.99l-.001-.004a1 1 0 0 0-.834-.569l-.277-.037a1.4 1.4 0 0 1-1.104-.82L-3.423 8a3.2 3.2 0 0 1-.225-.94l.01-.277a1.4 1.4 0 0 1 .764-1.112l.258-.1a1 1 0 0 0 .654-.674v-.004a1 1 0 0 0-.217-.98l-.19-.205a1.4 1.4 0 0 1-.345-1.347l.085-.27c.117-.39.308-.75.56-1.06l.173-.211a1.4 1.4 0 0 1 1.345-.261l.267.085a1 1 0 0 0 .939-.148l.003-.002a1 1 0 0 0 .412-1.005l-.038-.276a1.4 1.4 0 0 1 .499-1.26l.223-.163a3.2 3.2 0 0 1 .808-.468l.275-.022a1.4 1.4 0 0 1 1.228.573l.156.247a1 1 0 0 0 .857.49h.003a1 1 0 0 0 .94-.617l.11-.28a1.4 1.4 0 0 1 1.074-.833l.272-.043ZM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clipRule="evenodd" />
-        </svg>
-      </button>
+      <div ref={menuRef} className="relative">
+        <button
+          onClick={() => setMenuOpen((o) => !o)}
+          className="text-[var(--ctp-text)] hover:text-[var(--ctp-text)] transition-colors p-0.5 rounded"
+          style={{ backgroundColor: menuOpen ? "var(--ctp-surface0)" : "transparent" }}
+          title="More actions"
+        >
+          <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+            <circle cx="3" cy="8" r="1.5" />
+            <circle cx="8" cy="8" r="1.5" />
+            <circle cx="13" cy="8" r="1.5" />
+          </svg>
+        </button>
+        {menuOpen && (
+          <div
+            className="absolute right-0 bottom-full mb-1 min-w-[200px] rounded-lg border border-[var(--ctp-surface1)] bg-[var(--ctp-surface0)] shadow-lg overflow-hidden"
+            style={{ zIndex: 30 }}
+          >
+            <button
+              onClick={() => {
+                close();
+                onCloneRepo();
+              }}
+              className="w-full text-left px-3 py-1.5 text-xs text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)] transition-colors"
+            >
+              Add Remote Repository
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

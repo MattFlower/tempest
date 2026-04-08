@@ -395,6 +395,9 @@ const rpc = BrowserView.defineRPC({
       removeRepo: (_params: any) => {
         workspaceManager.removeRepo(_params.repoId);
       },
+      cloneRepo: async (_params: any) => {
+        return await workspaceManager.cloneRepo(_params);
+      },
       getBranches: async (_params: any) => {
         return await workspaceManager.getBranches(_params.repoId);
       },

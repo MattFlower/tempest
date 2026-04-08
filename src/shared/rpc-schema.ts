@@ -114,6 +114,10 @@ export interface BunRequests {
     params: { repoId: string };
     response: void;
   };
+  cloneRepo: {
+    params: { vcsType: VCSType; url: string; localPath: string; colocate?: boolean };
+    response: { success: boolean; error?: string };
+  };
 
   // Workspaces
   getBranches: {

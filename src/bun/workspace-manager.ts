@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import { rm } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 
 import type {
@@ -24,6 +25,7 @@ import {
 } from "./config/repo-settings";
 import { detectVCS, detectVCSType } from "./vcs/detector";
 import type { VCSProvider } from "./vcs/types";
+import { PathResolver } from "./config/path-resolver";
 import { WEBPAGE_PREVIEWS_DIR } from "./config/paths";
 
 export class WorkspaceManager {
@@ -117,6 +119,59 @@ export class WorkspaceManager {
     this.workspacesByRepo.delete(repoId);
     this.providers.delete(repoId);
     this.persistRepoList();
+  }
+
+  async cloneRepo(params: {
+    vcsType: VCSType;
+    url: string;
+    localPath: string;
+    colocate?: boolean;
+  }): Promise<{ success: boolean; error?: string }> {
+    const { vcsType, url, localPath, colocate } = params;
+    const expandedPath = localPath.replace(/^~(?=\/|$)/, homedir());
+
+    if (existsSync(expandedPath)) {
+      return { success: false, error: `Path already exists: ${expandedPath}` };
+    }
+
+    const parentDir = join(expandedPath, "..");
+    mkdirSync(parentDir, { recursive: true });
+
+    try {
+      const resolver = new PathResolver();
+      let command: string[];
+      if (vcsType === VCSType.JJ) {
+        const jjPath = resolver.resolve("jj", this.config.jjPath);
+        command = [jjPath, "git", "clone", colocate ? "--colocate" : "--no-colocate", url, expandedPath];
+      } else {
+        const gitPath = resolver.resolve("git", this.config.gitPath);
+        command = [gitPath, "clone", url, expandedPath];
+      }
+
+      const proc = Bun.spawn(command, {
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+      const [stdout, stderr] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+      ]);
+
+      const exitCode = await proc.exited;
+
+      if (exitCode !== 0) {
+        try { await rm(expandedPath, { recursive: true, force: true }); } catch {}
+        return {
+          success: false,
+          error: `Clone failed (exit ${exitCode}):\n${(stderr || stdout).trim()}`,
+        };
+      }
+
+      return await this.addRepo(expandedPath);
+    } catch (err: any) {
+      return { success: false, error: err.message ?? String(err) };
+    }
   }
 
   private async persistRepoList(): Promise<void> {

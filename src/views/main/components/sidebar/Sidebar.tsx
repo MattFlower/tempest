@@ -7,6 +7,7 @@ import { RepoSection } from "./RepoSection";
 import { SidebarToolbar } from "./SidebarToolbar";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { RepoSettingsDialog } from "./RepoSettingsDialog";
+import { CloneRepoDialog } from "./CloneRepoDialog";
 
 export function Sidebar() {
   const repos = useStore((s) => s.repos);
@@ -16,7 +17,9 @@ export function Sidebar() {
   const selectWorkspace = useStore((s) => s.selectWorkspace);
   const setRepos = useStore((s) => s.setRepos);
   const setWorkspaces = useStore((s) => s.setWorkspaces);
-  const toggleCommandPalette = useStore((s) => s.toggleCommandPalette);
+  const cloneRepoDialogVisible = useStore((s) => s.cloneRepoDialogVisible);
+  const showCloneRepoDialog = useStore((s) => s.showCloneRepoDialog);
+  const hideCloneRepoDialog = useStore((s) => s.hideCloneRepoDialog);
 
   const setSidebarInfo = useStore((s) => s.setSidebarInfo);
   const newWorkspaceRepoId = useStore((s) => s.newWorkspaceRepoId);
@@ -162,7 +165,7 @@ export function Sidebar() {
         )}
       </div>
 
-      <SidebarToolbar onAddRepo={handleAddRepo} onOpenSettings={toggleCommandPalette} />
+      <SidebarToolbar onAddRepo={handleAddRepo} onCloneRepo={showCloneRepoDialog} />
 
       {newWorkspaceRepo && (
         <NewWorkspaceDialog
@@ -180,6 +183,21 @@ export function Sidebar() {
         <RepoSettingsDialog
           repo={settingsRepo}
           onDismiss={() => setSettingsRepo(null)}
+        />
+      )}
+
+      {cloneRepoDialogVisible && (
+        <CloneRepoDialog
+          onCloned={async () => {
+            hideCloneRepoDialog();
+            const loadedRepos = await api.getRepos();
+            setRepos(loadedRepos);
+            for (const repo of loadedRepos) {
+              const ws = await api.getWorkspaces(repo.id);
+              setWorkspaces(repo.id, ws);
+            }
+          }}
+          onDismiss={hideCloneRepoDialog}
         />
       )}
     </div>

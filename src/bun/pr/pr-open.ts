@@ -115,6 +115,7 @@ export async function openPR(
   bookmarkName: string | undefined,
   title: string,
   body: string,
+  draft: boolean = true,
 ): Promise<string> {
   if (vcsType === VCSType.JJ && bookmarkName) {
     await pushJJ(workspacePath, bookmarkName);
@@ -122,7 +123,7 @@ export async function openPR(
     await pushGit(workspacePath);
   }
 
-  return await createDraftPR(repoPath, workspacePath, bookmarkName, title, body);
+  return await createPR(repoPath, workspacePath, bookmarkName, title, body, draft);
 }
 
 /**
@@ -171,12 +172,13 @@ async function pushGit(workspacePath: string): Promise<void> {
 
 // --- Create draft PR ---
 
-async function createDraftPR(
+async function createPR(
   repoPath: string,
   workspacePath: string,
   bookmarkName: string | undefined,
   title: string,
   body: string,
+  draft: boolean,
 ): Promise<string> {
   const gitPath = await getGitPath();
   const remoteURL = await run(gitPath, ["remote", "get-url", "origin"], repoPath);
@@ -187,7 +189,7 @@ async function createDraftPR(
   }
 
   const ghPath = await getGHPath();
-  const args = ["pr", "create", "--draft", "--repo", ownerRepo];
+  const args = ["pr", "create", ...(draft ? ["--draft"] : []), "--repo", ownerRepo];
 
   if (bookmarkName) {
     // JJ: bookmark name was provided by the caller

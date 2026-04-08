@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Draft mode checkbox in Open PR dialog (checked by default)
+
 ### Fixed
 
 - Package scripts from the scripts dropdown now use the resolved login-shell PATH, fixing "command not found: bun" (exit 127) errors when running scripts on macOS.

@@ -288,6 +288,11 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
         return;
       }
 
+      // Log prepare-script errors (workspace was still created)
+      if (result.error) {
+        console.warn("[PR Review] Workspace created but prepare script had issues:", result.error);
+      }
+
       // Switch to the new workspace
       const store = useStore.getState();
       store.selectWorkspace(result.workspace.path);

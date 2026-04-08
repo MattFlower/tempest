@@ -249,6 +249,7 @@ export class TempestHttpServer {
       success: true,
       workspaceId: workspace.id,
       workspacePath: workspace.path,
+      error: result.error, // propagate prepare-script errors
     };
   }
 

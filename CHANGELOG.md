@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Package scripts from the scripts dropdown now use the resolved login-shell PATH, fixing "command not found: bun" (exit 127) errors when running scripts on macOS.
 - Progress view no longer offers to delete the "default" workspace
 - Renamed "Archive Workspace" to "Delete Workspace" in the Progress view
+- PR Review workspaces now properly run the repository's "Prepare workspace" script and propagate errors. Previously `startPRReview` silently dropped prepare-script errors from `createWorkspace`. The prepare script also now runs when reopening an existing PR workspace. Prepare-script error propagation is also fixed for regular workspace creation and the HTTP API.
 
 ### Changed
 

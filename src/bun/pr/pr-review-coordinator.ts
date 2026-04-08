@@ -56,13 +56,14 @@ export async function startPRReview(
     return { success: false, error: "Repository not found" };
   }
 
-  // Check for existing PR workspace
+  // Check for existing PR workspace — still run prepare script in case
+  // it was skipped or failed on the original creation.
   const existing = workspaceManager.getWorkspaces(repoId);
   const existingPR = existing.find((ws) => ws.name.startsWith(`pr-${prNumber}-`));
   if (existingPR) {
-    // Look up the PR URL for the browser pane
     const prUrl = await fetchPRUrl(prNumber, repo.path);
-    return { success: true, workspace: existingPR, prUrl };
+    const prepareError = await runPrepareIfConfigured(workspaceManager, repo.path, existingPR.path);
+    return { success: true, workspace: existingPR, prUrl, error: prepareError };
   }
 
   // 1. Get remote URL
@@ -138,7 +139,7 @@ export async function startPRReview(
     return { success: false, error: `Failed to fetch branch '${prInfo.headRefName}': ${fetchErr.trim()}` };
   }
 
-  // 5. Create workspace
+  // 5. Create workspace (runs prepare script via createWorkspace)
   const wsName = prWorkspaceName(prNumber, prInfo.title);
   const result = await workspaceManager.createWorkspace(
     repoId,
@@ -155,7 +156,31 @@ export async function startPRReview(
     success: true,
     workspace: result.workspace,
     prUrl: prInfo.url,
+    error: result.error, // propagate prepare-script errors
   };
+}
+
+/**
+ * Run the repo's prepare script in the given workspace directory.
+ * Returns an error string if the script fails, undefined otherwise.
+ */
+async function runPrepareIfConfigured(
+  workspaceManager: WorkspaceManager,
+  repoPath: string,
+  workspacePath: string,
+): Promise<string | undefined> {
+  const settings = workspaceManager.getRepoSettings(repoPath);
+  if (!settings?.prepareScript?.trim()) return undefined;
+
+  const result = await workspaceManager.runPrepareScript(settings.prepareScript, workspacePath);
+  if (result.exitCode !== 0) {
+    console.warn(
+      `[pr-review] Prepare script failed (exit ${result.exitCode}):`,
+      result.output,
+    );
+    return `Prepare script failed (exit ${result.exitCode}):\n${result.output}`;
+  }
+  return undefined;
 }
 
 async function fetchPRUrl(prNumber: number, repoPath: string): Promise<string | undefined> {

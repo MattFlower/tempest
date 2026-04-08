@@ -8,7 +8,7 @@ import { fuzzyMatch } from "../palette/fuzzy-match";
 interface Props {
   repo: SourceRepo;
   existingWorkspaces: TempestWorkspace[];
-  onCreated: (workspace: TempestWorkspace) => void;
+  onCreated: (workspace: TempestWorkspace, prepareError?: string) => void;
   onDismiss: () => void;
 }
 
@@ -159,7 +159,10 @@ export function NewWorkspaceDialog({ repo, existingWorkspaces, onCreated, onDism
     });
 
     if (result.success && result.workspace) {
-      onCreated(result.workspace);
+      if (result.error) {
+        console.warn("[workspace] Created but prepare script had issues:", result.error);
+      }
+      onCreated(result.workspace, result.error);
     } else {
       setErrorMessage(result.error ?? "Failed to create workspace.");
       setIsCreating(false);

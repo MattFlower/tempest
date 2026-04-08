@@ -9,8 +9,9 @@ import type { AppConfig, NetworkInterface } from "../../../../shared/ipc-types";
 import { api } from "../../state/rpc-client";
 import { useStore } from "../../state/store";
 import { useOverlay } from "../../state/useOverlay";
+import { applyTheme } from "../../state/theme";
 
-type Tab = "general" | "remote" | "tools";
+type Tab = "general" | "remote" | "tools" | "appearance";
 
 export function SettingsDialog() {
   useOverlay();
@@ -24,6 +25,9 @@ export function SettingsDialog() {
   // General tab state
   const [editor, setEditor] = useState<"nvim" | "monaco">("nvim");
   const [vimMode, setVimMode] = useState(false);
+
+  // Appearance tab state
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   // MCP Tools tab state
   const [showWebpage, setShowWebpage] = useState(true);
@@ -45,6 +49,7 @@ export function SettingsDialog() {
       setConfig(cfg);
       setEditor(cfg.editor === "monaco" ? "monaco" : "nvim");
       setVimMode(cfg.monacoVimMode ?? false);
+      setTheme(cfg.theme ?? "dark");
       setHttpPlanMode(cfg.httpDefaultPlanMode ?? false);
       setShowWebpage(cfg.mcpTools?.showWebpage !== false);
       if (cfg.httpServer) {
@@ -76,6 +81,7 @@ export function SettingsDialog() {
       ...config,
       editor,
       monacoVimMode: vimMode,
+      theme,
       httpDefaultPlanMode: httpPlanMode,
       mcpTools: { showWebpage },
       httpServer: {
@@ -87,6 +93,10 @@ export function SettingsDialog() {
     };
 
     await api.saveConfig(updated);
+
+    // Apply theme immediately and update store
+    applyTheme(theme);
+    useStore.getState().setConfig(updated);
 
     // Start or stop the HTTP server based on the toggle
     if (httpEnabled && !serverRunning) {
@@ -152,6 +162,7 @@ export function SettingsDialog() {
   const isDirty = config
     ? (config.editor ?? "nvim") !== editor ||
       (config.monacoVimMode ?? false) !== vimMode ||
+      (config.theme ?? "dark") !== theme ||
       (config.httpDefaultPlanMode ?? false) !== httpPlanMode ||
       (config.mcpTools?.showWebpage !== false) !== showWebpage ||
       (config.httpServer?.enabled ?? false) !== httpEnabled ||
@@ -225,6 +236,11 @@ export function SettingsDialog() {
             onClick={() => setActiveTab("general")}
           />
           <TabButton
+            label="Appearance"
+            active={activeTab === "appearance"}
+            onClick={() => setActiveTab("appearance")}
+          />
+          <TabButton
             label="Remote"
             active={activeTab === "remote"}
             onClick={() => setActiveTab("remote")}
@@ -252,6 +268,9 @@ export function SettingsDialog() {
                 vimMode={vimMode}
                 setVimMode={setVimMode}
               />
+            )}
+            {activeTab === "appearance" && (
+              <AppearanceTab theme={theme} setTheme={setTheme} />
             )}
             {activeTab === "tools" && (
               <McpToolsTab
@@ -423,6 +442,73 @@ function GeneralTab({
           </p>
         </div>
         <ToggleSwitch value={vimMode} onChange={setVimMode} />
+      </div>
+    </>
+  );
+}
+
+// --- Appearance Tab ---
+
+function AppearanceTab({
+  theme,
+  setTheme,
+}: {
+  theme: "dark" | "light";
+  setTheme: (v: "dark" | "light") => void;
+}) {
+  return (
+    <>
+      <div className="flex flex-col gap-2">
+        <label
+          className="text-[11px] font-semibold"
+          style={{ color: "var(--ctp-subtext0)" }}
+        >
+          Theme
+        </label>
+        <p className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
+          Choose between dark and light appearance.
+        </p>
+        <div
+          className="flex rounded-lg overflow-hidden"
+          style={{ border: "1px solid var(--ctp-surface1)" }}
+        >
+          <button
+            onClick={() => setTheme("dark")}
+            className="flex-1 py-2 text-sm font-medium transition-colors"
+            style={{
+              backgroundColor:
+                theme === "dark"
+                  ? "var(--ctp-surface1)"
+                  : "var(--ctp-surface0)",
+              color:
+                theme === "dark"
+                  ? "var(--ctp-text)"
+                  : "var(--ctp-overlay0)",
+            }}
+          >
+            Dark
+          </button>
+          <div
+            className="w-px"
+            style={{ backgroundColor: "var(--ctp-surface1)" }}
+          />
+          <button
+            onClick={() => setTheme("light")}
+            className="flex-1 py-2 text-sm font-medium transition-colors"
+            style={{
+              backgroundColor:
+                theme === "light"
+                  ? "var(--ctp-surface1)"
+                  : "var(--ctp-surface0)",
+              color:
+                theme === "light"
+                  ? "var(--ctp-text)"
+                  : "var(--ctp-overlay0)",
+            }}
+          >
+            Light
+          </button>
+        </div>
       </div>
     </>
   );

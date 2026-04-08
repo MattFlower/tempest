@@ -40,7 +40,7 @@ export interface TempestStore {
   commandPaletteVisible: boolean;
   commandPaletteInitialMode: "commands" | "files";
   settingsDialogVisible: boolean;
-  settingsDialogInitialTab: "general" | "remote" | "tools";
+  settingsDialogInitialTab: "general" | "remote" | "tools" | "appearance";
   cloneRepoDialogVisible: boolean;
   httpServerRunning: boolean;
   httpServerError: string | null;
@@ -68,7 +68,7 @@ export interface TempestStore {
   toggleCommandPalette: () => void;
   openCommandPaletteFiles: () => void;
   toggleSettingsDialog: () => void;
-  openSettingsTab: (tab: "general" | "remote" | "tools") => void;
+  openSettingsTab: (tab: "general" | "remote" | "tools" | "appearance") => void;
   showCloneRepoDialog: () => void;
   hideCloneRepoDialog: () => void;
   setHttpServerStatus: (running: boolean, error?: string | null) => void;

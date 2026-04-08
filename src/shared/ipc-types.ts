@@ -140,6 +140,7 @@ export interface AppConfig {
   claudeArgs: string[];
   editor?: string; // e.g. "nvim", "hx", "vim", "code". Defaults to "nvim".
   monacoVimMode?: boolean; // Enable vim keybindings in Monaco editor. Defaults to false.
+  theme?: "dark" | "light"; // Appearance theme. Defaults to "dark".
   httpServer?: HttpServerConfig;
   httpDefaultPlanMode?: boolean; // Start HTTP-created workspaces in plan mode. Defaults to false.
   mcpTools?: McpToolConfig;

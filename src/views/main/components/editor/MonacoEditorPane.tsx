@@ -34,13 +34,11 @@ import { useStore } from "../../state/store";
 import { PaneTabKind, EditorType } from "../../../../shared/ipc-types";
 import { createTab } from "../../models/pane-node";
 import { addTab } from "../../state/actions";
-import { tempestTheme, TEMPEST_THEME_NAME } from "./tempest-theme";
+import { tempestTheme, TEMPEST_THEME_NAME, tempestLightTheme, TEMPEST_LIGHT_THEME_NAME } from "./tempest-theme";
 import { ImportLinkProvider, TEMPEST_FILE_SCHEME } from "./import-link-provider";
 
 // Configure Monaco to load from local bundled files
 loader.config({ paths: { vs: "./monaco-editor/min/vs" } });
-
-const THEME_NAME = TEMPEST_THEME_NAME;
 
 interface MonacoEditorPaneProps {
   filePath: string;
@@ -55,6 +53,9 @@ export function MonacoEditorPane({
   isFocused,
   onCloseRequest,
 }: MonacoEditorPaneProps) {
+  const themeMode = useStore((s) => s.config?.theme ?? "dark");
+  const monacoThemeName = themeMode === "light" ? TEMPEST_LIGHT_THEME_NAME : TEMPEST_THEME_NAME;
+
   const [content, setContent] = useState<string | null>(null);
   const [language, setLanguage] = useState("plaintext");
   const [error, setError] = useState<string | null>(null);
@@ -166,9 +167,10 @@ export function MonacoEditorPane({
     editorRef.current = editor;
     setEditorReady(true);
 
-    // Register the Espresso Libre theme once
+    // Register dark and light themes once
     if (!themeRegistered.current) {
-      monaco.editor.defineTheme(THEME_NAME, tempestTheme);
+      monaco.editor.defineTheme(TEMPEST_THEME_NAME, tempestTheme);
+      monaco.editor.defineTheme(TEMPEST_LIGHT_THEME_NAME, tempestLightTheme);
       themeRegistered.current = true;
 
       // Disable semantic validation — Monaco's TS service doesn't have access
@@ -181,7 +183,8 @@ export function MonacoEditorPane({
         noSemanticValidation: true,
       });
     }
-    monaco.editor.setTheme(THEME_NAME);
+    const currentTheme = useStore.getState().config?.theme ?? "dark";
+    monaco.editor.setTheme(currentTheme === "light" ? TEMPEST_LIGHT_THEME_NAME : TEMPEST_THEME_NAME);
 
     // Jump to line if specified
     if (lineNumber) {
@@ -322,7 +325,7 @@ export function MonacoEditorPane({
         <Editor
           defaultValue={content}
           language={language}
-          theme={THEME_NAME}
+          theme={monacoThemeName}
           onChange={handleEditorChange}
           onMount={handleEditorMount}
           options={{

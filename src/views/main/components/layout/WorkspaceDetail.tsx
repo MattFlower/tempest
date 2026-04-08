@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { PaneTabKind, ViewMode } from "../../../../shared/ipc-types";
 import type { PaneNode } from "../../models/pane-node";
-import { createPane, createTab, createLeaf, createSplit } from "../../models/pane-node";
+import { createPane, createTab, createLeaf, createSplit, allPanes, findPane } from "../../models/pane-node";
 import { useStore } from "../../state/store";
 import { PaneTreeView } from "./PaneTreeView";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
@@ -10,7 +10,6 @@ import { PRDashboard } from "../pr/PRDashboard";
 import { VCSView } from "../vcs/VCSView";
 import { initTerminalDispatch } from "../../state/terminal-dispatch";
 import { addTab, splitPane, focusNextPane, focusPreviousPane, toggleMaximize, closeTab } from "../../state/actions";
-import { findPane } from "../../models/pane-node";
 
 // Normalize: if root is a leaf, wrap it in a single-child split.
 // This prevents React from tearing down & recreating the component
@@ -30,6 +29,7 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
   const paneTrees = useStore((s) => s.paneTrees);
   const setPaneTree = useStore((s) => s.setPaneTree);
   const setFocusedPaneId = useStore((s) => s.setFocusedPaneId);
+  const selectedWorkspacePath = useStore((s) => s.selectedWorkspacePath);
   const viewMode = useStore(
     (s) => s.workspaceViewMode[workspacePath] ?? ViewMode.Terminal,
   );
@@ -123,6 +123,19 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
       setFocusedPaneId(pane.id);
     }
   }, [workspacePath, paneTrees, setPaneTree, setFocusedPaneId]);
+
+  // Ensure a valid pane is focused when this workspace becomes active
+  useEffect(() => {
+    if (workspacePath !== selectedWorkspacePath) return;
+    if (!tree) return;
+    const { focusedPaneId } = useStore.getState();
+    if (!focusedPaneId || !findPane(tree, focusedPaneId)) {
+      const panes = allPanes(tree);
+      if (panes.length > 0) {
+        setFocusedPaneId(panes[0]!.id);
+      }
+    }
+  }, [workspacePath, selectedWorkspacePath, tree, setFocusedPaneId]);
 
   if (!tree) {
     return null; // Will be created by useEffect

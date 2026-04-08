@@ -21,6 +21,7 @@ export interface TempestStore {
   // --- Pane state (per workspace) ---
   paneTrees: Record<string, PaneNode>; // keyed by workspace path
   focusedPaneId: string | null;
+  focusedPaneIds: Record<string, string | null>; // per-workspace focused pane cache
   maximizedPaneId: string | null;
 
   // --- View mode (per workspace) ---
@@ -83,6 +84,7 @@ export const useStore = create<TempestStore>((set) => ({
 
   paneTrees: {},
   focusedPaneId: null,
+  focusedPaneIds: {},
   maximizedPaneId: null,
 
   workspaceViewMode: {},
@@ -110,14 +112,32 @@ export const useStore = create<TempestStore>((set) => ({
       workspacesByRepo: { ...s.workspacesByRepo, [repoId]: workspaces },
     })),
   selectWorkspace: (path) =>
-    set({ selectedWorkspacePath: path, maximizedPaneId: null }),
+    set((s) => {
+      let focusMap = s.focusedPaneIds;
+      // Save current focus for the departing workspace
+      if (s.selectedWorkspacePath) {
+        focusMap = { ...focusMap, [s.selectedWorkspacePath]: s.focusedPaneId };
+      }
+      return {
+        selectedWorkspacePath: path,
+        maximizedPaneId: null,
+        focusedPaneId: path ? (focusMap[path] ?? null) : null,
+        focusedPaneIds: focusMap,
+      };
+    }),
   setSidebarInfo: (path, info) =>
     set((s) => ({ sidebarInfo: { ...s.sidebarInfo, [path]: info } })),
   setConfig: (config) => set({ config }),
 
   setPaneTree: (workspacePath, tree) =>
     set((s) => ({ paneTrees: { ...s.paneTrees, [workspacePath]: tree } })),
-  setFocusedPaneId: (id) => set({ focusedPaneId: id }),
+  setFocusedPaneId: (id) =>
+    set((s) => ({
+      focusedPaneId: id,
+      focusedPaneIds: s.selectedWorkspacePath
+        ? { ...s.focusedPaneIds, [s.selectedWorkspacePath]: id }
+        : s.focusedPaneIds,
+    })),
   setMaximizedPaneId: (id) => set({ maximizedPaneId: id }),
 
   setViewMode: (workspacePath, mode) =>

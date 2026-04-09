@@ -17,6 +17,7 @@ export function OpenPRDialog({ workspacePath, workspaceName, vcsType, onCreated,
   const [bookmarkName, setBookmarkName] = useState("");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [draft, setDraft] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingDefaults, setIsLoadingDefaults] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -47,7 +48,7 @@ export function OpenPRDialog({ workspacePath, workspaceName, vcsType, onCreated,
     setErrorMessage(null);
 
     const bookmark = isJJ ? bookmarkName.trim() : undefined;
-    const result = await api.openPR(workspacePath, title.trim(), body, bookmark);
+    const result = await api.openPR(workspacePath, title.trim(), body, bookmark, draft);
 
     if ("error" in result) {
       setErrorMessage(result.error);
@@ -89,8 +90,8 @@ export function OpenPRDialog({ workspacePath, workspaceName, vcsType, onCreated,
           </h2>
           <p className="text-xs mt-1" style={{ color: "var(--ctp-overlay0)" }}>
             {isJJ
-              ? "Set a bookmark and push to create a draft PR"
-              : "Push current branch and create a draft PR"}
+              ? "Set a bookmark and push to create a PR"
+              : "Push current branch and create a PR"}
           </p>
         </div>
 
@@ -104,6 +105,10 @@ export function OpenPRDialog({ workspacePath, workspaceName, vcsType, onCreated,
               value={bookmarkName}
               onChange={(e) => setBookmarkName(e.target.value)}
               placeholder="e.g. my-feature"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
               className="px-3 py-1.5 rounded text-sm font-mono outline-none"
               style={{
                 backgroundColor: "var(--ctp-surface0)",
@@ -152,6 +157,18 @@ export function OpenPRDialog({ workspacePath, workspaceName, vcsType, onCreated,
             }}
           />
         </div>
+
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={draft}
+            onChange={(e) => setDraft(e.target.checked)}
+            className="accent-[var(--ctp-mauve)]"
+          />
+          <span className="text-xs" style={{ color: "var(--ctp-subtext0)" }}>
+            Open as draft
+          </span>
+        </label>
 
         {errorMessage && (
           <p className="text-[11px]" style={{ color: "var(--ctp-red)" }}>

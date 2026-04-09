@@ -373,6 +373,7 @@ export interface BunRequests {
       bookmarkName?: string;
       title: string;
       body: string;
+      draft?: boolean;
     };
     response: { prURL: string } | { error: string };
   };

@@ -663,7 +663,7 @@ const rpc = BrowserView.defineRPC({
           const vcsType = workspaceManager.getVCSType(ws.repoPath);
           const prURL = await openPRAction(
             params.workspacePath, ws.repoPath, vcsType,
-            params.bookmarkName, params.title, params.body,
+            params.bookmarkName, params.title, params.body, params.draft ?? true,
           );
           // Persist PR state
           sessionStateManager.savePRState(params.workspacePath, {

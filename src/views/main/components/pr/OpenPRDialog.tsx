@@ -59,7 +59,8 @@ export function OpenPRDialog({ workspacePath, workspaceName, vcsType, onCreated,
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey && canSubmit) {
+    const targetTag = (e.target as HTMLElement).tagName;
+    if (e.key === "Enter" && !e.shiftKey && targetTag !== "TEXTAREA" && canSubmit) {
       e.preventDefault();
       handleSubmit();
     } else if (e.key === "Escape") {

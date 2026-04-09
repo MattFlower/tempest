@@ -1,6 +1,6 @@
 import { useMemo, useCallback, useState, useEffect } from "react";
 import { PaneTabKind, WorkspaceStatus, ActivityState, VCSType } from "../../../../shared/ipc-types";
-import type { CustomScript, OpenPRState } from "../../../../shared/ipc-types";
+import type { CustomScript, OpenPRState, VCSFileEntry } from "../../../../shared/ipc-types";
 import { createTab, createPane, createLeaf, createSplit, toNodeState } from "../../models/pane-node";
 import { useStore } from "../../state/store";
 import { addTab, splitPane } from "../../state/actions";
@@ -9,6 +9,7 @@ import { DropdownButton, type DropdownItem } from "./DropdownButton";
 import { StatusBadge } from "./StatusBadge";
 import { PRReviewDialog } from "../pr/PRReviewDialog";
 import { OpenPRDialog } from "../pr/OpenPRDialog";
+import { UncommittedChangesDialog } from "../pr/UncommittedChangesDialog";
 import { ScriptDialog } from "./ScriptDialog";
 import { ScriptRunDialog } from "./ScriptRunDialog";
 import { editorIcons } from "./editor-icons";
@@ -62,6 +63,8 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
   const [prState, setPrState] = useState<OpenPRState | null>(null);
   const [prError, setPrError] = useState<string | null>(null);
   const [vcsType, setVcsType] = useState<VCSType>(VCSType.Git);
+  const [dirtyFiles, setDirtyFiles] = useState<VCSFileEntry[] | null>(null);
+  const [showDirtyDialog, setShowDirtyDialog] = useState(false);
 
   const [showScriptDialog, setShowScriptDialog] = useState(false);
   const [customScripts, setCustomScripts] = useState<CustomScript[]>([]);
@@ -232,11 +235,25 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
       } catch (err) {
         setPrError(err instanceof Error ? err.message : String(err));
       }
+    } else if (vcsType === VCSType.Git) {
+      // Git repo — check for uncommitted changes before opening PR dialog
+      try {
+        const status = await api.getVCSStatus(workspacePath);
+        if (status.files.length > 0) {
+          setDirtyFiles(status.files);
+          setShowDirtyDialog(true);
+        } else {
+          setShowOpenPR(true);
+        }
+      } catch {
+        // If status check fails, just proceed to PR dialog
+        setShowOpenPR(true);
+      }
     } else {
-      // No PR yet — show dialog
+      // Non-git VCS — show dialog directly
       setShowOpenPR(true);
     }
-  }, [workspacePath, prState]);
+  }, [workspacePath, prState, vcsType]);
 
   const handlePRCreated = useCallback((prURL: string, bookmarkName?: string) => {
     const newState: OpenPRState = { prURL, bookmarkName };
@@ -447,6 +464,27 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
           }}
           isLoading={prReviewLoading}
           errorMessage={prReviewError}
+        />
+      )}
+
+      {showDirtyDialog && dirtyFiles && (
+        <UncommittedChangesDialog
+          workspacePath={workspacePath}
+          files={dirtyFiles}
+          onCommitted={() => {
+            setShowDirtyDialog(false);
+            setDirtyFiles(null);
+            setShowOpenPR(true);
+          }}
+          onSkip={() => {
+            setShowDirtyDialog(false);
+            setDirtyFiles(null);
+            setShowOpenPR(true);
+          }}
+          onCancel={() => {
+            setShowDirtyDialog(false);
+            setDirtyFiles(null);
+          }}
         />
       )}
 

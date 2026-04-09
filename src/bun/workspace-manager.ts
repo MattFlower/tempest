@@ -25,7 +25,7 @@ import {
 } from "./config/repo-settings";
 import { detectVCS, detectVCSType } from "./vcs/detector";
 import type { VCSProvider } from "./vcs/types";
-import { PathResolver } from "./config/path-resolver";
+import { PathResolver, getResolvedPATH } from "./config/path-resolver";
 import { WEBPAGE_PREVIEWS_DIR } from "./config/paths";
 
 export class WorkspaceManager {
@@ -533,6 +533,7 @@ export class WorkspaceManager {
     const remoteRepos = await this.getRemoteRepos(repoPath);
     const env: Record<string, string> = {
       ...process.env as Record<string, string>,
+      PATH: getResolvedPATH(),
       REMOTE_REPOS: remoteRepos.join(" "),
       WORKSPACE_NAME: workspaceName,
     };

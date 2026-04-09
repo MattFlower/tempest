@@ -31,6 +31,11 @@ function captureLoginShellPATH(): string {
 // Cache the PATH once at module load time
 const cachedPATH = captureLoginShellPATH();
 
+/** The full login-shell PATH, including additional search paths. */
+export function getResolvedPATH(): string {
+  return cachedPATH;
+}
+
 export class PathResolver {
   resolve(binary: string, configuredPath?: string): string {
     if (configuredPath) {

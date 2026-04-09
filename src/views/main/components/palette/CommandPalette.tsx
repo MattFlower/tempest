@@ -144,6 +144,23 @@ function useCommands(): PaletteCommand[] {
       addTabToFocusedPane(PaneTabKind.Browser, "GitHub", { browserURL: result.url });
     }},
 
+    { id: "view-pr-in-browser", label: "View PR in Browser", canOpenAsPane: true, action: async () => {
+      if (!selectedWorkspacePath) return;
+
+      // Fast path: use cached PR URL if available
+      const cached = await api.getOpenPRState(selectedWorkspacePath);
+      if (cached?.prURL) {
+        addTabToFocusedPane(PaneTabKind.Browser, "PR", { browserURL: cached.prURL });
+        return;
+      }
+
+      // Slow path: discover via gh CLI and cache
+      const result = await api.lookupPRUrl(selectedWorkspacePath);
+      if ("error" in result) return;
+      addTabToFocusedPane(PaneTabKind.Browser, "PR", { browserURL: result.url });
+      api.setOpenPRState(selectedWorkspacePath, { prURL: result.url });
+    }},
+
     // App
     { id: "toggle-sidebar", label: "Toggle Sidebar", shortcutHint: "⌘\\", canOpenAsPane: false, action: toggleSidebar },
     { id: "toggle-devtools", label: "Toggle Developer Tools", shortcutHint: "⌘⌥I", canOpenAsPane: false, action: () => toggleDevTools() },

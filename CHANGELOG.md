@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Fixed
+
+### Changed
+
+### Removed
+
+## [0.11.1] - 2026-04-08
+
+### Added
+
 - Draft mode checkbox in Open PR dialog (checked by default)
 - Browser DNS error page — when navigating to a hostname that can't be resolved, the browser pane now shows a styled error page instead of silently doing nothing.
 - Uncommitted changes check when opening a PR in git repos — shows a dialog with changed files and options to commit, skip, or cancel

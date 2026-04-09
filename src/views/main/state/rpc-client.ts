@@ -659,6 +659,10 @@ export const api = {
   openInEditor: (editorId: string, directory: string) =>
     rpcRequest.openInEditor({ editorId, directory }),
 
+  // Browser DNS
+  resolveDns: (hostname: string) =>
+    rpcRequest.resolveDns({ hostname }),
+
   // HTTP Remote Control Server
   startHttpServer: (params: { enabled: boolean; port: number; hostname: string; token: string }) =>
     rpcRequest.startHttpServer(params),

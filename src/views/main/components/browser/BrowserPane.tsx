@@ -10,10 +10,12 @@ import { findPane } from "../../models/pane-node";
 import { useStore } from "../../state/store";
 import { ViewMode } from "../../../../shared/ipc-types";
 import { BrowserToolbar, FindBar } from "./BrowserToolbar";
+import { api } from "../../state/rpc-client";
 
 // Electrobun webview element type (system webview custom element)
 interface ElectrobunWebview extends HTMLElement {
   loadURL(url: string): void;
+  loadHTML(html: string): void;
   goBack(): void;
   goForward(): void;
   reload(): void;
@@ -25,6 +27,77 @@ interface ElectrobunWebview extends HTMLElement {
   togglePassthrough(value?: boolean): void;
   executeJavascript(js: string): void;
   on(event: string, handler: (...args: any[]) => void): void;
+}
+
+/** Build a self-contained HTML error page for DNS resolution failures. */
+function dnsErrorPage(url: string, hostname: string, error: string): string {
+  const escapedUrl = url.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const escapedHost = hostname.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const escapedError = error.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 2rem;
+  }
+  .container {
+    max-width: 480px;
+    text-align: center;
+  }
+  .icon {
+    font-size: 48px;
+    margin-bottom: 1.5rem;
+    opacity: 0.7;
+  }
+  h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    color: #ffffff;
+  }
+  .hostname {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    background: rgba(255,255,255,0.08);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    font-size: 0.95em;
+  }
+  .detail {
+    color: #999;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    margin-bottom: 1.5rem;
+  }
+  .error-code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    color: #777;
+    font-size: 0.75rem;
+    margin-top: 1.5rem;
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">&#x1F50D;</div>
+    <h1>Can\u2019t find <span class="hostname">${escapedHost}</span></h1>
+    <p class="detail">
+      The server at <strong>${escapedHost}</strong> can\u2019t be found because the
+      DNS lookup failed. Check the address for typos, or verify your network connection.
+    </p>
+    <p class="error-code">${escapedError}<br>${escapedUrl}</p>
+  </div>
+</body>
+</html>`;
 }
 
 export interface BrowserPaneProps {
@@ -243,13 +316,31 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
 
   // Navigation actions — wrapped in try-catch for resilience against
   // webview methods being unavailable during initialization or teardown.
-  const navigate = useCallback((url: string) => {
+  const navigate = useCallback(async (url: string) => {
     const el = webviewRef.current;
     if (!el) return;
     try {
       setIsLoading(true);
-      el.loadURL(url);
       setCurrentUrl(url);
+
+      // Pre-flight DNS check for http/https URLs to catch unresolvable
+      // hostnames before handing the URL to WKWebView (which silently
+      // does nothing on DNS failure — no error event, no error page).
+      try {
+        const parsed = new URL(url);
+        if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+          const result = await api.resolveDns(parsed.hostname);
+          if (!result.ok) {
+            el.loadHTML(dnsErrorPage(url, parsed.hostname, result.error ?? "DNS lookup failed"));
+            setIsLoading(false);
+            return;
+          }
+        }
+      } catch {
+        // URL parsing failed — let WKWebView handle it
+      }
+
+      el.loadURL(url);
     } catch {
       setIsLoading(false);
     }

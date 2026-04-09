@@ -595,6 +595,12 @@ export interface BunRequests {
     response: { terminalCommand: string[] | null };
   };
 
+  // --- Browser DNS ---
+  resolveDns: {
+    params: { hostname: string };
+    response: { ok: boolean; error?: string };
+  };
+
   // --- HTTP Remote Control Server ---
   startHttpServer: {
     params: HttpServerConfig;

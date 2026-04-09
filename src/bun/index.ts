@@ -961,6 +961,16 @@ const rpc = BrowserView.defineRPC({
       getInstalledEditors: () => getInstalledEditors(),
       openInEditor: (params: any) => openInEditor(params.editorId, params.directory),
 
+      // --- Browser DNS ---
+      resolveDns: async (params: any) => {
+        try {
+          await (Bun.dns as any).resolve(params.hostname);
+          return { ok: true };
+        } catch (err: any) {
+          return { ok: false, error: err?.code ?? err?.message ?? "DNS lookup failed" };
+        }
+      },
+
       // --- HTTP Remote Control Server ---
       startHttpServer: (params: any) => {
         const config = {

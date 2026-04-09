@@ -147,7 +147,10 @@ export function WorkspaceRow({ workspace, sidebarInfo, isSelected, onSelect, onA
           <path d="M5 5v6" />
           <path d="M9.5 6C8 6 5 6.5 5 8.5" />
         </svg>
-        <span className="truncate text-[13px] font-semibold text-[var(--ctp-text)]">
+        <span
+          className="truncate text-[13px] font-semibold text-[var(--ctp-text)]"
+          title={workspace.path}
+        >
           {workspace.name}
         </span>
         <span className="flex-1" />

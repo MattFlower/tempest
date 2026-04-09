@@ -1,0 +1,4 @@
+# No formatting solution has been set up for this codebase yet.
+# Until one is chosen, ignore everything so editor-integrated prettier
+# can't reformat files against the repo's de facto style.
+*

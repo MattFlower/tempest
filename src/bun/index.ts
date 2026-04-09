@@ -1077,6 +1077,10 @@ const win = new BrowserWindow({
   rpc,
 });
 
+// Vertically center the macOS traffic-light buttons inside our 40px (h-10) top bar.
+// (x, y) is the top-left of the close button, measured from the window's top-left.
+win.setWindowButtonPosition(16, 17);
+
 // --- Stream A: Wire PTY output/exit to webview ---
 ptyManager.onOutput((id, data, seq) => {
   win.webview.rpc.send.terminalOutput({ id, data, seq });

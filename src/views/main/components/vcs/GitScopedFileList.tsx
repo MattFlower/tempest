@@ -10,6 +10,7 @@ interface GitScopedFileListProps {
   selectedFilePath: string | null;
   onSelectFile: (path: string) => void;
   summary: string;
+  aiContextPaths?: Set<string>;
 }
 
 const CHANGE_TYPE_COLORS: Record<string, string> = {
@@ -33,6 +34,7 @@ export function GitScopedFileList({
   selectedFilePath,
   onSelectFile,
   summary,
+  aiContextPaths,
 }: GitScopedFileListProps) {
   return (
     <div className="flex flex-col h-full overflow-y-auto" style={{ backgroundColor: "var(--ctp-base)" }}>
@@ -97,6 +99,18 @@ export function GitScopedFileList({
               <span className="truncate" style={{ color: "var(--ctp-text)" }}>
                 {fileName}
               </span>
+              {aiContextPaths?.has(file.path) && (
+                <span
+                  className="text-[9px] font-bold px-1 py-px rounded-full flex-shrink-0"
+                  style={{
+                    background: "var(--ctp-mauve)",
+                    color: "var(--ctp-base)",
+                  }}
+                  title="Claude has edited this file"
+                >
+                  AI
+                </span>
+              )}
               {dirPath && (
                 <span
                   className="truncate flex-shrink-0 ml-auto"

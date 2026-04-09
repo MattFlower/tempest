@@ -108,6 +108,7 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
   const [aiTimeline, setAiTimeline] = useState<FileChangeTimeline | null>(null);
   const [currentChangeIndex, setCurrentChangeIndex] = useState(0);
   const [aiPanelRatio, setAiPanelRatio] = useState(0.3);
+  const [aiContextPaths, setAiContextPaths] = useState<Set<string>>(new Set());
 
   // --- Shared state ---
   const [diffData, setDiffData] = useState<VCSFileDiffResult | null>(null);
@@ -319,6 +320,44 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
 
     return () => { cancelled = true; };
   }, [activeFilePath, workspacePath]);
+
+  // --- Pre-fetch AI context indicators for all files in the current scope ---
+
+  const listedPaths = isScoped
+    ? scopedFiles.map((f) => f.path)
+    : files.map((f) => f.path);
+  const listedPathsKey = listedPaths.join("\n");
+
+  useEffect(() => {
+    if (!workspacePath || listedPaths.length === 0) {
+      setAiContextPaths(new Set());
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      const paths = new Set<string>();
+      const results = await Promise.all(
+        listedPaths.map(async (path) => {
+          try {
+            const ctx = await api.getAIContextForFile(`${workspacePath}/${path}`);
+            return ctx && ctx.sessions.length > 0 ? path : null;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      for (const path of results) {
+        if (path) paths.add(path);
+      }
+      if (!cancelled) setAiContextPaths(paths);
+    })();
+
+    return () => { cancelled = true; };
+    // listedPathsKey captures list identity; workspacePath is the other dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listedPathsKey, workspacePath]);
 
   // --- Stage/unstage operations ---
 
@@ -579,6 +618,7 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
                 onStageAll={handleStageAll}
                 onUnstageAll={handleUnstageAll}
                 onContextMenu={handleFileContextMenu}
+                aiContextPaths={aiContextPaths}
               />
             </div>
             <VCSCommitPanel
@@ -601,6 +641,7 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
               selectedFilePath={scopedSelectedFile}
               onSelectFile={setScopedSelectedFile}
               summary={scopedSummary}
+              aiContextPaths={aiContextPaths}
             />
           </div>
         )}

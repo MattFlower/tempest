@@ -213,6 +213,7 @@ export function JJView({ workspacePath }: JJViewProps) {
   const [currentChangeIndex, setCurrentChangeIndex] = useState(0);
   const [aiPanelRatio, setAiPanelRatio] = useState(0.3);
   const [fileListWidth, setFileListWidth] = useState(200);
+  const [aiContextPaths, setAiContextPaths] = useState<Set<string>>(new Set());
 
   // Ask Claude state
   const diffContainerRef = useRef<HTMLDivElement>(null);
@@ -430,6 +431,41 @@ export function JJView({ workspacePath }: JJViewProps) {
 
     return () => { cancelled = true; };
   }, [selectedFilePath, workspacePath]);
+
+  // --- Pre-fetch AI context indicators for all files in the current revision/range ---
+
+  const changedFilePathsKey = changedFiles.map((f) => f.path).join("\n");
+
+  useEffect(() => {
+    if (!workspacePath || changedFiles.length === 0) {
+      setAiContextPaths(new Set());
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      const paths = new Set<string>();
+      const results = await Promise.all(
+        changedFiles.map(async (file) => {
+          try {
+            const ctx = await api.getAIContextForFile(`${workspacePath}/${file.path}`);
+            return ctx && ctx.sessions.length > 0 ? file.path : null;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      for (const path of results) {
+        if (path) paths.add(path);
+      }
+      if (!cancelled) setAiContextPaths(paths);
+    })();
+
+    return () => { cancelled = true; };
+    // changedFilePathsKey captures file-list identity; workspacePath is the other dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [changedFilePathsKey, workspacePath]);
 
   // --- Action handlers ---
 
@@ -1071,6 +1107,18 @@ export function JJView({ workspacePath }: JJViewProps) {
                             <span className="truncate" style={{ color: "var(--ctp-text)" }}>
                               {fileName}
                             </span>
+                            {aiContextPaths.has(file.path) && (
+                              <span
+                                className="text-[9px] font-bold px-1 py-px rounded-full flex-shrink-0"
+                                style={{
+                                  background: "var(--ctp-mauve)",
+                                  color: "var(--ctp-base)",
+                                }}
+                                title="Claude has edited this file"
+                              >
+                                AI
+                              </span>
+                            )}
                           </div>
                         );
                       })

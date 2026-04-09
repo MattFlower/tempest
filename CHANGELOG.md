@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hovering over a workspace name in the sidebar now shows the full workspace path as a tooltip.
 - "View PR in Browser" is now available in the command palette (previously only reachable via the PR button dropdown).
 - Sidebar collapse/expand button in the view mode bar. Clicking toggles the left sidebar (equivalent to ⌘\ or the command palette's "Toggle Sidebar").
-
+- "AI" badge in the VCS view file lists (git working changes, git scoped views, and jj revisions) marking files that Claude has edited in session history. Matches the indicator previously only available in the Diff View sidebar.
 ### Fixed
 
 - Popups, dialogs, and command/file palettes now render correctly over browser panes without having to hide the whole browser. The browser stays visible behind the popup and clicks outside the popup dismiss it as expected. Uses the new `auto-mask` attribute on `<electrobun-webview>` from our Electrobun fork, which punches holes in the native WKWebView wherever host HTML overlays overlap it and routes pointer events through to the host when a modal-style wrapper is open.

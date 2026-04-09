@@ -15,6 +15,7 @@ interface VCSFileListProps {
   onStageAll: () => void;
   onUnstageAll: () => void;
   onContextMenu?: (file: VCSFileEntry, x: number, y: number) => void;
+  aiContextPaths?: Set<string>;
 }
 
 const CHANGE_TYPE_COLORS: Record<string, string> = {
@@ -41,12 +42,14 @@ function FileRow({
   onSelect,
   onToggleStage,
   onContextMenu,
+  hasAiContext,
 }: {
   file: VCSFileEntry;
   isSelected: boolean;
   onSelect: () => void;
   onToggleStage: () => void;
   onContextMenu?: (x: number, y: number) => void;
+  hasAiContext?: boolean;
 }) {
   const fileName = file.path.split("/").pop() ?? file.path;
   const dirPath = file.path.includes("/")
@@ -100,6 +103,18 @@ function FileRow({
       <span className="truncate" style={{ color: "var(--ctp-text)" }}>
         {fileName}
       </span>
+      {hasAiContext && (
+        <span
+          className="text-[9px] font-bold px-1 py-px rounded-full flex-shrink-0"
+          style={{
+            background: "var(--ctp-mauve)",
+            color: "var(--ctp-base)",
+          }}
+          title="Claude has edited this file"
+        >
+          AI
+        </span>
+      )}
       {dirPath && (
         <span
           className="truncate flex-shrink-0 ml-auto"
@@ -121,6 +136,7 @@ export function VCSFileList({
   onStageAll,
   onUnstageAll,
   onContextMenu,
+  aiContextPaths,
 }: VCSFileListProps) {
   const stagedFiles = files.filter((f) => f.staged);
   const unstagedFiles = files.filter((f) => !f.staged);
@@ -175,6 +191,7 @@ export function VCSFileList({
               onSelect={() => onSelectFile(file.path, true)}
               onToggleStage={() => handleToggleStage(file)}
               onContextMenu={onContextMenu ? (x, y) => onContextMenu(file, x, y) : undefined}
+              hasAiContext={aiContextPaths?.has(file.path)}
             />
           ))
         )}
@@ -218,6 +235,7 @@ export function VCSFileList({
               onSelect={() => onSelectFile(file.path, false)}
               onToggleStage={() => handleToggleStage(file)}
               onContextMenu={onContextMenu ? (x, y) => onContextMenu(file, x, y) : undefined}
+              hasAiContext={aiContextPaths?.has(file.path)}
             />
           ))
         )}

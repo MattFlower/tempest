@@ -284,7 +284,21 @@ export function MarkdownViewer({ filePath, paneId }: MarkdownViewerProps) {
       )}
 
       {/* Markdown content iframe + Ask Claude tooltip */}
-      <div className="relative flex-1 overflow-hidden">
+      {/*
+        WKWebView quirk: wheel events over a srcDoc iframe do not reliably
+        scroll the sub-document (arrow keys do, because they dispatch via
+        keyboard focus). As a workaround, catch wheel events on the wrapper
+        and forward them to the iframe's contentWindow.
+      */}
+      <div
+        className="relative flex-1 overflow-hidden"
+        onWheel={(e) => {
+          const win = iframeRef.current?.contentWindow;
+          if (win) {
+            win.scrollBy(e.deltaX, e.deltaY);
+          }
+        }}
+      >
         <iframe
           ref={iframeRef}
           srcDoc={srcdoc ?? ""}

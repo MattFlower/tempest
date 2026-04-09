@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Markdown preview now scrolls with the mouse wheel. Previously only the arrow keys worked, because wheel events over the srcDoc iframe were not being forwarded to the sub-document by WKWebView. The wrapper now catches wheel events and scrolls the iframe's contentWindow manually.
+
 ### Changed
 
 ### Removed

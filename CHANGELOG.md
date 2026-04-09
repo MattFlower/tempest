@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Hovering over a workspace name in the sidebar now shows the full workspace path as a tooltip.
 - "View PR in Browser" is now available in the command palette (previously only reachable via the PR button dropdown).
+- Sidebar collapse/expand button in the view mode bar. Clicking toggles the left sidebar (equivalent to ⌘\ or the command palette's "Toggle Sidebar").
 
 ### Fixed
 

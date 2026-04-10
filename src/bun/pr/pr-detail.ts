@@ -8,12 +8,14 @@
 // restarts and the Progress view loads instantly.
 // ============================================================
 
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, existsSync } from "node:fs";
 import { stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { PathResolver } from "../config/path-resolver";
 import { parseGitHubRemote } from "./pr-url-lookup";
 import { PROGRESS_CACHE_FILE } from "../config/paths";
+import { extractSlugFromTranscript } from "../session-id-lookup";
 import type { PRDetailInfo } from "../../shared/ipc-types";
 
 const pathResolver = new PathResolver();
@@ -32,6 +34,10 @@ interface DiskCache {
   version: 1;
   entries: Record<string, { data: PRDetailInfo; timestamp: number }>;
   workspaceMeta?: Record<string, WorkspaceMeta>;
+  // Map of Claude sessionId → plan slug.
+  // Slugs are immutable per session so this cache is permanent.
+  // (Older caches may contain "" sentinels from a prior negative-cache strategy.)
+  sessionPlanSlugs?: Record<string, string>;
 }
 
 let diskCache: DiskCache | null = null;
@@ -44,6 +50,7 @@ function loadDiskCache(): DiskCache {
     if (raw?.version === 1 && raw.entries) {
       diskCache = raw as DiskCache;
       if (!diskCache.workspaceMeta) diskCache.workspaceMeta = {};
+      if (!diskCache.sessionPlanSlugs) diskCache.sessionPlanSlugs = {};
       // Populate memory cache from disk on cold start
       for (const [key, entry] of Object.entries(diskCache.entries)) {
         memCache.set(key, entry);
@@ -53,7 +60,7 @@ function loadDiskCache(): DiskCache {
   } catch {
     // File doesn't exist or is malformed
   }
-  diskCache = { version: 1, entries: {}, workspaceMeta: {} };
+  diskCache = { version: 1, entries: {}, workspaceMeta: {}, sessionPlanSlugs: {} };
   return diskCache;
 }
 
@@ -180,6 +187,60 @@ export function setWorkspaceCreatedAt(workspacePath: string, createdAt: string):
     diskDirty = true;
     saveDiskCacheDebounced();
   }
+}
+
+/**
+ * Resolve the plan path for a Claude session, using a permanent
+ * sessionId → slug cache to avoid re-parsing multi-MB JSONL transcripts.
+ *
+ * - Cache hit: one map lookup + one existsSync on the plan file.
+ * - Cache miss: parse the transcript JSONL and cache only positive slug hits.
+ *
+ * Slugs are immutable per session, so the positive cache has no TTL.
+ * The plan file itself is checked via existsSync on every call so newly
+ * written plans are picked up without any invalidation.
+ */
+export function resolveSessionPlanPath(
+  sessionId: string,
+  workspacePath: string,
+  claudeDir?: string,
+): string | null {
+  const base = claudeDir ?? join(homedir(), ".claude");
+  const plansDir = join(base, "plans");
+
+  const dc = loadDiskCache();
+  if (!dc.sessionPlanSlugs) dc.sessionPlanSlugs = {};
+
+  let slug: string | undefined = dc.sessionPlanSlugs[sessionId];
+
+  // Backward-compat: older versions stored "" as a permanent negative cache.
+  // Drop it so we can re-check and eventually discover late-written slugs/plans.
+  if (slug === "") {
+    delete dc.sessionPlanSlugs[sessionId];
+    slug = undefined;
+    diskDirty = true;
+    saveDiskCacheDebounced();
+  }
+
+  if (slug === undefined) {
+    const encodedPath = workspacePath.replace(/\//g, "-");
+    const transcriptPath = join(
+      base,
+      "projects",
+      encodedPath,
+      `${sessionId}.jsonl`,
+    );
+    const parsed = extractSlugFromTranscript(transcriptPath);
+    if (!parsed) return null;
+
+    slug = parsed;
+    dc.sessionPlanSlugs[sessionId] = slug;
+    diskDirty = true;
+    saveDiskCacheDebounced();
+  }
+
+  const planPath = join(plansDir, `${slug}.md`);
+  return existsSync(planPath) ? planPath : null;
 }
 
 /**

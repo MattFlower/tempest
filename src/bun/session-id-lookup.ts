@@ -101,7 +101,7 @@ export function lookupPlanPath(
  * Extract the slug field from a JSONL transcript file.
  * The slug doesn't appear on every line — scan until we find one.
  */
-function extractSlugFromTranscript(transcriptPath: string): string | null {
+export function extractSlugFromTranscript(transcriptPath: string): string | null {
   let fd: number;
   try {
     fd = openSync(transcriptPath, "r");

@@ -10,8 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Keychain-backed environment variables for the Pi coding agent. A new "Pi" tab in Settings (`src/views/main/components/settings/SettingsDialog.tsx`) lets users add, replace, and delete named secrets (API keys, etc.) that are stored in the macOS Keychain via `/usr/bin/security` (`src/bun/keychain.ts`). Only the *names* are persisted to `~/.config/tempest/config.json` as `piEnvVarNames`; values never touch disk outside the keychain. `SessionManager.buildPiCommand` in `src/bun/session-manager.ts` now resolves each configured name to its keychain value at launch time and shell-quotes `NAME='value'` assignments in front of the existing `TEMPEST_HOOK_SOCKET` assignment so Pi inherits the secrets via the normal `zsh -lic "… exec pi …"` invocation. Names that can't be resolved (missing from the keychain) are skipped with a console warning rather than blocking the launch. RPC surface: `listPiEnvVarNames`, `setPiEnvVar`, `deletePiEnvVar`.
+- Progress view detail panel now shows a link to the Claude Code plan file (when one exists) for the workspace's first persisted Claude tab. Clicking jumps to the workspace and opens the plan in a MarkdownViewer tab. Uses a permanent sessionId→slug cache so each poll does at most one map lookup + one stat per workspace.
 
 ### Fixed
+
+- Fixed Progress-view Claude plan link discovery in `src/bun/pr/pr-detail.ts`: `resolveSessionPlanPath` no longer writes permanent negative cache entries (`""`) for sessions whose transcript slug is not yet present. This prevents a race where an early poll (before Claude writes the slug/plan) could suppress the plan link forever for that session. Existing legacy `""` cache entries are now cleared on read so affected sessions self-heal.
 
 ### Changed
 

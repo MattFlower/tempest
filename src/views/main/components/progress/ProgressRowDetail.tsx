@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
-import { ViewMode, WorkspaceStage } from "../../../../shared/ipc-types";
+import { PaneTabKind, ViewMode, WorkspaceStage } from "../../../../shared/ipc-types";
 import type {
   WorkspaceProgressInfo,
   PRDetailInfo,
 } from "../../../../shared/ipc-types";
 import { useStore } from "../../state/store";
 import { api } from "../../state/rpc-client";
+import { allPanes, createTab } from "../../models/pane-node";
+import { addTab } from "../../state/actions";
 
 interface Props {
   workspace: WorkspaceProgressInfo;
@@ -17,6 +19,45 @@ function navigateToWorkspace(wsPath: string, viewMode: ViewMode) {
   store.selectWorkspace(wsPath);
   store.setViewMode(wsPath, viewMode);
   store.setProgressViewActive(false);
+}
+
+/**
+ * Jump to a workspace and open a MarkdownViewer tab for the given path.
+ * Mirrors the openUrlInWorkspace helper in ProgressRow: the pane tree may
+ * not be initialized yet, so we subscribe to the store and add the tab
+ * once the target workspace's tree becomes available.
+ */
+function openPlanInWorkspace(wsPath: string, planPath: string) {
+  const store = useStore.getState();
+  store.selectWorkspace(wsPath);
+  store.setViewMode(wsPath, ViewMode.Terminal);
+  store.setProgressViewActive(false);
+
+  const label = planPath.split("/").pop() ?? "Plan";
+
+  const tryAddTab = () => {
+    const state = useStore.getState();
+    const tree = state.paneTrees[wsPath];
+    if (!tree || state.selectedWorkspacePath !== wsPath) return false;
+
+    const panes = allPanes(tree);
+    const paneId = panes[0]?.id;
+    if (!paneId) return false;
+
+    state.setFocusedPaneId(paneId);
+    const tab = createTab(PaneTabKind.MarkdownViewer, label, {
+      markdownFilePath: planPath,
+    });
+    addTab(paneId, tab);
+    return true;
+  };
+
+  if (tryAddTab()) return;
+
+  const unsub = useStore.subscribe(() => {
+    if (tryAddTab()) unsub();
+  });
+  setTimeout(() => unsub(), 5000);
 }
 
 function formatRelativeTime(isoDate: string): string {
@@ -62,6 +103,28 @@ function StatGroup({
         {children}
       </span>
     </div>
+  );
+}
+
+function PlanStat({ ws }: { ws: WorkspaceProgressInfo }) {
+  if (!ws.planPath) return null;
+  const name = ws.planPath.split("/").pop() ?? "Plan";
+  return (
+    <StatGroup label="Plan">
+      <a
+        href="#"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openPlanInWorkspace(ws.workspacePath, ws.planPath!);
+        }}
+        className="text-[11px] no-underline truncate inline-block max-w-full"
+        style={{ color: "var(--ctp-blue)" }}
+        title={ws.planPath}
+      >
+        {name} →
+      </a>
+    </StatGroup>
   );
 }
 
@@ -355,6 +418,8 @@ function PRDetail({ ws }: { ws: WorkspaceProgressInfo }) {
         )}
       </StatGroup>
 
+      <PlanStat ws={ws} />
+
       <DateStats ws={ws} />
     </div>
   );
@@ -393,6 +458,7 @@ function InDevDetail({ ws }: { ws: WorkspaceProgressInfo }) {
             "—"
           )}
         </StatGroup>
+        <PlanStat ws={ws} />
         <DateStats ws={ws} />
       </div>
       <div
@@ -460,6 +526,7 @@ function MergedDetail({ ws }: { ws: WorkspaceProgressInfo }) {
           "—"
         )}
       </StatGroup>
+      <PlanStat ws={ws} />
       <DateStats ws={ws} />
     </div>
   );

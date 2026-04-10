@@ -42,7 +42,7 @@ import { readFileForEditor, writeFileForEditor, resolveModulePath } from "./edit
 import { AIContextProvider } from "./ai-context/ai-context-provider";
 import { PRMonitor } from "./pr/pr-monitor";
 import { lookupPRUrl } from "./pr/pr-url-lookup";
-import { getPRDetail, getPRDetailCached, clearPRDetailCache, getWorkspaceMeta, setWorkspaceLastOpened, resolveWorkspaceCreatedAt } from "./pr/pr-detail";
+import { getPRDetail, getPRDetailCached, clearPRDetailCache, getWorkspaceMeta, setWorkspaceLastOpened, resolveWorkspaceCreatedAt, resolveSessionPlanPath } from "./pr/pr-detail";
 import { getDefaultTitleAndBody, openPR as openPRAction, updatePR as updatePRAction } from "./pr/pr-open";
 import { getAssignedPRs, refreshAssignedPRs } from "./pr/pr-assigned";
 import { startPRReview } from "./pr/pr-review-coordinator";
@@ -882,6 +882,15 @@ const rpc: any = (BrowserView.defineRPC as any)({
             const meta = getWorkspaceMeta(ws.path);
             const createdAt = await resolveWorkspaceCreatedAt(ws.path);
 
+            // Plan file lookup — derives sessionId from the persisted pane
+            // tree (in-memory) and uses a permanent sessionId→slug cache so
+            // the hot path is one map lookup + one existsSync per workspace.
+            let planPath: string | undefined;
+            const claudeSessionId = sessionStateManager.getFirstClaudeSessionId(ws.path);
+            if (claudeSessionId) {
+              planPath = resolveSessionPlanPath(claudeSessionId, ws.path) ?? undefined;
+            }
+
             results.push({
               workspaceId: ws.id,
               workspacePath: ws.path,
@@ -897,6 +906,7 @@ const rpc: any = (BrowserView.defineRPC as any)({
               prURL,
               createdAt,
               lastOpenedAt: meta.lastOpenedAt,
+              planPath,
             });
           }
         }

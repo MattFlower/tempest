@@ -6,6 +6,7 @@ import type {
   OpenPRState,
   WorkspacePaneState,
 } from "../shared/ipc-types";
+import { PaneTabKind } from "../shared/ipc-types";
 import { TEMPEST_DIR } from "./config/paths";
 
 const CURRENT_VERSION = 1;
@@ -117,6 +118,35 @@ export class SessionStateManager {
     }
     this.state!.collapsedRepoIds = Array.from(current);
     this.dirty = true;
+  }
+
+  /**
+   * Walk the persisted pane tree for a workspace and return the first
+   * Claude tab's sessionId. Both the uppercase (`sessionID`) and lowercase
+   * (`sessionId`) field names are accepted to match PaneTabState.
+   */
+  getFirstClaudeSessionId(workspacePath: string): string | null {
+    const ws = this.state?.workspaces[workspacePath];
+    if (!ws) return null;
+
+    const walk = (node: PaneNodeState | undefined): string | null => {
+      if (!node) return null;
+      if (node.type === "leaf") {
+        for (const tab of node.pane.tabs) {
+          if (tab.kind !== PaneTabKind.Claude) continue;
+          const id = tab.sessionID ?? tab.sessionId;
+          if (id) return id;
+        }
+        return null;
+      }
+      for (const child of node.children) {
+        const found = walk(child);
+        if (found) return found;
+      }
+      return null;
+    };
+
+    return walk(ws.paneTree);
   }
 
   /** Update scrollback/cwd on terminal tabs in all stored pane trees. */

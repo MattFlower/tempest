@@ -206,6 +206,9 @@ export interface WorkspaceProgressInfo {
   prURL?: string;
   createdAt?: string;
   lastOpenedAt?: string;
+  /** Absolute path to the Claude Code plan file for this workspace's first
+   * persisted Claude tab, if one exists on disk. */
+  planPath?: string;
 }
 
 // --- Open PR State ---

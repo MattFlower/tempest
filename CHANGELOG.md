@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Popups, dialogs, and command/file palettes now render correctly over browser panes without having to hide the whole browser. The browser stays visible behind the popup and clicks outside the popup dismiss it as expected. Uses the new `auto-mask` attribute on `<electrobun-webview>` from our Electrobun fork, which punches holes in the native WKWebView wherever host HTML overlays overlap it and routes pointer events through to the host when a modal-style wrapper is open.
 - Traffic-light buttons (close/minimize/zoom) are now vertically centered inside the 40px top bar instead of being crammed into the top-left corner. Uses the new `setWindowButtonPosition` API exposed by our Electrobun fork.
 - Markdown preview now scrolls with the mouse wheel. Previously only the arrow keys worked, because wheel events over the srcDoc iframe were not being forwarded to the sub-document by WKWebView. The wrapper now catches wheel events and scrolls the iframe's contentWindow manually.
 - Pressing Enter inside the Open PR description textarea no longer submits the dialog; it now inserts a newline as expected. Enter still submits from the other fields.

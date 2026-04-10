@@ -114,12 +114,17 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
   // Ref tracks latest visibility for use in async callbacks (avoids stale closures).
   const isTrulyVisibleRef = useRef(false);
 
-  // True visibility: combines all four hiding layers (tab selection, pane
+  // True visibility: combines hiding layers (tab selection, pane
   // maximization, workspace selection, view mode) so we can tell the native
   // webview overlay to hide — CSS opacity/display have no effect on it.
+  //
+  // Note: we intentionally do NOT check `overlayCount` here. The native
+  // overlay is kept visible while popups/dialogs/palettes are open and the
+  // auto-mask system (Electrobun fork) cuts holes where the host HTML popup
+  // content lives. The old "hide the whole browser" behavior was a workaround
+  // for not having auto-mask and is no longer needed.
   const isTrulyVisible = useStore((s) => {
     if (!isVisible) return false;
-    if (s.overlayCount > 0) return false;
     if (s.maximizedPaneId !== null && s.maximizedPaneId !== paneId) return false;
     for (const [wsPath, tree] of Object.entries(s.paneTrees)) {
       if (findPane(tree, paneId)) {
@@ -429,6 +434,7 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
           id={webviewId}
           src={tab.browserURL || "about:blank"}
           style={{ flex: 1, width: "100%", minHeight: 0 }}
+          auto-mask=""
         />
       )}
     </div>

@@ -41,7 +41,7 @@
     "@xterm/xterm": "^6.0.0",
     "diff": "^8.0.3",
     "diff2html": "^3.4.56",
-    "electrobun": "^1.16.0",
+    "electrobun": "https://github.com/MattFlower/electrobun/releases/download/v1.17.3-beta.11-tempest.1/electrobun-1.17.3-beta.11-tempest.1.tgz",
     "eruda": "^3.4.3",
     "highlight.js": "^11.11.1",
     "markdown-it": "^14.1.1",

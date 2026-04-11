@@ -7,7 +7,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../../state/rpc-client";
 import type { Bookmark } from "../../../../shared/ipc-types";
-import { normalizeURL } from "../../../../shared/url-utils";
+import { normalizeURL, resolveOmniboxInput } from "../../../../shared/url-utils";
 
 // --- Portal Popover ---
 // Renders children into document.body so they aren't clipped by
@@ -129,12 +129,9 @@ export function BrowserToolbar({
   const handleUrlKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      let url = urlText.trim();
-      if (!url) return;
-      if (!url.includes("://")) {
-        url = "https://" + url;
-      }
-      onNavigate(url);
+      const input = urlText.trim();
+      if (!input) return;
+      onNavigate(resolveOmniboxInput(input));
       urlInputRef.current?.blur();
     }
   };

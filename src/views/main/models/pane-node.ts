@@ -132,6 +132,7 @@ export function fromNodeState(state: PaneNodeState): PaneNode {
       // Editor tabs only need a terminalId for terminal-based editors (not Monaco).
       terminalId:
         ts.kind === PaneTabKind.Claude || ts.kind === PaneTabKind.Shell ||
+        ts.kind === PaneTabKind.Pi ||
         (ts.kind === PaneTabKind.Editor && ts.editorType !== EditorType.Monaco)
           ? crypto.randomUUID()
           : undefined,

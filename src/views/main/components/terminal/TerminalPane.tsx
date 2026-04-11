@@ -143,6 +143,16 @@ export function TerminalPane({
           console.error("Failed to build Claude command:", e);
           command = ["/bin/zsh", "-lic", "exec claude"];
         }
+      } else if (tabKindRef.current === PaneTabKind.Pi) {
+        try {
+          const result = await api.buildPiCommand({
+            workspacePath: cwdRef.current,
+          });
+          command = result.command;
+        } catch (e) {
+          console.error("Failed to build Pi command:", e);
+          command = ["/bin/zsh", "-lic", "exec pi"];
+        }
       } else {
         try {
           const result = await api.buildShellCommand({

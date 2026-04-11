@@ -39,6 +39,7 @@ function TabContent({ tab, paneId, isFocused, isVisible, workspacePath }: { tab:
   switch (tab.kind) {
     case PaneTabKind.Shell:
     case PaneTabKind.Claude:
+    case PaneTabKind.Pi:
       if (!tab.terminalId) {
         return (
           <div className="flex h-full items-center justify-center text-[var(--ctp-overlay0)] text-xs">

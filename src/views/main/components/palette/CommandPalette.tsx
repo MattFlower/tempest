@@ -44,6 +44,7 @@ function addTabToFocusedPane(kind: PaneTabKind, label: string, overrides?: Recor
   const needsTerminalId =
     kind === PaneTabKind.Claude ||
     kind === PaneTabKind.Shell ||
+    kind === PaneTabKind.Pi ||
     (kind === PaneTabKind.Editor &&
       overrides?.editorType !== EditorType.Monaco &&
       !(overrides?.editorType === undefined && isMonacoDefault()));
@@ -78,6 +79,7 @@ function useCommands(): PaletteCommand[] {
   return [
     // Tab commands
     { id: "new-claude", label: "Claude", shortcutHint: "⌘T", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.Claude, "Claude") },
+    { id: "new-pi", label: "Pi", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.Pi, "Pi") },
     { id: "new-shell", label: "New Shell Tab", shortcutHint: "⌘⏎", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.Shell, "Shell") },
     { id: "new-browser", label: "Browser", shortcutHint: "⌘⇧B", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.Browser, "Browser") },
     { id: "history", label: "Chat History", shortcutHint: "⌘⇧H", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.HistoryViewer, "History") },

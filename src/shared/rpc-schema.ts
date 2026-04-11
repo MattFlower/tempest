@@ -98,6 +98,10 @@ export interface BunRequests {
     params: { workspacePath: string };
     response: { command: string[] };
   };
+  buildPiCommand: {
+    params: { workspacePath: string };
+    response: { command: string[] };
+  };
   buildEditorCommand: {
     params: { filePath: string; lineNumber?: number };
     response: { command: string[] };

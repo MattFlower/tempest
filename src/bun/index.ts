@@ -379,6 +379,7 @@ const rpc = BrowserView.defineRPC({
         mcpToken: mcpServer.getToken(),
       }),
       buildShellCommand: (params: any) => sessionManager.buildShellCommand(params),
+      buildPiCommand: (params: any) => sessionManager.buildPiCommand(params),
       buildEditorCommand: async (params: any) => {
         const config = await loadConfig();
         const editor = config.editor ?? "nvim";

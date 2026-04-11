@@ -38,6 +38,7 @@ export enum EditorType {
 
 export enum PaneTabKind {
   Claude = "claude",
+  Pi = "pi",
   Shell = "shell",
   Browser = "browser",
   HistoryViewer = "historyViewer",
@@ -137,7 +138,9 @@ export interface AppConfig {
   gitPath?: string;
   claudePath?: string;
   ghPath?: string;
+  piPath?: string;
   claudeArgs: string[];
+  piArgs?: string[];
   editor?: string; // e.g. "nvim", "hx", "vim", "code". Defaults to "nvim".
   monacoVimMode?: boolean; // Enable vim keybindings in Monaco editor. Defaults to false.
   theme?: "dark" | "light"; // Appearance theme. Defaults to "dark".

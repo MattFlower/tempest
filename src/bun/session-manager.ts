@@ -91,6 +91,15 @@ export class SessionManager {
     return { command: ["/bin/zsh", "-l"] };
   }
 
+  buildPiCommand(_params: {
+    workspacePath: string;
+  }): { command: string[] } {
+    const piPath = this.resolveBinary("pi", this.config.piPath);
+    const parts = [piPath, ...(this.config.piArgs ?? [])];
+    const command = ["/bin/zsh", "-lic", `exec ${parts.join(" ")}`];
+    return { command };
+  }
+
   /** Check if a Claude session JSONL file exists under ~/.claude/projects/ */
   private async sessionExists(sessionId: string, workspacePath: string): Promise<boolean> {
     const home = homedir();

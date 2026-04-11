@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- New "Pi" tab type for launching the Pi coding agent. Available from the tab `+` menu, the workspace toolbar's New/Split dropdowns, and the command palette. Uses a new `piPath` / `piArgs` config and a `buildPiCommand` RPC that resolves the `pi` binary from PATH and runs it in a login shell.
 - Browser URL bar now falls back to a Google search when the input doesn't look like a URL or host, instead of failing to navigate.
 - Hovering over a workspace name in the sidebar now shows the full workspace path as a tooltip.
 - "View PR in Browser" is now available in the command palette (previously only reachable via the PR button dropdown).

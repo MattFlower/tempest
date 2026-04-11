@@ -391,6 +391,8 @@ export const api = {
 
   buildShellCommand: (params: { workspacePath: string }) =>
     rpcRequest.buildShellCommand(params),
+  buildPiCommand: (params: { workspacePath: string }) =>
+    rpcRequest.buildPiCommand(params),
   buildEditorCommand: (filePath: string, lineNumber?: number) =>
     rpcRequest.buildEditorCommand({ filePath, lineNumber }),
 

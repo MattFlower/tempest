@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Sidebar repository collapse state now persists across restarts. Collapsing a repository in the sidebar is saved to session state, so previously collapsed repositories remain collapsed the next time Tempest starts.
+
 ### Fixed
 
 ### Changed

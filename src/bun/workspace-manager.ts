@@ -37,6 +37,7 @@ export class WorkspaceManager {
   private repoSettings: Record<string, RepoSettings> = {};
   private sidebarRefreshTimer?: ReturnType<typeof setInterval>;
   private config: AppConfig = defaultConfig();
+  private isRepoCollapsed: (repoId: string) => boolean = () => false;
 
   // Push-notification callbacks (set by index.ts after RPC is created)
   onWorkspacesChanged?: (
@@ -48,6 +49,15 @@ export class WorkspaceManager {
     info: WorkspaceSidebarInfo,
   ) => void;
   onConfigChanged?: (config: AppConfig) => void;
+
+  setCollapsedResolver(resolver: (repoId: string) => boolean): void {
+    this.isRepoCollapsed = resolver;
+  }
+
+  setRepoExpanded(repoId: string, isExpanded: boolean): void {
+    const repo = this.repos.find((r) => r.id === repoId);
+    if (repo) repo.isExpanded = isExpanded;
+  }
 
   // --- Initialization ---
 
@@ -102,11 +112,12 @@ export class WorkspaceManager {
   private async addRepoInternal(repoPath: string): Promise<void> {
     const provider = detectVCS(repoPath, this.config);
     const name = repoPath.split("/").pop() ?? repoPath;
+    const id = stableId(repoPath);
     const repo: SourceRepo = {
-      id: stableId(repoPath),
+      id,
       path: repoPath,
       name,
-      isExpanded: true,
+      isExpanded: !this.isRepoCollapsed(id),
       vcsType: provider.vcsType,
     };
     this.repos.push(repo);

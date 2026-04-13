@@ -221,6 +221,7 @@ export interface SessionState {
   savedAt: string;
   selectedWorkspacePath?: string;
   workspaces: Record<string, WorkspacePaneState>;
+  collapsedRepoIds?: string[];
 }
 
 export interface WorkspacePaneState {

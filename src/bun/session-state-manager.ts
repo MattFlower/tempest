@@ -22,6 +22,7 @@ export class SessionStateManager {
   }
 
   async load(): Promise<SessionState | null> {
+    if (this.state) return this.state;
     const file = Bun.file(this.stateFilePath);
     if (!(await file.exists())) return null;
 
@@ -94,6 +95,24 @@ export class SessionStateManager {
 
   getPRState(workspacePath: string): OpenPRState | null {
     return this.state?.workspaces[workspacePath]?.prState ?? null;
+  }
+
+  isRepoCollapsed(repoId: string): boolean {
+    return this.state?.collapsedRepoIds?.includes(repoId) ?? false;
+  }
+
+  setRepoCollapsed(repoId: string, collapsed: boolean): void {
+    this.ensureState();
+    const current = new Set(this.state!.collapsedRepoIds ?? []);
+    if (collapsed) {
+      if (current.has(repoId)) return;
+      current.add(repoId);
+    } else {
+      if (!current.has(repoId)) return;
+      current.delete(repoId);
+    }
+    this.state!.collapsedRepoIds = Array.from(current);
+    this.dirty = true;
   }
 
   /** Update scrollback/cwd on terminal tabs in all stored pane trees. */

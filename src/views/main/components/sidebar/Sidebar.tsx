@@ -113,10 +113,14 @@ export function Sidebar() {
   }, []);
 
   const handleToggleExpanded = (repoIndex: number) => {
+    const target = repos[repoIndex];
+    if (!target) return;
+    const nextExpanded = !target.isExpanded;
     const updated = repos.map((r, i) =>
-      i === repoIndex ? { ...r, isExpanded: !r.isExpanded } : r
+      i === repoIndex ? { ...r, isExpanded: nextExpanded } : r
     );
     setRepos(updated);
+    api.setRepoExpanded(target.id, nextExpanded);
   };
 
   return (

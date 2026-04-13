@@ -469,6 +469,8 @@ export const api = {
   loadSessionState: () => rpcRequest.loadSessionState(),
   savePaneState: (workspacePath: string, paneTree: any) =>
     rpcRequest.savePaneState({ workspacePath, paneTree }),
+  setRepoExpanded: (repoId: string, isExpanded: boolean) =>
+    rpcRequest.setRepoExpanded({ repoId, isExpanded }),
 
   // Files
   listFiles: (workspacePath: string) =>

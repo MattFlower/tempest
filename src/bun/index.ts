@@ -527,6 +527,12 @@ const rpc = BrowserView.defineRPC({
         sessionStateManager.savePaneState(_params.workspacePath, _params.paneTree);
         sessionStateManager.setSelectedWorkspacePath(_params.workspacePath);
       },
+      setRepoExpanded: async (_params: any) => {
+        const { repoId, isExpanded } = _params as { repoId: string; isExpanded: boolean };
+        workspaceManager.setRepoExpanded(repoId, isExpanded);
+        sessionStateManager.setRepoCollapsed(repoId, !isExpanded);
+        await sessionStateManager.flush();
+      },
 
       // --- Files (Stream E) ---
       listFiles: async (params: any) => {
@@ -1221,6 +1227,15 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
   }
 
   try {
+    await sessionStateManager.load();
+  } catch (err) {
+    console.error("[main] SessionStateManager preload failed:", err);
+  }
+
+  try {
+    workspaceManager.setCollapsedResolver((repoId) =>
+      sessionStateManager.isRepoCollapsed(repoId),
+    );
     await workspaceManager.initialize();
     console.log("[main] WorkspaceManager initialized");
   } catch (err) {

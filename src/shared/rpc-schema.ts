@@ -258,6 +258,10 @@ export interface BunRequests {
     params: { workspacePath: string; paneTree: PaneNodeState };
     response: void;
   };
+  setRepoExpanded: {
+    params: { repoId: string; isExpanded: boolean };
+    response: void;
+  };
 
   // File operations (for command palette)
   listFiles: {

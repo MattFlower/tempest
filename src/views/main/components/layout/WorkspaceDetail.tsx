@@ -5,7 +5,6 @@ import { createPane, createTab, createLeaf, createSplit, allPanes, findPane } fr
 import { useStore } from "../../state/store";
 import { PaneTreeView } from "./PaneTreeView";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
-import { DiffView } from "../diff/DiffView";
 import { PRDashboard } from "../pr/PRDashboard";
 import { VCSView } from "../vcs/VCSView";
 import { initTerminalDispatch } from "../../state/terminal-dispatch";
@@ -86,13 +85,12 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
           addTab(focusedPaneId, tab);
         }
       }
-      // View mode shortcuts: Cmd+1 = Terminal, Cmd+2 = Diff, Cmd+3 = Dashboard, Cmd+4 = VCS
+      // View mode shortcuts: Cmd+1 = Terminal, Cmd+2 = VCS, Cmd+3 = Dashboard
       if (e.metaKey && !e.shiftKey && !e.altKey) {
         const modeForKey: Record<string, ViewMode> = {
           "1": ViewMode.Terminal,
-          "2": ViewMode.Diff,
+          "2": ViewMode.VCS,
           "3": ViewMode.Dashboard,
-          "4": ViewMode.VCS,
         };
         const mode = modeForKey[e.key];
         if (mode) {
@@ -155,17 +153,6 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
           }`}
         >
           <PaneTreeView node={normalize(tree)} workspacePath={workspacePath} />
-        </div>
-
-        {/* Diff mode */}
-        <div
-          className={`absolute inset-0 ${
-            viewMode === ViewMode.Diff
-              ? "opacity-100"
-              : "opacity-0 pointer-events-none"
-          }`}
-        >
-          {viewMode === ViewMode.Diff && <DiffView />}
         </div>
 
         {/* Dashboard mode — always rendered to preserve monitoring state */}

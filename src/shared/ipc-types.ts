@@ -44,7 +44,6 @@ export enum PaneTabKind {
   HistoryViewer = "historyViewer",
   MarkdownViewer = "markdownViewer",
   Editor = "editor",
-  DiffViewer = "diffViewer",
   PRDashboard = "prDashboard",
 }
 
@@ -52,7 +51,6 @@ export enum PaneTabKind {
 
 export enum ViewMode {
   Terminal = "terminal",
-  Diff = "diff",
   Dashboard = "dashboard",
   VCS = "vcs",
 }
@@ -255,14 +253,6 @@ export interface PaneTabState {
   scrollbackContent?: string; // Serialized terminal scrollback for session restore
 }
 
-// --- Diff Viewer ---
-
-export interface DiffFile {
-  oldPath: string;
-  newPath: string;
-  status: "modified" | "added" | "deleted" | "renamed";
-}
-
 // --- Usage Tracking ---
 
 export interface UsageTokens {
@@ -311,7 +301,7 @@ export interface ToolCallInfo {
   inputParamCount?: number;
 }
 
-// --- AI Context (for Diff Viewer) ---
+// --- AI Context ---
 
 export interface FileAIContext {
   filePath: string;

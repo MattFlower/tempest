@@ -106,7 +106,6 @@ interface ViewModeBarProps {
 const workspaceModes: { mode: ViewMode; label: string }[] = [
   { mode: ViewMode.Dashboard, label: "Dashboard" },
   { mode: ViewMode.Terminal, label: "Terminal" },
-  { mode: ViewMode.Diff, label: "Diff View" },
   { mode: ViewMode.VCS, label: "VCS" },
 ];
 

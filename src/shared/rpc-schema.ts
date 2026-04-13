@@ -9,7 +9,6 @@ import type {
   BinaryStatus,
   Bookmark,
   CustomScript,
-  DiffFile,
   HookEvent,
   HttpServerConfig,
   JJBookmark,
@@ -344,11 +343,7 @@ export interface BunRequests {
     response: { resolvedPath: string | null };
   };
 
-  // Diff viewer
-  getDiff: {
-    params: { workspacePath: string; scope: DiffScope; contextLines?: number; commitRef?: string };
-    response: { raw: string; files: DiffFile[] };
-  };
+  // AI Context
   getAIContextForFile: {
     params: { filePath: string; projectPath?: string };
     response: FileAIContext | null;

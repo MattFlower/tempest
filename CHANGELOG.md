@@ -14,9 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Restoring older session-state files no longer creates blank tabs from removed `diffViewer` pane tabs. Legacy unsupported tab kinds are now ignored during pane hydration.
+- Updated user-facing copy to remove stale references to Diff View where VCS View is now the source of truth.
+
 ### Changed
 
+- ⌘2 now opens VCS view (previously Diff View). ⌘4 no longer bound.
+
 ### Removed
+
+- Diff View, superseded by VCS view which now has feature parity. The workspace view mode, pane tab type, `getDiff` RPC, diff parser/provider, and `DiffFile` shared type are all gone. Shared components (`AIContextPanel`, `InlineDiff`, `AIContextProvider`) moved out of `diff/` into new `ai-context/` folders since they're still used by VCS view.
 
 ## [0.12.0] - 2026-04-12
 

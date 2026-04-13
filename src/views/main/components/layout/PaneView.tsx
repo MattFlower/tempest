@@ -8,7 +8,6 @@ import { TerminalPane } from "../terminal/TerminalPane";
 import { BrowserPane } from "../browser/BrowserPane";
 import { HistoryViewer } from "../history/HistoryViewer";
 import { MarkdownViewer } from "../markdown/MarkdownViewer";
-import { DiffView } from "../diff/DiffView";
 import { PRDashboard } from "../pr/PRDashboard";
 import { EditorPane } from "../editor/EditorPane";
 import { closeTab } from "../../state/actions";
@@ -73,8 +72,6 @@ function TabContent({ tab, paneId, isFocused, isVisible, workspacePath }: { tab:
       return <HistoryViewer />;
     case PaneTabKind.MarkdownViewer:
       return <MarkdownViewer filePath={tab.markdownFilePath} paneId={paneId} />;
-    case PaneTabKind.DiffViewer:
-      return <DiffView />;
     case PaneTabKind.PRDashboard:
       return <PRDashboard />;
     case PaneTabKind.Editor:

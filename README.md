@@ -27,7 +27,7 @@ Grab the latest `Tempest.dmg` or `Tempest.zip` from the [GitHub Releases](https:
 - **PR monitor** -- Track and review pull requests
 - **Session management** -- Workspace persistence, session state restore, and terminal scrollback capture
 - **Workspaces** -- Create, archive, and switch between workspaces, each with their own terminals, browser tabs, and sessions. Activity indicators show whether each workspace is idle, working, or waiting for input.
-- **Ask Claude** -- Highlight text in Diff View or VCS View and send it to Claude Code with context automatically included
+- **Ask Claude** -- Highlight text in VCS View and send it to Claude Code with context automatically included
 - **Custom scripts** -- Define parameterized scripts and run them with a button click
 - **Command palette** -- Quick access to commands (Cmd+Shift+P) and files (Cmd+P), with arrow keys to target left or right pane
 - **Remote control server** -- Optional HTTP server for controlling Tempest remotely, with bearer token auth, a web dashboard, and QR code for easy mobile access

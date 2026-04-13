@@ -29,7 +29,7 @@ import { JJView } from "./JJView";
 import { GitScopeSelector } from "./GitScopeSelector";
 import { GitCommitPicker } from "./GitCommitPicker";
 import { GitScopedFileList } from "./GitScopedFileList";
-import { AIContextPanel } from "../diff/AIContextPanel";
+import { AIContextPanel } from "../ai-context/AIContextPanel";
 import { GitFileContextMenu } from "./GitFileContextMenu";
 
 export function VCSView() {

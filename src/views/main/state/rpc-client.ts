@@ -326,12 +326,6 @@ const rpc = Electroview.defineRPC({
                 store.setViewMode(store.selectedWorkspacePath, ViewMode.Terminal);
               }
               break;
-            case "view-diff":
-              if (store.progressViewActive) store.setProgressViewActive(false);
-              if (store.selectedWorkspacePath) {
-                store.setViewMode(store.selectedWorkspacePath, ViewMode.Diff);
-              }
-              break;
             case "view-dashboard":
               if (store.progressViewActive) store.setProgressViewActive(false);
               if (store.selectedWorkspacePath) {
@@ -533,9 +527,7 @@ export const api = {
   resolveModulePath: (specifier: string, fromFilePath: string) =>
     rpcRequest.resolveModulePath({ specifier, fromFilePath }),
 
-  // Diff viewer
-  getDiff: (workspacePath: string, scope: string, contextLines?: number, commitRef?: string) =>
-    rpcRequest.getDiff({ workspacePath, scope, contextLines, commitRef }),
+  // AI Context
   getAIContextForFile: (filePath: string, projectPath?: string) =>
     rpcRequest.getAIContextForFile({ filePath, projectPath }),
   getAITimelineForFile: (filePath: string, projectPath?: string) =>

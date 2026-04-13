@@ -97,7 +97,7 @@ function useCommands(): PaletteCommand[] {
 
     // View modes
     { id: "terminal-view", label: "Terminal View", shortcutHint: "⌘1", canOpenAsPane: false, action: () => setMode(ViewMode.Terminal) },
-    { id: "diff-view", label: "Diff View", shortcutHint: "⌘2", canOpenAsPane: false, action: () => setMode(ViewMode.Diff) },
+    { id: "vcs-view", label: "VCS View", shortcutHint: "⌘2", canOpenAsPane: false, action: () => setMode(ViewMode.VCS) },
     { id: "dashboard-view", label: "Dashboard View", shortcutHint: "⌘3", canOpenAsPane: false, action: () => setMode(ViewMode.Dashboard) },
 
     // Repos

@@ -69,6 +69,15 @@ export function createLeaf(pane: Pane): PaneNode {
   return { type: "leaf", pane };
 }
 
+function normalizePaneTabKind(kind: unknown): PaneTabKind | null {
+  if (typeof kind !== "string") return null;
+  // Legacy tab kind removed in 0.13.0.
+  if (kind === "diffViewer") return null;
+  return (Object.values(PaneTabKind) as string[]).includes(kind)
+    ? (kind as PaneTabKind)
+    : null;
+}
+
 // --- Serialization (PaneNode ↔ PaneNodeState) ---
 
 import type { PaneNodeState, PaneState, PaneTabState } from "../../../shared/ipc-types";
@@ -115,32 +124,37 @@ export function toNodeState(node: PaneNode): PaneNodeState {
 export function fromNodeState(state: PaneNodeState): PaneNode {
   if (state.type === "leaf") {
     const ps = state.pane;
-    const tabs: PaneTab[] = ps.tabs.map((ts: any) => ({
-      id: crypto.randomUUID(),
-      kind: ts.kind,
-      label: ts.label,
-      isAlive: true,
-      // Handle both Swift's "sessionID" and our "sessionId"
-      sessionId: ts.sessionId ?? ts.sessionID,
-      browserURL: ts.browserURL ?? ts.browserUrl,
-      // Handle both Swift's nested "markdownViewerState.filePath" and our flat "markdownFilePath"
-      markdownFilePath: ts.markdownFilePath ?? ts.markdownViewerState?.filePath,
-      editorFilePath: ts.editorFilePath,
-      editorLineNumber: ts.editorLineNumber,
-      editorType: ts.editorType,
-      diffScope: ts.diffScope,
-      // Terminal/Claude/Shell tabs get fresh terminalIds so new PTYs are created.
-      // Editor tabs only need a terminalId for terminal-based editors (not Monaco).
-      terminalId:
-        ts.kind === PaneTabKind.Claude || ts.kind === PaneTabKind.Shell ||
-        ts.kind === PaneTabKind.Pi ||
-        (ts.kind === PaneTabKind.Editor && ts.editorType !== EditorType.Monaco)
-          ? crypto.randomUUID()
-          : undefined,
-      // Restore shell CWD and scrollback for session restore
-      shellCwd: ts.shellCwd,
-      scrollbackContent: ts.scrollbackContent,
-    }));
+    const tabs: PaneTab[] = ps.tabs.flatMap((ts: any) => {
+      const kind = normalizePaneTabKind(ts.kind);
+      if (!kind) return [];
+
+      return [{
+        id: crypto.randomUUID(),
+        kind,
+        label: ts.label,
+        isAlive: true,
+        // Handle both Swift's "sessionID" and our "sessionId"
+        sessionId: ts.sessionId ?? ts.sessionID,
+        browserURL: ts.browserURL ?? ts.browserUrl,
+        // Handle both Swift's nested "markdownViewerState.filePath" and our flat "markdownFilePath"
+        markdownFilePath: ts.markdownFilePath ?? ts.markdownViewerState?.filePath,
+        editorFilePath: ts.editorFilePath,
+        editorLineNumber: ts.editorLineNumber,
+        editorType: ts.editorType,
+        diffScope: ts.diffScope,
+        // Terminal/Claude/Shell tabs get fresh terminalIds so new PTYs are created.
+        // Editor tabs only need a terminalId for terminal-based editors (not Monaco).
+        terminalId:
+          kind === PaneTabKind.Claude || kind === PaneTabKind.Shell ||
+          kind === PaneTabKind.Pi ||
+          (kind === PaneTabKind.Editor && ts.editorType !== EditorType.Monaco)
+            ? crypto.randomUUID()
+            : undefined,
+        // Restore shell CWD and scrollback for session restore
+        shellCwd: ts.shellCwd,
+        scrollbackContent: ts.scrollbackContent,
+      }];
+    });
     const selectedTab = tabs[ps.selectedTabIndex] ?? tabs[0];
     return {
       type: "leaf",

@@ -32,7 +32,7 @@ import { JJFileContextMenu } from "./JJFileContextMenu";
 import { JJBookmarkDialog } from "./JJBookmarkDialog";
 import { JJRebaseDialog } from "./JJRebaseDialog";
 import { JJRestoreFromDialog } from "./JJRestoreFromDialog";
-import { AIContextPanel } from "../diff/AIContextPanel";
+import { AIContextPanel } from "../ai-context/AIContextPanel";
 
 const DEFAULT_REVSET = "heads(::@ & ::trunk())..@";
 const DEFAULT_BOUNDS = { from: "heads(::@ & ::trunk())", to: "@" };

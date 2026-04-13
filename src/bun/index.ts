@@ -32,11 +32,10 @@ import {
   unwatchMarkdownFile,
   unwatchAll as unwatchAllMarkdown,
 } from "./markdown/markdown-service";
-import { getDiff } from "./diff/diff-provider";
 import { buildEditorCommand } from "./editor/editor-command";
 import { getInstalledEditors, openInEditor } from "./editor/open-in";
 import { readFileForEditor, writeFileForEditor, resolveModulePath } from "./editor/file-service";
-import { AIContextProvider } from "./diff/ai-context-provider";
+import { AIContextProvider } from "./ai-context/ai-context-provider";
 import { PRMonitor } from "./pr/pr-monitor";
 import { lookupPRUrl } from "./pr/pr-url-lookup";
 import { getPRDetail, getPRDetailCached, clearPRDetailCache, getWorkspaceMeta, setWorkspaceLastOpened, resolveWorkspaceCreatedAt } from "./pr/pr-detail";
@@ -626,10 +625,7 @@ const rpc = BrowserView.defineRPC({
         return resolveModulePath(params.specifier, params.fromFilePath);
       },
 
-      // --- Diff Viewer (Feature 1) ---
-      getDiff: async (params: any) => {
-        return await getDiff(params.workspacePath, params.scope, params.contextLines, params.commitRef);
-      },
+      // --- AI Context ---
       getAIContextForFile: async (params: any) => {
         return await aiContextProvider.contextForFile(params.filePath, params.projectPath);
       },
@@ -1186,9 +1182,8 @@ ApplicationMenu.setApplicationMenu([
       { type: "separator" },
       { label: "Progress", action: "view-progress", accelerator: "Cmd+5" },
       { label: "Terminal", action: "view-terminal", accelerator: "Cmd+1" },
-      { label: "Diff", action: "view-diff", accelerator: "Cmd+2" },
+      { label: "VCS", action: "view-vcs", accelerator: "Cmd+2" },
       { label: "Dashboard", action: "view-dashboard", accelerator: "Cmd+3" },
-      { label: "VCS", action: "view-vcs", accelerator: "Cmd+4" },
       { type: "separator" },
       { label: "Toggle Developer Tools", action: "toggle-devtools", accelerator: "Cmd+Alt+I" },
     ],

@@ -230,6 +230,22 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
       updateNavState();
     });
 
+    // Intercept window.open / target="_blank" link clicks and load the URL
+    // in the current webview instead of spawning a new window. Without this,
+    // clicking such links is a silent no-op (common on Google results, news
+    // sites, etc.).
+    el.on("new-window-open", (event: any) => {
+      const url = extractUrl(event);
+      if (!url) return;
+      try {
+        setIsLoading(true);
+        setCurrentUrl(url);
+        el.loadURL(url);
+      } catch {
+        setIsLoading(false);
+      }
+    });
+
     // Listen for host messages from the content page (e.g. page title, find shortcut)
     el.on("host-message", (event: any) => {
       try {

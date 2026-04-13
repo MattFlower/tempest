@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Traffic-light buttons (close/minimize/zoom) are now vertically centered inside the 40px top bar instead of being crammed into the top-left corner. Uses the new `setWindowButtonPosition` API exposed by our Electrobun fork.
 - Markdown preview now scrolls with the mouse wheel. Previously only the arrow keys worked, because wheel events over the srcDoc iframe were not being forwarded to the sub-document by WKWebView. The wrapper now catches wheel events and scrolls the iframe's contentWindow manually.
 - Pressing Enter inside the Open PR description textarea no longer submits the dialog; it now inserts a newline as expected. Enter still submits from the other fields.
+- Clicking links with `target="_blank"` or `window.open(...)` inside a browser pane now navigates the current webview instead of being a silent no-op. Previously these clicks fired Electrobun's `new-window-open` event, which had no handler, so common links on Google results, news sites, etc. appeared dead.
 
 ### Changed
 

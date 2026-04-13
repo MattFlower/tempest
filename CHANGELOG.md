@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Markdown preview now scrolls with the mouse wheel. Previously only the arrow keys worked, because wheel events over the srcDoc iframe were not being forwarded to the sub-document by WKWebView. The wrapper now catches wheel events and scrolls the iframe's contentWindow manually.
 - Pressing Enter inside the Open PR description textarea no longer submits the dialog; it now inserts a newline as expected. Enter still submits from the other fields.
 - Clicking links with `target="_blank"` or `window.open(...)` inside a browser pane now navigates the current webview instead of being a silent no-op. Previously these clicks fired Electrobun's `new-window-open` event, which had no handler, so common links on Google results, news sites, etc. appeared dead.
+- Usage footer cost for the day now matches `ccusage` output. The service was invoking ccusage with `-O` (offline pricing) between 3-hour online refreshes, but the bundled offline pricing table has incorrect rates for `claude-opus-4-6`, inflating the daily total by ~60% on cache-heavy days. Every fetch now uses live pricing.
 
 ### Changed
 

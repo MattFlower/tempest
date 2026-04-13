@@ -1,11 +1,10 @@
 // ============================================================
 // Usage tracking service — runs ccusage to get token counts.
-// Port of UsageService.swift. Caches results with 5-minute TTL.
 //
-// Pricing strategy: ccusage hits the pricing API only when run
-// without -O. We do a full @latest call (with pricing) once
-// every 3 hours, capture the resolved version, then use the
-// pinned version + -O for all intermediate fetches.
+// Always runs `ccusage@latest` with live pricing. A prior version
+// cached pricing with -O/offline mode, but ccusage's offline pricing
+// table disagrees with live prices for claude-opus-4-6, inflating
+// daily cost by ~60% on cache-heavy days.
 // ============================================================
 
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
@@ -19,23 +18,15 @@ interface CachedResult {
 }
 
 interface PersistedState {
-  lastPricingFetchAt: number | null;
-  pinnedVersion: string | null;
   /** Persisted usage cache so data survives app restarts. */
   cachedResult?: CachedResult | null;
 }
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const PRICING_REFRESH_MS = 3 * 60 * 60 * 1000; // 3 hours
 
 let cached: CachedResult | null = null;
 let lastFetchFailed = false;
 let fetchInProgress = false;
-
-/** Timestamp of last full @latest call (with pricing API). */
-let lastPricingFetchAt: number | null = null;
-/** Pinned version discovered from the last @latest call. */
-let pinnedVersion: string | null = null;
 
 let stateLoaded = false;
 
@@ -45,13 +36,10 @@ function ensureStateLoaded(): void {
   try {
     const raw = readFileSync(CCUSAGE_STATE_FILE, "utf-8");
     const state: PersistedState = JSON.parse(raw);
-    if (typeof state.lastPricingFetchAt === "number") lastPricingFetchAt = state.lastPricingFetchAt;
-    if (typeof state.pinnedVersion === "string") pinnedVersion = state.pinnedVersion;
     if (state.cachedResult?.data?.dailyTotals) {
       cached = state.cachedResult;
       console.log(`[usage] restored cached data from disk (fetched ${new Date(cached.fetchedAt).toISOString()})`);
     }
-    console.log(`[usage] restored state: version=${pinnedVersion}, lastPricing=${lastPricingFetchAt ? new Date(lastPricingFetchAt).toISOString() : "never"}`);
   } catch {
     // No persisted state yet — first run
   }
@@ -59,7 +47,7 @@ function ensureStateLoaded(): void {
 
 function savePersistedState(): void {
   try {
-    const state: PersistedState = { lastPricingFetchAt, pinnedVersion, cachedResult: cached };
+    const state: PersistedState = { cachedResult: cached };
     mkdirSync(TEMPEST_DIR, { recursive: true });
     writeFileSync(CCUSAGE_STATE_FILE, JSON.stringify(state, null, 2));
   } catch (err) {
@@ -87,43 +75,11 @@ export function formatTokens(count: number): string {
   return String(count);
 }
 
-/** Whether it's time for a full @latest call with pricing API. */
-function needsPricingRefresh(): boolean {
-  if (lastPricingFetchAt === null) return true;
-  return Date.now() - lastPricingFetchAt >= PRICING_REFRESH_MS;
-}
-
-/** Resolve the current version from a ccusage@latest --version call. */
-async function resolveLatestVersion(bunPath: string): Promise<string | null> {
-  try {
-    const proc = Bun.spawn(
-      [bunPath, "x", "ccusage@latest", "--version"],
-      { stdout: "pipe", stderr: "pipe" },
-    );
-    const output = await new Response(proc.stdout).text();
-    const exitCode = await proc.exited;
-    if (exitCode === 0) {
-      const version = output.trim();
-      if (version) return version;
-    }
-  } catch {}
-  return null;
-}
-
 async function runCCUsage(since: string): Promise<Omit<UsageResponse, "isStale">> {
   const bunPath = process.execPath;
-  const fullRefresh = needsPricingRefresh();
+  const args = [bunPath, "x", "ccusage@latest", "daily", "--json", "--since", since, "--instances"];
 
-  // Build the command: @latest for full refresh, @pinnedVersion + -O otherwise
-  const pkg = fullRefresh || !pinnedVersion
-    ? "ccusage@latest"
-    : `ccusage@${pinnedVersion}`;
-  const args = [bunPath, "x", pkg, "daily", "--json", "--since", since, "--instances"];
-  if (!fullRefresh && pinnedVersion) {
-    args.push("-O");
-  }
-
-  console.log(`[usage] running: ${pkg}${fullRefresh ? " (full refresh)" : " -O (cached pricing)"}`);
+  console.log(`[usage] running: ccusage@latest`);
 
   const proc = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });
 
@@ -145,20 +101,6 @@ async function runCCUsage(since: string): Promise<Omit<UsageResponse, "isStale">
   const exitCode = await proc.exited;
   if (exitCode !== 0) {
     return { dailyTotals: null, projectBreakdowns: {} };
-  }
-
-  // On successful full refresh, record the timestamp and capture version
-  if (fullRefresh) {
-    lastPricingFetchAt = Date.now();
-    savePersistedState();
-    // Resolve version in background — @latest is already cached by bun so this is fast
-    resolveLatestVersion(bunPath).then((v) => {
-      if (v) {
-        console.log(`[usage] pinned ccusage version: ${v}`);
-        pinnedVersion = v;
-        savePersistedState();
-      }
-    });
   }
 
   return parseResponse(output);

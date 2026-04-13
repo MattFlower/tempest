@@ -147,6 +147,7 @@ export function TerminalPane({
         try {
           const result = await api.buildPiCommand({
             workspacePath: cwdRef.current,
+            sessionPath: sessionIdRef.current,
           });
           command = result.command;
         } catch (e) {

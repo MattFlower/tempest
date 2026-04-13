@@ -99,7 +99,7 @@ export interface BunRequests {
     response: { command: string[] };
   };
   buildPiCommand: {
-    params: { workspacePath: string };
+    params: { workspacePath: string; sessionPath?: string };
     response: { command: string[] };
   };
   buildEditorCommand: {

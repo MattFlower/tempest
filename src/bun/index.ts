@@ -1244,6 +1244,24 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
 
   try {
     hookListener.start((event) => {
+      // Pi session discovery: the Tempest-owned Pi extension fires this
+      // event on session_start with transcriptPath = the .jsonl session
+      // file. We resolve the terminalId from Pi's PID and route the path
+      // through the same sessionIdResolved RPC Claude's watcher uses.
+      if (event.eventType === "pi_session_start") {
+        const terminalId = ptyManager.findTerminalByPid(event.pid);
+        const sessionPath = event.transcriptPath;
+        if (terminalId && sessionPath) {
+          try {
+            win.webview.rpc.send.sessionIdResolved({
+              terminalId,
+              sessionId: sessionPath,
+            });
+          } catch { /* webview not ready yet */ }
+        }
+        return;
+      }
+
       activityTracker.handleEvent(event);
       try {
         win.webview.rpc.send.hookEvent(event);

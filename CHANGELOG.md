@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Pi tabs now resume the previous session when Tempest restarts, matching Claude's behavior. A small Pi extension shipped with Tempest (`src/bun/hooks/pi-tempest-extension.ts`) reports the session file path on `session_start` over the existing hook Unix socket; Tempest persists the path in the saved pane tree and passes it back via `pi --session <path>` next time. Missing session files fall back to a fresh session.
 - Sidebar repository collapse state now persists across restarts. Collapsing a repository in the sidebar is saved to session state, so previously collapsed repositories remain collapsed the next time Tempest starts.
 
 ### Fixed

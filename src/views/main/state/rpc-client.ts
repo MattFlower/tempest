@@ -164,12 +164,20 @@ const rpc = Electroview.defineRPC({
         terminalExitHandler?.(id, exitCode);
       },
       sessionIdResolved: (msg: any) => {
-        import("./store").then(({ useStore }) => {
+        Promise.all([
+          import("./store"),
+          import("../models/pane-node"),
+        ]).then(([{ useStore }, paneNode]) => {
           const store = useStore.getState();
           // Find the tab with this terminalId across all workspace pane trees and update its sessionId
           for (const [wsPath, tree] of Object.entries(store.paneTrees)) {
             if (updateTabSessionId(tree as any, msg.terminalId, msg.sessionId)) {
               store.setPaneTree(wsPath, tree as any);
+              // Persist the new sessionId immediately. Claude has a backend
+              // safety net (enrichTreeWithSessionIds scans ~/.claude/sessions/
+              // on the next paneTreeChanged), but Pi has no such fallback —
+              // if we don't notify here, the resolved path could be lost.
+              api.notifyPaneTreeChanged(wsPath, paneNode.toNodeState(tree as any));
               break;
             }
           }
@@ -391,7 +399,7 @@ export const api = {
 
   buildShellCommand: (params: { workspacePath: string }) =>
     rpcRequest.buildShellCommand(params),
-  buildPiCommand: (params: { workspacePath: string }) =>
+  buildPiCommand: (params: { workspacePath: string; sessionPath?: string }) =>
     rpcRequest.buildPiCommand(params),
   buildEditorCommand: (filePath: string, lineNumber?: number) =>
     rpcRequest.buildEditorCommand({ filePath, lineNumber }),

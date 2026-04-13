@@ -148,6 +148,10 @@ export class HookSettingsBuilder {
     return join(import.meta.dir, "tempest-channel.ts");
   }
 
+  static get piExtensionPath(): string {
+    return join(import.meta.dir, "pi-tempest-extension.ts");
+  }
+
   static get socketPath(): string {
     return `/tmp/tempest-${process.getuid?.() ?? 501}.sock`;
   }

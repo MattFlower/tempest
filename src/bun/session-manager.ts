@@ -4,6 +4,11 @@ import { homedir } from "node:os";
 import type { AppConfig } from "../shared/ipc-types";
 import { HookSettingsBuilder } from "./hooks/hook-settings-builder";
 
+/** POSIX single-quote escape so a string is safe to splice into a shell command. */
+function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, "'\\''")}'`;
+}
+
 export class SessionManager {
   private config: AppConfig;
   private cachedPATH: string;
@@ -91,12 +96,31 @@ export class SessionManager {
     return { command: ["/bin/zsh", "-l"] };
   }
 
-  buildPiCommand(_params: {
+  async buildPiCommand(params: {
     workspacePath: string;
-  }): { command: string[] } {
+    sessionPath?: string;
+  }): Promise<{ command: string[] }> {
     const piPath = this.resolveBinary("pi", this.config.piPath);
-    const parts = [piPath, ...(this.config.piArgs ?? [])];
-    const command = ["/bin/zsh", "-lic", `exec ${parts.join(" ")}`];
+    const parts = [piPath, "-e", HookSettingsBuilder.piExtensionPath];
+
+    if (params.sessionPath) {
+      if (await Bun.file(params.sessionPath).exists()) {
+        parts.push("--session", params.sessionPath);
+      } else {
+        console.log(
+          `[session] Pi session ${params.sessionPath} not found, starting new session`,
+        );
+      }
+    }
+
+    parts.push(...(this.config.piArgs ?? []));
+
+    // Shell-quote everything: parts may include arbitrary user paths
+    // (workspaces with spaces, session files, configured piArgs) that
+    // would otherwise be reinterpreted by zsh -lic.
+    const quoted = parts.map(shellQuote).join(" ");
+    const envAssign = `TEMPEST_HOOK_SOCKET=${shellQuote(HookSettingsBuilder.socketPath)}`;
+    const command = ["/bin/zsh", "-lic", `${envAssign} exec ${quoted}`];
     return { command };
   }
 

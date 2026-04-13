@@ -13,7 +13,8 @@ export interface PaneTab {
   label: string;
   terminalId?: string; // Links to PTY instance
   browserURL?: string;
-  sessionId?: string; // Claude session ID
+  /** Claude: session UUID. Pi: absolute path to `.jsonl` session file. */
+  sessionId?: string;
   isAlive: boolean;
   processId?: number;
   activityState?: ActivityState;

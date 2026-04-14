@@ -1045,6 +1045,12 @@ const rpc = BrowserView.defineRPC({
         enrichTreeWithScrollback(_msg.tree);
         sessionStateManager.savePaneState(_msg.workspacePath, _msg.tree);
         sessionStateManager.setSelectedWorkspacePath(_msg.workspacePath);
+
+        // Some updates (e.g. Pi session path discovery) should be persisted
+        // immediately to reduce loss risk on abrupt shutdown.
+        if (_msg.flushNow) {
+          void sessionStateManager.flush();
+        }
       },
 
       // --- Terminal scrollback persistence ---

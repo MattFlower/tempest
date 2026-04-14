@@ -633,7 +633,7 @@ export interface BunMessages {
   writeToTerminal: { id: string; data: string };
   clipboardWrite: { text: string };
   showNotification: { title: string; body?: string };
-  paneTreeChanged: { workspacePath: string; tree: PaneNodeState };
+  paneTreeChanged: { workspacePath: string; tree: PaneNodeState; flushNow?: boolean };
   saveLatencyStats: { id: string; stats: LatencyStats };
   terminalScrollbackUpdate: {
     entries: Array<{ terminalId: string; scrollback: string; cwd?: string }>;

@@ -177,7 +177,11 @@ const rpc = Electroview.defineRPC({
               // safety net (enrichTreeWithSessionIds scans ~/.claude/sessions/
               // on the next paneTreeChanged), but Pi has no such fallback —
               // if we don't notify here, the resolved path could be lost.
-              api.notifyPaneTreeChanged(wsPath, paneNode.toNodeState(tree as any));
+              api.notifyPaneTreeChanged(
+                wsPath,
+                paneNode.toNodeState(tree as any),
+                true,
+              );
               break;
             }
           }
@@ -481,8 +485,8 @@ export const api = {
     rpcRequest.browsePath({ query, workspacePath }),
 
   // Pane tree sync
-  notifyPaneTreeChanged: (workspacePath: string, tree: any) =>
-    rpcSend.paneTreeChanged({ workspacePath, tree }),
+  notifyPaneTreeChanged: (workspacePath: string, tree: any, flushNow?: boolean) =>
+    rpcSend.paneTreeChanged({ workspacePath, tree, flushNow }),
 
   // Terminal scrollback persistence
   sendTerminalScrollbackUpdate: (

@@ -48,11 +48,26 @@ export default function (pi: PiExtensionAPI) {
     };
 
     await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        resolve();
+      };
+
       const sock = net.createConnection(socketPath, () => {
         sock.end(JSON.stringify(payload) + "\n");
       });
-      sock.once("close", () => resolve());
-      sock.once("error", () => resolve());
+
+      // Safety timeout: never let session startup block on a stuck socket.
+      const timeout = setTimeout(() => {
+        try { sock.destroy(); } catch {}
+        finish();
+      }, 1500);
+
+      sock.once("close", finish);
+      sock.once("error", finish);
     });
   });
 }

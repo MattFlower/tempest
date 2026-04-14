@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - HistoryStore now prunes stale AI-context parse/edit cache entries for sessions that no longer exist, and bounds cache growth with LRU-style eviction to prevent unbounded memory usage in long-running app sessions.
 - Restoring older session-state files no longer creates blank tabs from removed `diffViewer` pane tabs. Legacy unsupported tab kinds are now ignored during pane hydration.
 - Updated user-facing copy to remove stale references to Diff View where VCS View is now the source of truth.
+- Hardened Pi session-resume persistence: the bundled Pi extension now times out socket reporting if Tempest's hook socket is unresponsive, and pane-tree updates can request an immediate state flush so newly resolved Pi session paths are less likely to be lost on abrupt shutdown.
 
 ### Changed
 

@@ -8,11 +8,14 @@ import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import type { SessionMessage, SessionSummary } from "../../../../shared/ipc-types";
 import { ToolCallBadge, HIDDEN_TOOLS } from "./ToolCallBadge";
 import { renderInlineMarkdown } from "../inline-markdown";
+import { resumeSessionInNewTab } from "../../state/actions";
+import type { HistoryProvider } from "./SessionList";
 
 interface MessageStreamProps {
   messages: SessionMessage[];
   summary: SessionSummary;
   searchQuery?: string;
+  provider: HistoryProvider;
 }
 
 /** Strip HTML/XML tags from a string */
@@ -89,7 +92,7 @@ function formatTime(isoString: string): string {
   }
 }
 
-export function MessageStream({ messages, summary, searchQuery }: MessageStreamProps) {
+export function MessageStream({ messages, summary, searchQuery, provider }: MessageStreamProps) {
   const [expandedMessages, setExpandedMessages] = useState<Set<number>>(new Set());
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -167,6 +170,18 @@ export function MessageStream({ messages, summary, searchQuery }: MessageStreamP
 
   const displayTitle = stripTags(summary.firstPrompt ?? "Untitled Session");
 
+  const handleResume = useCallback(() => {
+    if (provider === "claude") {
+      // Claude's session UUID is the .jsonl basename.
+      const fileName = summary.filePath.split("/").pop() ?? summary.filePath;
+      const sessionId = fileName.replace(/\.jsonl$/, "");
+      resumeSessionInNewTab("claude", sessionId);
+    } else {
+      // Pi consumes the absolute .jsonl path via --session <path>.
+      resumeSessionInNewTab("pi", summary.filePath);
+    }
+  }, [provider, summary.filePath]);
+
   return (
     <div className="flex flex-col h-full">
       {/* Match navigation bar */}
@@ -211,36 +226,49 @@ export function MessageStream({ messages, summary, searchQuery }: MessageStreamP
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
         <div className="py-2">
           {/* Session header */}
-          <div className="px-4 pt-1 pb-2">
-            <div
-              className="text-base font-semibold leading-tight"
-              style={{ color: "var(--ctp-text)" }}
+          <div className="px-4 pt-1 pb-2 flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              <div
+                className="text-base font-semibold leading-tight"
+                style={{ color: "var(--ctp-text)" }}
+              >
+                {displayTitle}
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                {(summary.modifiedAt ?? summary.createdAt) && (
+                  <span
+                    className="text-xs"
+                    style={{ color: "var(--ctp-subtext0)" }}
+                  >
+                    {formatDate(
+                      (summary.modifiedAt ?? summary.createdAt)!,
+                    )}
+                  </span>
+                )}
+                {summary.gitBranch && (
+                  <span
+                    className="text-[11px] px-1.5 py-0.5 rounded"
+                    style={{
+                      color: "var(--ctp-text)",
+                      backgroundColor: "rgba(255,255,255,0.08)",
+                    }}
+                  >
+                    {summary.gitBranch}
+                  </span>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={handleResume}
+              className="text-xs px-2 py-1 rounded shrink-0 cursor-pointer"
+              style={{
+                backgroundColor: "var(--ctp-blue)",
+                color: "white",
+              }}
+              title={`Open this session in a new ${provider === "claude" ? "Claude" : "Pi"} tab`}
             >
-              {displayTitle}
-            </div>
-            <div className="flex items-center gap-2 mt-1">
-              {(summary.modifiedAt ?? summary.createdAt) && (
-                <span
-                  className="text-xs"
-                  style={{ color: "var(--ctp-subtext0)" }}
-                >
-                  {formatDate(
-                    (summary.modifiedAt ?? summary.createdAt)!,
-                  )}
-                </span>
-              )}
-              {summary.gitBranch && (
-                <span
-                  className="text-[11px] px-1.5 py-0.5 rounded"
-                  style={{
-                    color: "var(--ctp-text)",
-                    backgroundColor: "rgba(255,255,255,0.08)",
-                  }}
-                >
-                  {summary.gitBranch}
-                </span>
-              )}
-            </div>
+              Resume in new tab
+            </button>
           </div>
 
           <div
@@ -276,6 +304,7 @@ export function MessageStream({ messages, summary, searchQuery }: MessageStreamP
                     index={index}
                     isExpanded={expandedMessages.has(index)}
                     onToggleExpand={toggleExpand}
+                    provider={provider}
                   />
                 ) : null}
               </div>
@@ -414,11 +443,13 @@ function AssistantMessage({
   index,
   isExpanded,
   onToggleExpand,
+  provider,
 }: {
   msg: SessionMessage;
   index: number;
   isExpanded: boolean;
   onToggleExpand: (index: number) => void;
+  provider: HistoryProvider;
 }) {
   const isLongText =
     msg.text != null &&
@@ -431,15 +462,31 @@ function AssistantMessage({
 
   return (
     <div className="flex items-start gap-2.5">
-      {/* Claude sparkle icon badge */}
-      <div
-        className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5"
-        style={{
-          background: "linear-gradient(135deg, var(--ctp-peach), rgba(250,179,135,0.8))",
-        }}
-      >
-        <span className="text-[11px] text-white">{"\u2726"}</span>
-      </div>
+      {/* Assistant icon badge — Pi logo for Pi sessions, sparkle for Claude */}
+      {provider === "pi" ? (
+        <div
+          className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5"
+          style={{ backgroundColor: "#11111b" }}
+        >
+          <svg viewBox="0 0 800 800" width="14" height="14" aria-hidden="true">
+            <path
+              fill="#fff"
+              fillRule="evenodd"
+              d="M165.29 165.29 H517.36 V400 H400 V517.36 H282.65 V634.72 H165.29 Z M282.65 282.65 V400 H400 V282.65 Z"
+            />
+            <path fill="#fff" d="M517.36 400 H634.72 V634.72 H517.36 Z" />
+          </svg>
+        </div>
+      ) : (
+        <div
+          className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5"
+          style={{
+            background: "linear-gradient(135deg, var(--ctp-peach), rgba(250,179,135,0.8))",
+          }}
+        >
+          <span className="text-[11px] text-white">{"\u2726"}</span>
+        </div>
+      )}
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
@@ -447,7 +494,7 @@ function AssistantMessage({
             className="text-[11px] font-semibold"
             style={{ color: "var(--ctp-subtext0)" }}
           >
-            CLAUDE
+            {provider === "pi" ? "PI" : "CLAUDE"}
           </span>
           {msg.timestamp && (
             <span

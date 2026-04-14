@@ -299,11 +299,20 @@ export interface BunRequests {
 
   // History
   getHistorySessions: {
-    params: { scope: "all" | "project"; projectPath?: string };
+    params: {
+      scope: "all" | "project";
+      workspacePath?: string;
+      provider?: "claude" | "pi";
+    };
     response: SessionSummary[];
   };
   searchHistory: {
-    params: { query: string; scope: "all" | "project"; projectPath?: string };
+    params: {
+      query: string;
+      scope: "all" | "project";
+      workspacePath?: string;
+      provider?: "claude" | "pi";
+    };
     response: SessionSummary[];
   };
   getSessionMessages: {
@@ -311,7 +320,7 @@ export interface BunRequests {
     response: SessionMessage[];
   };
   isHistorySearchAvailable: {
-    params: void;
+    params: { provider?: "claude" | "pi" };
     response: boolean;
   };
 

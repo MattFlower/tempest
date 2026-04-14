@@ -4,10 +4,18 @@
 // 30s refresh timer for background scanning.
 // ============================================================
 
-import { HistoryMetadataCache, type SessionSummaryData, type CachedSession } from "./metadata-cache";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import {
+  HistoryMetadataCache,
+  encodeWorkspacePath,
+  type SessionSummaryData,
+  type CachedSession,
+} from "./metadata-cache";
 import { RipgrepSearcher } from "./ripgrep-searcher";
 import { parseFile, type ParsedMessage } from "./jsonl-parser";
 import type { SessionSummary, SessionMessage, ToolCallInfo } from "../../shared/ipc-types";
+import type { SessionHistoryProvider } from "./session-history-provider";
 
 interface ParseCacheEntry {
   mtime: number;
@@ -24,7 +32,11 @@ interface EditIndexEntry {
 const MAX_PARSE_CACHE_ENTRIES = 300;
 const MAX_EDIT_INDEX_ENTRIES = 1000;
 
-export class HistoryStore {
+const CLAUDE_PROJECTS_ROOT = join(homedir(), ".claude", "projects");
+
+export class HistoryStore implements SessionHistoryProvider {
+  readonly providerId = "claude" as const;
+
   private readonly cache: HistoryMetadataCache;
   private readonly searcher: RipgrepSearcher;
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -56,10 +68,10 @@ export class HistoryStore {
 
   async getSessions(
     scope: "all" | "project",
-    projectPath?: string,
+    workspacePath?: string,
   ): Promise<SessionSummary[]> {
     if (!this.initialized) await this.initialize();
-    return this.cache.sessions(scope, projectPath).map(toSessionSummary);
+    return this.cache.sessions(scope, workspacePath).map(toSessionSummary);
   }
 
   // --- Search ---
@@ -67,21 +79,28 @@ export class HistoryStore {
   async searchSessions(
     query: string,
     scope: "all" | "project",
-    projectPath?: string,
+    workspacePath?: string,
   ): Promise<SessionSummary[]> {
     if (!this.initialized) await this.initialize();
 
     if (!this.searcher.isAvailable) {
       // Fallback: filter cached sessions by title
       return this.cache
-        .sessions(scope, projectPath)
+        .sessions(scope, workspacePath)
         .filter((s) =>
           s.firstPrompt.toLowerCase().includes(query.toLowerCase()),
         )
         .map(toSessionSummary);
     }
 
-    const filePaths = await this.searcher.search(query, scope, projectPath);
+    const encodedProjectPath = workspacePath
+      ? encodeWorkspacePath(workspacePath)
+      : undefined;
+    const filePaths = await this.searcher.search(
+      query,
+      scope,
+      encodedProjectPath,
+    );
     const summaries: SessionSummary[] = [];
 
     for (const path of filePaths) {
@@ -116,17 +135,21 @@ export class HistoryStore {
     }
   }
 
+  ownsSessionFile(sessionFilePath: string): boolean {
+    return sessionFilePath.startsWith(CLAUDE_PROJECTS_ROOT);
+  }
+
   // --- File-specific search (for AI Context) ---
 
   async sessionsWithToolCallsForFile(
     filePath: string,
     scope: "all" | "project",
-    projectPath?: string,
+    workspacePath?: string,
   ): Promise<SessionSummary[]> {
     if (!this.initialized) await this.initialize();
 
     const fileName = filePath.split("/").pop() ?? filePath;
-    const allSessions = this.cache.sessions(scope, projectPath);
+    const allSessions = this.cache.sessions(scope, workspacePath);
     const matching: SessionSummary[] = [];
 
     for (const summary of allSessions) {

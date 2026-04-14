@@ -138,12 +138,19 @@ export class HistoryMetadataCache {
 
   // --- Queries ---
 
-  sessions(scope: "all" | "project", projectPath?: string): SessionSummaryData[] {
+  sessions(
+    scope: "all" | "project",
+    workspacePath?: string,
+  ): SessionSummaryData[] {
+    const encodedProjectPath = workspacePath
+      ? encodeWorkspacePath(workspacePath)
+      : undefined;
     const filtered: CachedSession[] = [];
 
     for (const entry of this.entries.values()) {
-      if (scope === "project" && projectPath) {
-        if (entry.projectPath !== projectPath) continue;
+      if (scope === "project") {
+        if (!encodedProjectPath) continue;
+        if (entry.projectPath !== encodedProjectPath) continue;
       }
       filtered.push(entry);
     }
@@ -243,4 +250,12 @@ export interface SessionSummaryData {
   createdAt?: string;
   modifiedAt?: string;
   gitBranch?: string;
+}
+
+/**
+ * Encode an absolute workspace path to the directory-name format Claude
+ * Code uses under `~/.claude/projects/` (slashes replaced with dashes).
+ */
+export function encodeWorkspacePath(workspacePath: string): string {
+  return workspacePath.replace(/\//g, "-");
 }

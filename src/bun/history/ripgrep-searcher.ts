@@ -37,9 +37,10 @@ export class RipgrepSearcher {
     projectPath?: string,
   ): Promise<string[]> {
     if (!this.rgPath) return [];
+    if (scope === "project" && !projectPath) return [];
 
     let searchPath: string;
-    if (scope === "project" && projectPath) {
+    if (scope === "project") {
       searchPath = join(this.claudeDir, "projects", projectPath);
     } else {
       searchPath = join(this.claudeDir, "projects");

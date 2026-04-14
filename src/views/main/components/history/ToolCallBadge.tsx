@@ -118,12 +118,40 @@ function parseEditDiff(
   if (toolCall.tool !== "Edit" || !toolCall.input) return null;
   try {
     const json = JSON.parse(toolCall.input);
-    if (typeof json.old_string !== "string" || typeof json.new_string !== "string")
-      return null;
-    return {
-      filePath: json.file_path ?? "",
-      lines: computeDiffLines(json.old_string, json.new_string),
-    };
+
+    // Claude shape: { file_path, old_string, new_string }
+    if (
+      typeof json.old_string === "string" &&
+      typeof json.new_string === "string"
+    ) {
+      return {
+        filePath: json.file_path ?? "",
+        lines: computeDiffLines(json.old_string, json.new_string),
+      };
+    }
+
+    // Pi shape: { path, edits: [{ oldText, newText }, ...] }
+    // Each entry is an independent find/replace; concatenate them into a
+    // single diff with a separator so we can reuse the same renderer.
+    if (Array.isArray(json.edits) && typeof json.path === "string") {
+      const lines: DiffLine[] = [];
+      json.edits.forEach((edit: any, i: number) => {
+        if (
+          typeof edit?.oldText !== "string" ||
+          typeof edit?.newText !== "string"
+        ) {
+          return;
+        }
+        if (i > 0) {
+          lines.push({ type: "context", text: "" });
+        }
+        lines.push(...computeDiffLines(edit.oldText, edit.newText));
+      });
+      if (lines.length === 0) return null;
+      return { filePath: json.path, lines };
+    }
+
+    return null;
   } catch {
     return null;
   }

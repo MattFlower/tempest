@@ -158,4 +158,13 @@ describe("RipgrepSearcher", () => {
     const searcher = new RipgrepSearcher();
     expect(searcher.isAvailable).toBe(true);
   });
+
+  it("returns empty results for project scope when projectPath is missing", async () => {
+    const searcher = new RipgrepSearcher("/tmp/nonexistent-claude-dir");
+    // Force a non-null rgPath so this test exercises the project-path guard.
+    (searcher as any).rgPath = "rg";
+
+    const results = await searcher.search("needle", "project");
+    expect(results).toEqual([]);
+  });
 });

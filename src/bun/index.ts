@@ -27,6 +27,8 @@ import { TempestHttpServer, generateToken, consumePendingData } from "./http-ser
 import { RemoteTerminalHub } from "./remote-terminal-hub";
 import { getUsageData } from "./usage/usage-service";
 import { HistoryStore } from "./history/history-store";
+import { PiHistoryStore } from "./history/pi-history-store";
+import { HistoryAggregator } from "./history/history-aggregator";
 import {
   readMarkdownFile,
   watchMarkdownFile,
@@ -105,6 +107,10 @@ const activityTracker = new SessionActivityTracker();
 
 // --- Stream G: History ---
 const historyStore = new HistoryStore();
+const piHistoryStore = new PiHistoryStore();
+const historyAggregator = new HistoryAggregator();
+historyAggregator.register(historyStore);
+historyAggregator.register(piHistoryStore);
 const aiContextProvider = new AIContextProvider(historyStore);
 
 // --- Stream H: PR Feedback ---
@@ -595,16 +601,23 @@ const rpc = BrowserView.defineRPC({
 
       // --- History (Stream G) ---
       getHistorySessions: async (params: any) => {
-        return historyStore.getSessions(params.scope, params.projectPath);
+        const provider = historyAggregator.provider(params.provider ?? "claude");
+        return provider.getSessions(params.scope, params.workspacePath);
       },
       searchHistory: async (params: any) => {
-        return historyStore.searchSessions(params.query, params.scope, params.projectPath);
+        const provider = historyAggregator.provider(params.provider ?? "claude");
+        return provider.searchSessions(
+          params.query,
+          params.scope,
+          params.workspacePath,
+        );
       },
       getSessionMessages: async (params: any) => {
-        return historyStore.getMessages(params.sessionFilePath);
+        return historyAggregator.getMessages(params.sessionFilePath);
       },
-      isHistorySearchAvailable: async () => {
-        return historyStore.isSearchAvailable;
+      isHistorySearchAvailable: async (params: any) => {
+        const provider = historyAggregator.provider(params?.provider ?? "claude");
+        return provider.isSearchAvailable;
       },
 
       // --- Markdown (Feature 4) ---
@@ -1322,11 +1335,11 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
   sessionStateManager.startAutoSave();
 
   try {
-    await historyStore.initialize();
-    historyStore.startRefreshTimer();
-    console.log("[main] HistoryStore initialized");
+    await historyAggregator.initializeAll();
+    historyAggregator.startRefreshTimers();
+    console.log("[main] History providers initialized");
   } catch (err) {
-    console.error("[main] HistoryStore init failed:", err);
+    console.error("[main] History providers init failed:", err);
   }
 
   // Auto-start HTTP server if configured
@@ -1368,7 +1381,7 @@ async function shutdown() {
   hookListener.stop();
   activityTracker.stopCleanupTimer();
   workspaceManager.stopSidebarRefresh();
-  historyStore.stopRefreshTimer();
+  historyAggregator.stopRefreshTimers();
   unwatchAllMarkdown();
   prMonitor.shutdown();
   httpServer.stop();

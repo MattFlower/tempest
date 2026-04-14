@@ -7,6 +7,8 @@
 import { useCallback, useMemo } from "react";
 import type { SessionSummary } from "../../../../shared/ipc-types";
 
+export type HistoryProvider = "claude" | "pi";
+
 interface SessionListProps {
   sessions: SessionSummary[];
   selectedFilePath: string | null;
@@ -14,6 +16,8 @@ interface SessionListProps {
   onSearchQueryChange: (query: string) => void;
   scope: "all" | "project";
   onScopeChange: (scope: "all" | "project") => void;
+  provider: HistoryProvider;
+  onProviderChange: (provider: HistoryProvider) => void;
   hasProjectScope: boolean;
   onSelectSession: (filePath: string) => void;
   showRipgrepHint?: boolean;
@@ -59,6 +63,8 @@ export function SessionList({
   onSearchQueryChange,
   scope,
   onScopeChange,
+  provider,
+  onProviderChange,
   hasProjectScope,
   onSelectSession,
   showRipgrepHint,
@@ -98,6 +104,20 @@ export function SessionList({
             {"\u2715"}
           </button>
         )}
+      </div>
+
+      {/* Provider toggle */}
+      <div className="flex gap-1 px-2 pt-1 shrink-0">
+        <ScopeButton
+          label="Claude"
+          isActive={provider === "claude"}
+          onClick={() => onProviderChange("claude")}
+        />
+        <ScopeButton
+          label="Pi"
+          isActive={provider === "pi"}
+          onClick={() => onProviderChange("pi")}
+        />
       </div>
 
       {/* Scope toggle */}

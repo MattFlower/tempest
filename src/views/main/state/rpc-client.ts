@@ -502,14 +502,21 @@ export const api = {
   getUsageData: (since?: string) => rpcRequest.getUsageData({ since }),
 
   // History
-  getHistorySessions: (scope: "all" | "project", projectPath?: string) =>
-    rpcRequest.getHistorySessions({ scope, projectPath }),
-  searchHistory: (query: string, scope: "all" | "project", projectPath?: string) =>
-    rpcRequest.searchHistory({ query, scope, projectPath }),
+  getHistorySessions: (
+    scope: "all" | "project",
+    workspacePath?: string,
+    provider: "claude" | "pi" = "claude",
+  ) => rpcRequest.getHistorySessions({ scope, workspacePath, provider }),
+  searchHistory: (
+    query: string,
+    scope: "all" | "project",
+    workspacePath?: string,
+    provider: "claude" | "pi" = "claude",
+  ) => rpcRequest.searchHistory({ query, scope, workspacePath, provider }),
   getSessionMessages: (sessionFilePath: string) =>
     rpcRequest.getSessionMessages({ sessionFilePath }),
-  isHistorySearchAvailable: () =>
-    rpcRequest.isHistorySearchAvailable(undefined as any),
+  isHistorySearchAvailable: (provider: "claude" | "pi" = "claude") =>
+    rpcRequest.isHistorySearchAvailable({ provider }),
 
   // Plan lookup
   getSessionPlanPath: (sessionId: string, workspacePath: string) =>

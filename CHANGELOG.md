@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Tempest Remote can now attach to running terminals (shell and Claude Code) inside a workspace. Each workspace row on the remote dashboard gains a **Connect** button that opens a picker listing the workspace's live terminals; clicking one opens an xterm.js viewer in the browser that replays the cached scrollback and streams live PTY output over WebSocket. Gated by two new toggles in **Settings → Remote**: *Allow Terminal Connect* is a master switch that must be on for any remote terminal attach to work (it hides the Connect button and returns 403 from `/api/terminals`, `/ws/terminals/:id`, and `/terminal` when off), and *Allow Terminal Write* additionally lets remote viewers send keystrokes and resize events into the shared PTY. Both default to off, so out of the box the feature is fully disabled.
+- Chat History viewer now supports both Claude Code and Pi sessions. A new Claude/Pi toggle in the viewer lists sessions from either provider (Pi reads `~/.pi/agent/sessions/*/*.jsonl`), with project-scope filtering keyed off the absolute `cwd` recorded in each Pi session header. The message stream also gains a "Resume in new tab" button that opens a new Claude or Pi tab pointed at the selected session — Claude via `--resume <sessionId>`, Pi via `--session <path>`. Backed by a shared `SessionHistoryProvider` interface and a `HistoryAggregator` so future features (e.g. VCS AI Context) can query both providers through one surface.
 - Pi tabs now resume the previous session when Tempest restarts, matching Claude's behavior. A small Pi extension shipped with Tempest (`src/bun/hooks/pi-tempest-extension.ts`) reports the session file path on `session_start` over the existing hook Unix socket; Tempest persists the path in the saved pane tree and passes it back via `pi --session <path>` next time. Missing session files fall back to a fresh session.
 - Sidebar repository collapse state now persists across restarts. Collapsing a repository in the sidebar is saved to session state, so previously collapsed repositories remain collapsed the next time Tempest starts.
 
@@ -20,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Restoring older session-state files no longer creates blank tabs from removed `diffViewer` pane tabs. Legacy unsupported tab kinds are now ignored during pane hydration.
 - Updated user-facing copy to remove stale references to Diff View where VCS View is now the source of truth.
 - Hardened Pi session-resume persistence: the bundled Pi extension now times out socket reporting if Tempest's hook socket is unresponsive, and pane-tree updates can request an immediate state flush so newly resolved Pi session paths are less likely to be lost on abrupt shutdown.
+- Chat History now refreshes immediately when the selected workspace changes (not just when scope/provider changes), preventing stale "This Project" session lists after switching workspaces.
+- Claude history search now strictly respects project scope: if a project-scoped search is requested without a resolved workspace/project path, it returns no results instead of falling back to searching all projects.
 
 ### Changed
 

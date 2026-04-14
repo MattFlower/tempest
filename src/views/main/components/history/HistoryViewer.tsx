@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import type { SessionSummary, SessionMessage } from "../../../../shared/ipc-types";
 import { api } from "../../state/rpc-client";
 import { useStore } from "../../state/store";
-import { SessionList } from "./SessionList";
+import { SessionList, type HistoryProvider } from "./SessionList";
 import { MessageStream } from "./MessageStream";
 
 /** Hook to track element width for responsive layout */
@@ -32,11 +32,6 @@ function useContainerWidth(): [React.RefObject<HTMLDivElement | null>, number] {
   return [ref, width];
 }
 
-/** Encode a workspace path to the directory name format used by ~/.claude/projects/ */
-function encodePath(path: string): string {
-  return path.replace(/\//g, "-");
-}
-
 export function HistoryViewer() {
   const selectedWorkspacePath = useStore((s) => s.selectedWorkspacePath);
 
@@ -47,6 +42,7 @@ export function HistoryViewer() {
   const [scope, setScope] = useState<"all" | "project">(
     selectedWorkspacePath ? "project" : "all",
   );
+  const [provider, setProvider] = useState<HistoryProvider>("claude");
   const [showingMessageStream, setShowingMessageStream] = useState(false);
   const [isSearchAvailable, setIsSearchAvailable] = useState(true);
 
@@ -56,28 +52,34 @@ export function HistoryViewer() {
   const isNarrow = containerWidth < 600;
 
   const hasProjectScope = !!selectedWorkspacePath;
-  const projectPath = selectedWorkspacePath
-    ? encodePath(selectedWorkspacePath)
-    : undefined;
 
-  // Check ripgrep availability on mount
+  // Check ripgrep availability on mount and whenever provider changes
   useEffect(() => {
-    api.isHistorySearchAvailable().then(setIsSearchAvailable).catch(() => {});
-  }, []);
+    api
+      .isHistorySearchAvailable(provider)
+      .then(setIsSearchAvailable)
+      .catch(() => {});
+  }, [provider]);
 
   // Load sessions
   const loadSessions = useCallback(async () => {
-    const effectiveProjectPath = scope === "project" ? projectPath : undefined;
+    const effectiveWorkspacePath =
+      scope === "project" ? selectedWorkspacePath ?? undefined : undefined;
     try {
       let result: SessionSummary[];
       if (searchQuery.trim()) {
         result = await api.searchHistory(
           searchQuery.trim(),
           scope,
-          effectiveProjectPath,
+          effectiveWorkspacePath,
+          provider,
         );
       } else {
-        result = await api.getHistorySessions(scope, effectiveProjectPath);
+        result = await api.getHistorySessions(
+          scope,
+          effectiveWorkspacePath,
+          provider,
+        );
       }
       setSessions(result);
 
@@ -92,12 +94,13 @@ export function HistoryViewer() {
     } catch (err) {
       console.error("[HistoryViewer] load sessions error:", err);
     }
-  }, [searchQuery, scope, projectPath, selectedFilePath]);
+  }, [searchQuery, scope, selectedWorkspacePath, provider, selectedFilePath]);
 
-  // Initial load
+  // Initial load and reload whenever scope/provider/workspace changes
   useEffect(() => {
     loadSessions();
-  }, [scope]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, provider, selectedWorkspacePath]);
 
   // Debounced search
   useEffect(() => {
@@ -157,6 +160,8 @@ export function HistoryViewer() {
     onSearchQueryChange: setSearchQuery,
     scope,
     onScopeChange: setScope,
+    provider,
+    onProviderChange: setProvider,
     hasProjectScope,
     onSelectSession: selectSession,
     showRipgrepHint,
@@ -191,6 +196,7 @@ export function HistoryViewer() {
                   messages={messages}
                   summary={selectedSummary}
                   searchQuery={searchQuery}
+                  provider={provider}
                 />
               </div>
             </>
@@ -217,6 +223,7 @@ export function HistoryViewer() {
                 messages={messages}
                 summary={selectedSummary}
                 searchQuery={searchQuery}
+                provider={provider}
               />
             ) : (
               <div

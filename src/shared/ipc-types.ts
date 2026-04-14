@@ -144,6 +144,8 @@ export interface AppConfig {
   theme?: "dark" | "light"; // Appearance theme. Defaults to "dark".
   httpServer?: HttpServerConfig;
   httpDefaultPlanMode?: boolean; // Start HTTP-created workspaces in plan mode. Defaults to false.
+  httpAllowTerminalConnect?: boolean; // Master switch: allow Tempest Remote to attach to running terminals at all. Defaults to false.
+  httpAllowTerminalWrite?: boolean; // When connect is enabled, also let remote viewers send keystrokes/resize. Defaults to false (view-only).
   mcpTools?: McpToolConfig;
 }
 

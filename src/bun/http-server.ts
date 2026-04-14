@@ -1,13 +1,36 @@
 import { randomBytes } from "node:crypto";
+import type { ServerWebSocket } from "bun";
 import type { WorkspaceManager } from "./workspace-manager";
 import type { SessionActivityTracker } from "./hooks/session-activity-tracker";
+import type { PtyManager } from "./pty-manager";
+import type { SessionStateManager } from "./session-state-manager";
+import type { RemoteTerminalHub, TermWsData } from "./remote-terminal-hub";
 import { ActivityState } from "../shared/ipc-types";
-import type { AppConfig, HttpServerConfig, SourceRepo, TempestWorkspace } from "../shared/ipc-types";
+import type {
+  AppConfig,
+  HttpServerConfig,
+  PaneNodeState,
+  SourceRepo,
+  TempestWorkspace,
+} from "../shared/ipc-types";
 
 export interface HttpServerDeps {
   workspaceManager: WorkspaceManager;
   activityTracker: SessionActivityTracker;
   getConfig: () => Promise<AppConfig>;
+  ptyManager: PtyManager;
+  sessionStateManager: SessionStateManager;
+  scrollbackCache: Map<string, { scrollback: string; cwd?: string }>;
+  remoteHub: RemoteTerminalHub;
+}
+
+interface RemoteTerminalInfo {
+  id: string;
+  kind: string;
+  label: string;
+  sessionID?: string;
+  running: boolean;
+  hasScrollback: boolean;
 }
 
 // Pending data queued by the HTTP server, consumed by TerminalPane when
@@ -75,10 +98,15 @@ export class TempestHttpServer {
     this.lastError = null;
 
     try {
-      this.server = Bun.serve({
+      this.server = Bun.serve<TermWsData>({
         port: this.port,
         hostname: this.hostname,
-        fetch: (req) => this.handleRequest(req),
+        fetch: (req, server) => this.handleRequest(req, server),
+        websocket: {
+          open: (ws) => this.onWsOpen(ws),
+          message: (ws, msg) => this.onWsMessage(ws, msg),
+          close: (ws) => this.onWsClose(ws),
+        },
       });
     } catch (err: any) {
       this.server = null;
@@ -102,7 +130,10 @@ export class TempestHttpServer {
     }
   }
 
-  private async handleRequest(req: Request): Promise<Response> {
+  private async handleRequest(
+    req: Request,
+    server: ReturnType<typeof Bun.serve>,
+  ): Promise<Response | undefined> {
     const url = new URL(req.url);
     const path = url.pathname;
 
@@ -123,7 +154,7 @@ export class TempestHttpServer {
     try {
       // HTML dashboard
       if (path === "/" && req.method === "GET") {
-        return new Response(this.renderDashboard(), {
+        return new Response(await this.renderDashboard(), {
           headers: { "Content-Type": "text/html; charset=utf-8" },
         });
       }
@@ -143,6 +174,59 @@ export class TempestHttpServer {
           planMode?: boolean;
         };
         return Response.json(await this.createWorkspaceAndPrompt(body));
+      }
+
+      // API: list running terminals in a workspace
+      if (path === "/api/terminals" && req.method === "GET") {
+        const config = await this.deps.getConfig();
+        if (config.httpAllowTerminalConnect !== true) {
+          return Response.json(
+            { error: "Terminal connect is disabled" },
+            { status: 403 },
+          );
+        }
+        const workspacePath = url.searchParams.get("workspacePath");
+        if (!workspacePath) {
+          return Response.json({ error: "workspacePath required" }, { status: 400 });
+        }
+        return Response.json({ terminals: this.listTerminals(workspacePath) });
+      }
+
+      // Terminal viewer HTML
+      if (path === "/terminal" && req.method === "GET") {
+        const config = await this.deps.getConfig();
+        if (config.httpAllowTerminalConnect !== true) {
+          return new Response("Terminal connect is disabled", { status: 403 });
+        }
+        const terminalId = url.searchParams.get("id");
+        if (!terminalId) {
+          return new Response("Missing id parameter", { status: 400 });
+        }
+        const allowWrite = config.httpAllowTerminalWrite === true;
+        return new Response(terminalViewerHTML(terminalId, this.token, allowWrite), {
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
+
+      // WebSocket upgrade for terminal stream
+      if (path.startsWith("/ws/terminals/")) {
+        const config = await this.deps.getConfig();
+        if (config.httpAllowTerminalConnect !== true) {
+          return new Response("Terminal connect is disabled", { status: 403 });
+        }
+        const terminalId = decodeURIComponent(path.slice("/ws/terminals/".length));
+        if (!terminalId) {
+          return new Response("Missing terminal id", { status: 400 });
+        }
+        if (!this.deps.ptyManager.isRunning(terminalId)) {
+          return new Response("Terminal not running", { status: 404 });
+        }
+        const allowWrite = config.httpAllowTerminalWrite === true;
+        const upgraded = server.upgrade(req, {
+          data: { terminalId, allowWrite } satisfies TermWsData,
+        });
+        if (upgraded) return undefined;
+        return new Response("Upgrade failed", { status: 400 });
       }
 
       return Response.json({ error: "Not found" }, { status: 404 });
@@ -253,9 +337,87 @@ export class TempestHttpServer {
     };
   }
 
-  private renderDashboard(): string {
+  private listTerminals(workspacePath: string): RemoteTerminalInfo[] {
+    const tree = this.deps.sessionStateManager.getPaneState(workspacePath);
+    if (!tree) return [];
+    const out: RemoteTerminalInfo[] = [];
+    const walk = (node: PaneNodeState | null | undefined): void => {
+      if (!node) return;
+      if (node.type === "leaf") {
+        for (const tab of node.pane.tabs) {
+          if (
+            tab.kind !== "claude" &&
+            tab.kind !== "shell" &&
+            tab.kind !== "pi"
+          ) continue;
+          if (!tab.terminalId) continue;
+          out.push({
+            id: tab.terminalId,
+            kind: tab.kind,
+            label: tab.label ?? tab.kind,
+            sessionID: tab.sessionID ?? tab.sessionId,
+            running: this.deps.ptyManager.isRunning(tab.terminalId),
+            hasScrollback: this.deps.scrollbackCache.has(tab.terminalId),
+          });
+        }
+      } else if (node.type === "split") {
+        for (const child of node.children) walk(child);
+      }
+    };
+    walk(tree);
+    return out;
+  }
+
+  private onWsOpen(ws: ServerWebSocket<TermWsData>): void {
+    const { terminalId } = ws.data;
+    this.deps.remoteHub.attach(terminalId, ws);
+    const cached = this.deps.scrollbackCache.get(terminalId);
+    const initFrame = {
+      type: "init",
+      terminalId,
+      allowWrite: ws.data.allowWrite,
+      scrollback: cached?.scrollback ?? "",
+      cwd: cached?.cwd,
+    };
+    try {
+      ws.send(JSON.stringify(initFrame));
+    } catch {
+      // ignore
+    }
+  }
+
+  private onWsMessage(
+    ws: ServerWebSocket<TermWsData>,
+    msg: string | Buffer,
+  ): void {
+    const { terminalId, allowWrite } = ws.data;
+    if (!allowWrite) return;
+    let parsed: any;
+    try {
+      parsed = JSON.parse(typeof msg === "string" ? msg : msg.toString("utf-8"));
+    } catch {
+      return;
+    }
+    if (parsed?.type === "input" && typeof parsed.data === "string") {
+      this.deps.ptyManager.write(terminalId, parsed.data);
+    } else if (
+      parsed?.type === "resize" &&
+      typeof parsed.cols === "number" &&
+      typeof parsed.rows === "number"
+    ) {
+      this.deps.ptyManager.resize(terminalId, parsed.cols, parsed.rows);
+    }
+  }
+
+  private onWsClose(ws: ServerWebSocket<TermWsData>): void {
+    this.deps.remoteHub.detach(ws.data.terminalId, ws);
+  }
+
+  private async renderDashboard(): Promise<string> {
     const status = this.getStatus();
-    return dashboardHTML(status, this.token);
+    const config = await this.deps.getConfig();
+    const allowConnect = config.httpAllowTerminalConnect === true;
+    return dashboardHTML(status, this.token, allowConnect);
   }
 }
 
@@ -370,6 +532,48 @@ const DASHBOARD_STYLES = `
     color: #89b4fa;
   }
   .btn-add:hover { background: #45475a; }
+  .btn-connect {
+    background: #313244;
+    color: #a6e3a1;
+    font-size: 0.8rem;
+    padding: 4px 10px;
+  }
+  .btn-connect:hover { background: #45475a; }
+  .ws-connect { text-align: right; width: 100px; }
+  .term-list {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0 0;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+  .term-list li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid #313244;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    background: #181825;
+  }
+  .term-list li.clickable { cursor: pointer; }
+  .term-list li.clickable:hover { background: #1e1e2e; border-color: #45475a; }
+  .term-list li.dead { opacity: 0.5; }
+  .term-kind-badge {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+  }
+  .term-kind-claude { background: #1e3a29; color: #a6e3a1; }
+  .term-kind-shell { background: #313244; color: #89b4fa; }
+  .term-kind-pi { background: #2e1e3a; color: #cba6f7; }
+  .term-label { flex: 1; color: #cdd6f4; font-size: 0.9rem; }
+  .term-session { color: #585b70; font-size: 0.75rem; font-family: monospace; }
+  .term-status { color: #6c7086; font-size: 0.75rem; }
   .ws-table {
     width: 100%;
     border-collapse: collapse;
@@ -501,6 +705,7 @@ const LOGIN_HTML = `<!DOCTYPE html>
 function dashboardHTML(
   status: ReturnType<TempestHttpServer["getStatus"]>,
   token: string,
+  allowConnect: boolean,
 ): string {
   const repoSections = status.repos
     .map(({ repo, workspaces }) => {
@@ -508,11 +713,17 @@ function dashboardHTML(
         .map(({ workspace, activityState }) => {
           const dotColor = statusColor(activityState);
           const dotOpacity = activityState === "idle" ? "0.4" : "1";
+          const connectCell = allowConnect
+            ? `<td class="ws-connect">
+              <button class="btn btn-connect" onclick="showTerminals('${escapeHtml(workspace.path)}', '${escapeHtml(workspace.name)}')">Connect</button>
+            </td>`
+            : `<td class="ws-connect"></td>`;
           return `<tr data-ws-id="${escapeHtml(workspace.id)}">
             <td class="status-cell"><span class="status-dot" style="background:${dotColor}; opacity:${dotOpacity};"></span></td>
             <td class="ws-name">${escapeHtml(workspace.name)}</td>
             <td class="ws-status">${escapeHtml(activityState)}</td>
             <td class="ws-path">${escapeHtml(workspace.path)}</td>
+            ${connectCell}
           </tr>`;
         })
         .join("\n");
@@ -524,8 +735,8 @@ function dashboardHTML(
           <button class="btn btn-add" onclick="showNewWorkspaceForm('${escapeHtml(repo.id)}', '${escapeHtml(repo.name)}')">+ New Workspace</button>
         </div>
         <table class="ws-table">
-          <thead><tr><th></th><th>Workspace</th><th>Status</th><th>Path</th></tr></thead>
-          <tbody>${wsRows || '<tr><td colspan="4" class="empty-row">No workspaces</td></tr>'}</tbody>
+          <thead><tr><th></th><th>Workspace</th><th>Status</th><th>Path</th><th></th></tr></thead>
+          <tbody>${wsRows || '<tr><td colspan="5" class="empty-row">No workspaces</td></tr>'}</tbody>
         </table>
       </div>`;
     })
@@ -547,6 +758,19 @@ function dashboardHTML(
   <main>
     ${repoSections || '<p class="empty-state">No repositories configured. Add repos in the Tempest desktop app.</p>'}
   </main>
+
+  <!-- Terminal Picker Modal -->
+  <div id="term-modal-overlay" class="modal-overlay" style="display:none;" onclick="if(event.target===this)hideTermModal()">
+    <div class="modal">
+      <h3>Terminals in <span id="term-modal-ws-name"></span></h3>
+      <div id="term-modal-body">
+        <p style="color:#6c7086; font-size:0.9rem;">Loading...</p>
+      </div>
+      <div class="modal-buttons">
+        <button type="button" class="btn btn-cancel" onclick="hideTermModal()">Close</button>
+      </div>
+    </div>
+  </div>
 
   <!-- New Workspace Modal -->
   <div id="modal-overlay" class="modal-overlay" style="display:none;" onclick="if(event.target===this)hideModal()">
@@ -630,6 +854,58 @@ function dashboardHTML(
       document.getElementById('modal-overlay').style.display = 'none';
     }
 
+    function hideTermModal() {
+      document.getElementById('term-modal-overlay').style.display = 'none';
+    }
+
+    async function showTerminals(workspacePath, workspaceName) {
+      document.getElementById('term-modal-ws-name').textContent = workspaceName;
+      const body = document.getElementById('term-modal-body');
+      body.innerHTML = '<p style="color:#6c7086; font-size:0.9rem;">Loading...</p>';
+      document.getElementById('term-modal-overlay').style.display = 'flex';
+
+      try {
+        const resp = await fetch('/api/terminals?workspacePath=' + encodeURIComponent(workspacePath), { headers });
+        const data = await resp.json();
+        const terms = (data && data.terminals) || [];
+        if (terms.length === 0) {
+          body.innerHTML = '<p style="color:#6c7086; font-size:0.9rem;">No terminals in this workspace. Open the workspace in Tempest to start one.</p>';
+          return;
+        }
+        const items = terms.map(t => {
+          const badgeClass =
+            t.kind === 'claude' ? 'term-kind-claude' :
+            t.kind === 'pi'     ? 'term-kind-pi' :
+                                  'term-kind-shell';
+          const kindLabel = t.kind;
+          const sessionStr = t.sessionID ? ('<span class="term-session">' + escapeAttr(t.sessionID.slice(0, 8)) + '</span>') : '';
+          const statusStr = t.running ? 'running' : 'stopped';
+          const liClass = 'term-list-item' + (t.running ? ' clickable' : ' dead');
+          const onclick = t.running
+            ? 'onclick="connectTerminal(\\'' + escapeAttr(t.id) + '\\')"'
+            : '';
+          return '<li class="' + liClass + '" ' + onclick + '>' +
+            '<span class="term-kind-badge ' + badgeClass + '">' + escapeAttr(kindLabel) + '</span>' +
+            '<span class="term-label">' + escapeAttr(t.label) + '</span>' +
+            sessionStr +
+            '<span class="term-status">' + statusStr + '</span>' +
+            '</li>';
+        }).join('');
+        body.innerHTML = '<ul class="term-list">' + items + '</ul>';
+      } catch (err) {
+        body.innerHTML = '<p class="result-error">Failed to load terminals: ' + escapeAttr(String(err)) + '</p>';
+      }
+    }
+
+    function connectTerminal(terminalId) {
+      const url = '/terminal?token=' + encodeURIComponent(TOKEN) + '&id=' + encodeURIComponent(terminalId);
+      window.open(url, '_blank');
+    }
+
+    function escapeAttr(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     async function submitNewWorkspace(event) {
       event.preventDefault();
       const btn = document.getElementById('submit-btn');
@@ -700,4 +976,141 @@ function escapeHtml(str: string): string {
 /** Generate a random bearer token. */
 export function generateToken(): string {
   return randomBytes(32).toString("hex");
+}
+
+function terminalViewerHTML(
+  terminalId: string,
+  token: string,
+  allowWrite: boolean,
+): string {
+  const XTERM_VERSION = "5.5.0";
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tempest Remote — Terminal</title>
+  <link rel="stylesheet" href="https://unpkg.com/@xterm/xterm@${XTERM_VERSION}/css/xterm.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: #000; color: #cdd6f4; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    #topbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      background: #1e1e2e;
+      border-bottom: 1px solid #313244;
+      font-size: 0.85rem;
+    }
+    #topbar .title { color: #89b4fa; font-weight: 600; }
+    #topbar .mode {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .mode-ro { background: #3a1e2e; color: #f9e2af; }
+    .mode-rw { background: #1e3a29; color: #a6e3a1; }
+    #status { color: #6c7086; margin-left: auto; }
+    #term-host {
+      position: absolute;
+      top: 38px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 6px;
+    }
+    .xterm { height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="topbar">
+    <span class="title">Tempest Remote</span>
+    <span>Terminal: <code>${escapeHtml(terminalId)}</code></span>
+    <span class="mode ${allowWrite ? "mode-rw" : "mode-ro"}">${allowWrite ? "read-write" : "view-only"}</span>
+    <span id="status">connecting...</span>
+  </div>
+  <div id="term-host"></div>
+
+  <script src="https://unpkg.com/@xterm/xterm@${XTERM_VERSION}/lib/xterm.js"></script>
+  <script src="https://unpkg.com/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
+  <script>
+    const TERMINAL_ID = ${JSON.stringify(terminalId)};
+    const TOKEN = ${JSON.stringify(token)};
+    const ALLOW_WRITE = ${JSON.stringify(allowWrite)};
+    const statusEl = document.getElementById('status');
+
+    const term = new Terminal({
+      fontFamily: 'Menlo, Monaco, "SF Mono", monospace',
+      fontSize: 13,
+      cursorBlink: true,
+      theme: { background: '#000000' },
+      convertEol: false,
+      disableStdin: !ALLOW_WRITE,
+    });
+    const fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(document.getElementById('term-host'));
+    fitAddon.fit();
+
+    const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = wsProto + '//' + location.host + '/ws/terminals/' + encodeURIComponent(TERMINAL_ID) + '?token=' + encodeURIComponent(TOKEN);
+    const ws = new WebSocket(wsUrl);
+
+    ws.addEventListener('open', () => {
+      statusEl.textContent = 'connected';
+      statusEl.style.color = '#a6e3a1';
+    });
+
+    ws.addEventListener('message', (ev) => {
+      let frame;
+      try { frame = JSON.parse(ev.data); } catch { return; }
+      if (frame.type === 'init') {
+        if (frame.scrollback) term.write(frame.scrollback);
+        // After replaying scrollback, report our dimensions so the PTY matches the viewer.
+        if (ALLOW_WRITE) sendResize();
+      } else if (frame.type === 'output') {
+        // Base64 -> binary -> utf-8 string
+        const bin = atob(frame.data);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        term.write(new TextDecoder().decode(bytes));
+      } else if (frame.type === 'exit') {
+        statusEl.textContent = 'terminal exited (code ' + frame.exitCode + ')';
+        statusEl.style.color = '#f38ba8';
+      }
+    });
+
+    ws.addEventListener('close', () => {
+      statusEl.textContent = 'disconnected';
+      statusEl.style.color = '#f38ba8';
+    });
+
+    ws.addEventListener('error', () => {
+      statusEl.textContent = 'connection error';
+      statusEl.style.color = '#f38ba8';
+    });
+
+    if (ALLOW_WRITE) {
+      term.onData((data) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'input', data }));
+        }
+      });
+    }
+
+    function sendResize() {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+    }
+
+    window.addEventListener('resize', () => {
+      fitAddon.fit();
+      if (ALLOW_WRITE) sendResize();
+    });
+  </script>
+</body>
+</html>`;
 }

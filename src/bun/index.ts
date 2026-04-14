@@ -24,6 +24,7 @@ import { loadConfig, saveConfig as saveConfigFile, defaultConfig } from "./confi
 import { runMigration } from "./config/migrate";
 import { PathResolver } from "./config/path-resolver";
 import { TempestHttpServer, generateToken, consumePendingData } from "./http-server";
+import { RemoteTerminalHub } from "./remote-terminal-hub";
 import { getUsageData } from "./usage/usage-service";
 import { HistoryStore } from "./history/history-store";
 import {
@@ -109,15 +110,22 @@ const aiContextProvider = new AIContextProvider(historyStore);
 // --- Stream H: PR Feedback ---
 const prMonitor = new PRMonitor();
 
+// --- Terminal scrollback cache (webview sends periodic updates) ---
+const scrollbackCache = new Map<string, { scrollback: string; cwd?: string }>();
+
+// --- Remote terminal hub: fans out PTY output to Tempest Remote WS clients ---
+const remoteHub = new RemoteTerminalHub();
+
 // --- HTTP Remote Control Server ---
 const httpServer = new TempestHttpServer({
   workspaceManager,
   activityTracker,
   getConfig: loadConfig,
+  ptyManager,
+  sessionStateManager,
+  scrollbackCache,
+  remoteHub,
 });
-
-// --- Terminal scrollback cache (webview sends periodic updates) ---
-const scrollbackCache = new Map<string, { scrollback: string; cwd?: string }>();
 
 // --- Stream E: listFiles ---
 const IGNORE_DIRS = new Set([
@@ -1091,6 +1099,15 @@ ptyManager.onOutput((id, data, seq) => {
 
 ptyManager.onExit((id, exitCode) => {
   win.webview.rpc.send.terminalExit({ id, exitCode });
+});
+
+// --- Stream A (remote): Fan-out PTY output/exit to Tempest Remote WS clients ---
+ptyManager.onOutput((id, data, seq) => {
+  remoteHub.broadcast(id, data, seq);
+});
+
+ptyManager.onExit((id, exitCode) => {
+  remoteHub.notifyExit(id, exitCode);
 });
 
 // --- Stream D: Wire push notifications ---

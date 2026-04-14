@@ -186,6 +186,11 @@ export class PtyManager {
     return this.terminals.get(id)?.proc.pid;
   }
 
+  /** Whether a terminal with this id is currently alive. */
+  isRunning(id: string): boolean {
+    return this.terminals.has(id);
+  }
+
   /** Find the terminal ID that owns a given PID (reverse lookup). */
   findTerminalByPid(pid: number): string | undefined {
     for (const [id, instance] of this.terminals) {

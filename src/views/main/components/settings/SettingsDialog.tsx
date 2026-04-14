@@ -38,6 +38,8 @@ export function SettingsDialog() {
   const [httpHostname, setHttpHostname] = useState("127.0.0.1");
   const [httpToken, setHttpToken] = useState("");
   const [httpPlanMode, setHttpPlanMode] = useState(false);
+  const [httpAllowTerminalConnect, setHttpAllowTerminalConnect] = useState(false);
+  const [httpAllowTerminalWrite, setHttpAllowTerminalWrite] = useState(false);
   const [serverRunning, setServerRunning] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [networkInterfaces, setNetworkInterfaces] = useState<NetworkInterface[]>([]);
@@ -51,6 +53,8 @@ export function SettingsDialog() {
       setVimMode(cfg.monacoVimMode ?? false);
       setTheme(cfg.theme ?? "dark");
       setHttpPlanMode(cfg.httpDefaultPlanMode ?? false);
+      setHttpAllowTerminalConnect(cfg.httpAllowTerminalConnect ?? false);
+      setHttpAllowTerminalWrite(cfg.httpAllowTerminalWrite ?? false);
       setShowWebpage(cfg.mcpTools?.showWebpage !== false);
       if (cfg.httpServer) {
         setHttpEnabled(cfg.httpServer.enabled);
@@ -83,6 +87,8 @@ export function SettingsDialog() {
       monacoVimMode: vimMode,
       theme,
       httpDefaultPlanMode: httpPlanMode,
+      httpAllowTerminalConnect,
+      httpAllowTerminalWrite,
       mcpTools: { showWebpage },
       httpServer: {
         enabled: httpEnabled,
@@ -164,6 +170,8 @@ export function SettingsDialog() {
       (config.monacoVimMode ?? false) !== vimMode ||
       (config.theme ?? "dark") !== theme ||
       (config.httpDefaultPlanMode ?? false) !== httpPlanMode ||
+      (config.httpAllowTerminalConnect ?? false) !== httpAllowTerminalConnect ||
+      (config.httpAllowTerminalWrite ?? false) !== httpAllowTerminalWrite ||
       (config.mcpTools?.showWebpage !== false) !== showWebpage ||
       (config.httpServer?.enabled ?? false) !== httpEnabled ||
       (config.httpServer?.port ?? 7778) !== httpPort ||
@@ -296,6 +304,10 @@ export function SettingsDialog() {
                 copied={copied}
                 planMode={httpPlanMode}
                 setPlanMode={setHttpPlanMode}
+                allowTerminalConnect={httpAllowTerminalConnect}
+                setAllowTerminalConnect={setHttpAllowTerminalConnect}
+                allowTerminalWrite={httpAllowTerminalWrite}
+                setAllowTerminalWrite={setHttpAllowTerminalWrite}
               />
             )}
           </div>
@@ -533,6 +545,10 @@ function RemoteTab({
   copied,
   planMode,
   setPlanMode,
+  allowTerminalConnect,
+  setAllowTerminalConnect,
+  allowTerminalWrite,
+  setAllowTerminalWrite,
 }: {
   enabled: boolean;
   setEnabled: (v: boolean) => void;
@@ -550,6 +566,10 @@ function RemoteTab({
   copied: boolean;
   planMode: boolean;
   setPlanMode: (v: boolean) => void;
+  allowTerminalConnect: boolean;
+  setAllowTerminalConnect: (v: boolean) => void;
+  allowTerminalWrite: boolean;
+  setAllowTerminalWrite: (v: boolean) => void;
 }) {
   // Build address options
   const addressOptions = useMemo(() => {
@@ -621,6 +641,50 @@ function RemoteTab({
           </p>
         </div>
         <ToggleSwitch value={planMode} onChange={setPlanMode} />
+      </div>
+
+      {/* Allow Terminal Connect */}
+      <div className="flex items-center justify-between gap-3 py-1">
+        <div className="flex flex-col gap-0.5">
+          <label
+            className="text-[11px] font-semibold"
+            style={{ color: "var(--ctp-subtext0)" }}
+          >
+            Allow Terminal Connect
+          </label>
+          <p className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
+            Expose a Connect button on the remote dashboard that lets you attach to running terminals in a workspace. View-only by default.
+          </p>
+        </div>
+        <ToggleSwitch
+          value={allowTerminalConnect}
+          onChange={setAllowTerminalConnect}
+        />
+      </div>
+
+      {/* Allow Terminal Write */}
+      <div
+        className="flex items-center justify-between gap-3 py-1"
+        style={{ opacity: allowTerminalConnect ? 1 : 0.5 }}
+      >
+        <div className="flex flex-col gap-0.5">
+          <label
+            className="text-[11px] font-semibold"
+            style={{ color: "var(--ctp-subtext0)" }}
+          >
+            Allow Terminal Write
+          </label>
+          <p className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
+            When connect is enabled, also let remote viewers send keystrokes and resize events into the shared terminal. Requires Allow Terminal Connect.
+          </p>
+        </div>
+        <ToggleSwitch
+          value={allowTerminalConnect && allowTerminalWrite}
+          onChange={(v) => {
+            if (!allowTerminalConnect) return;
+            setAllowTerminalWrite(v);
+          }}
+        />
       </div>
 
       {/* Listen Address */}

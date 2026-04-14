@@ -97,6 +97,10 @@ export class SessionStateManager {
     return this.state?.workspaces[workspacePath]?.prState ?? null;
   }
 
+  getPaneState(workspacePath: string): PaneNodeState | null {
+    return this.state?.workspaces[workspacePath]?.paneTree ?? null;
+  }
+
   isRepoCollapsed(repoId: string): boolean {
     return this.state?.collapsedRepoIds?.includes(repoId) ?? false;
   }

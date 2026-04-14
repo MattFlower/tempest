@@ -24,9 +24,10 @@ export class AIContextProvider {
     filePath: string,
     projectPath?: string,
   ): Promise<FileAIContext | null> {
+    const scope = projectPath ? "project" : "all";
     const matchingSessions = await this.store.sessionsWithToolCallsForFile(
       filePath,
-      "all",
+      scope,
       projectPath,
     );
 

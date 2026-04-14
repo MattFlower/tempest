@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- VCS view AI-tag indicators load much faster and no longer block the diff from appearing when a file is clicked. The pre-fetch is now scoped to the current worktree (via the session's encoded project path) instead of scanning every Claude session across every worktree, and parsed JSONL sessions plus their edited-file sets are cached in-memory keyed by file mtime so repeated lookups skip disk I/O and re-parsing.
+- HistoryStore now prunes stale AI-context parse/edit cache entries for sessions that no longer exist, and bounds cache growth with LRU-style eviction to prevent unbounded memory usage in long-running app sessions.
 - Restoring older session-state files no longer creates blank tabs from removed `diffViewer` pane tabs. Legacy unsupported tab kinds are now ignored during pane hydration.
 - Updated user-facing copy to remove stale references to Diff View where VCS View is now the source of truth.
 

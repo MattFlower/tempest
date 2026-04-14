@@ -4,16 +4,33 @@
 // 30s refresh timer for background scanning.
 // ============================================================
 
-import { HistoryMetadataCache, type SessionSummaryData } from "./metadata-cache";
+import { HistoryMetadataCache, type SessionSummaryData, type CachedSession } from "./metadata-cache";
 import { RipgrepSearcher } from "./ripgrep-searcher";
 import { parseFile, type ParsedMessage } from "./jsonl-parser";
 import type { SessionSummary, SessionMessage, ToolCallInfo } from "../../shared/ipc-types";
+
+interface ParseCacheEntry {
+  mtime: number;
+  messages: ParsedMessage[];
+}
+
+interface EditIndexEntry {
+  mtime: number;
+  fullPaths: Set<string>;
+  baseNames: Set<string>;
+  summaries: string[];
+}
+
+const MAX_PARSE_CACHE_ENTRIES = 300;
+const MAX_EDIT_INDEX_ENTRIES = 1000;
 
 export class HistoryStore {
   private readonly cache: HistoryMetadataCache;
   private readonly searcher: RipgrepSearcher;
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private initialized = false;
+  private parseCache = new Map<string, ParseCacheEntry>();
+  private editIndex = new Map<string, EditIndexEntry>();
 
   get isSearchAvailable(): boolean {
     return this.searcher.isAvailable;
@@ -30,6 +47,7 @@ export class HistoryStore {
     if (this.initialized) return;
     await this.cache.load();
     this.cache.scan();
+    this.pruneDerivedCaches();
     await this.cache.save();
     this.initialized = true;
   }
@@ -87,8 +105,11 @@ export class HistoryStore {
   // --- Messages ---
 
   async getMessages(sessionFilePath: string): Promise<SessionMessage[]> {
+    const cachedSession = this.cache.sessionByFilePath(sessionFilePath);
     try {
-      const parsed = await parseFile(sessionFilePath);
+      const parsed = cachedSession
+        ? await this.getParsedForSession(cachedSession)
+        : await parseFile(sessionFilePath);
       return parsed.map((msg, index) => toSessionMessage(msg, index));
     } catch {
       return [];
@@ -108,24 +129,20 @@ export class HistoryStore {
     const allSessions = this.cache.sessions(scope, projectPath);
     const matching: SessionSummary[] = [];
 
-    for (const session of allSessions) {
+    for (const summary of allSessions) {
+      const session = this.cache.sessionByFilePath(summary.filePath);
+      if (!session) continue;
       try {
-        const messages = await parseFile(session.filePath);
-        const hasEdit = messages.some(
-          (msg) =>
-            msg.type === "assistant" &&
-            msg.toolCalls.some((tc) => {
-              const isEditTool = tc.name === "Edit" || tc.name === "Write";
-              const matchesPath =
-                tc.inputSummary.includes(filePath) ||
-                tc.inputSummary.includes(fileName) ||
-                (tc.fullInput != null && tc.fullInput.includes(filePath));
-              return isEditTool && matchesPath;
-            }),
-        );
+        const index = await this.getEditIndexForSession(session);
+        const hasEdit =
+          index.fullPaths.has(filePath) ||
+          index.baseNames.has(fileName) ||
+          index.summaries.some(
+            (s) => s.includes(filePath) || s.includes(fileName),
+          );
 
         if (hasEdit) {
-          matching.push(toSessionSummary(session));
+          matching.push(toSessionSummary(summary));
         }
       } catch {
         // Skip unreadable sessions
@@ -137,11 +154,114 @@ export class HistoryStore {
     );
   }
 
+  // --- Caches keyed by session file mtime ---
+
+  private async getParsedForSession(
+    session: CachedSession,
+  ): Promise<ParsedMessage[]> {
+    const cached = this.parseCache.get(session.filePath);
+    if (cached && cached.mtime === session.fileMtime) {
+      this.touchEntry(this.parseCache, session.filePath, cached);
+      return cached.messages;
+    }
+    const messages = await parseFile(session.filePath);
+    const entry: ParseCacheEntry = {
+      mtime: session.fileMtime,
+      messages,
+    };
+    this.touchEntry(this.parseCache, session.filePath, entry);
+    this.pruneMapToLimit(this.parseCache, MAX_PARSE_CACHE_ENTRIES);
+    return messages;
+  }
+
+  private async getEditIndexForSession(
+    session: CachedSession,
+  ): Promise<EditIndexEntry> {
+    const cached = this.editIndex.get(session.filePath);
+    if (cached && cached.mtime === session.fileMtime) {
+      this.touchEntry(this.editIndex, session.filePath, cached);
+      return cached;
+    }
+
+    const messages = await this.getParsedForSession(session);
+    const fullPaths = new Set<string>();
+    const baseNames = new Set<string>();
+    const summaries: string[] = [];
+
+    for (const msg of messages) {
+      if (msg.type !== "assistant") continue;
+      for (const tc of msg.toolCalls) {
+        if (tc.name !== "Edit" && tc.name !== "Write") continue;
+        summaries.push(tc.inputSummary);
+        if (tc.fullInput) {
+          try {
+            const parsed = JSON.parse(tc.fullInput);
+            const p = parsed.file_path;
+            if (typeof p === "string") {
+              fullPaths.add(p);
+              const base = p.split("/").pop();
+              if (base) baseNames.add(base);
+            }
+          } catch {
+            // fullInput isn't pure JSON — fall back to summary match
+          }
+        }
+      }
+    }
+
+    const entry: EditIndexEntry = {
+      mtime: session.fileMtime,
+      fullPaths,
+      baseNames,
+      summaries,
+    };
+    this.touchEntry(this.editIndex, session.filePath, entry);
+    this.pruneMapToLimit(this.editIndex, MAX_EDIT_INDEX_ENTRIES);
+    return entry;
+  }
+
   // --- Refresh ---
 
   async refresh(): Promise<void> {
     this.cache.scan();
+    this.pruneDerivedCaches();
     await this.cache.save();
+  }
+
+  private pruneDerivedCaches(): void {
+    const livePaths = new Set(
+      this.cache.sessions("all").map((session) => session.filePath),
+    );
+
+    for (const path of this.parseCache.keys()) {
+      if (!livePaths.has(path)) {
+        this.parseCache.delete(path);
+      }
+    }
+
+    for (const path of this.editIndex.keys()) {
+      if (!livePaths.has(path)) {
+        this.editIndex.delete(path);
+      }
+    }
+
+    this.pruneMapToLimit(this.parseCache, MAX_PARSE_CACHE_ENTRIES);
+    this.pruneMapToLimit(this.editIndex, MAX_EDIT_INDEX_ENTRIES);
+  }
+
+  private touchEntry<T>(map: Map<string, T>, key: string, value: T): void {
+    if (map.has(key)) {
+      map.delete(key);
+    }
+    map.set(key, value);
+  }
+
+  private pruneMapToLimit<T>(map: Map<string, T>, limit: number): void {
+    while (map.size > limit) {
+      const oldestKey = map.keys().next().value as string | undefined;
+      if (!oldestKey) break;
+      map.delete(oldestKey);
+    }
   }
 
   startRefreshTimer(): void {

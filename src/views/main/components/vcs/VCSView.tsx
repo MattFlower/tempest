@@ -296,13 +296,14 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
     }
 
     const fullPath = `${workspacePath}/${activeFilePath}`;
+    const projectPath = workspacePath.replace(/\//g, "-");
     let cancelled = false;
 
     (async () => {
       try {
         const [ctx, tl] = await Promise.all([
-          api.getAIContextForFile(fullPath),
-          api.getAITimelineForFile(fullPath),
+          api.getAIContextForFile(fullPath, projectPath),
+          api.getAITimelineForFile(fullPath, projectPath),
         ]);
         if (!cancelled) {
           setAiContext(ctx);
@@ -334,6 +335,7 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
       return;
     }
 
+    const projectPath = workspacePath.replace(/\//g, "-");
     let cancelled = false;
 
     (async () => {
@@ -341,7 +343,10 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
       const results = await Promise.all(
         listedPaths.map(async (path) => {
           try {
-            const ctx = await api.getAIContextForFile(`${workspacePath}/${path}`);
+            const ctx = await api.getAIContextForFile(
+              `${workspacePath}/${path}`,
+              projectPath,
+            );
             return ctx && ctx.sessions.length > 0 ? path : null;
           } catch {
             return null;

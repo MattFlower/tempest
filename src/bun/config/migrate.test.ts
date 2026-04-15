@@ -7,70 +7,54 @@ import {
   rmSync,
 } from "node:fs";
 import { join } from "node:path";
+import { runMigration } from "./migrate";
 
-// Use a temp directory to avoid touching real user data
+// Use a temp directory to avoid touching real user data.
 const tmpRoot = join("/tmp", `tempest-migrate-test-${Date.now()}`);
 const targetDir = join(tmpRoot, "target");
-const appSupportDir = join(tmpRoot, "app-support");
-const dotTempestDir = join(tmpRoot, "dot-tempest");
+const homeDir = join(tmpRoot, "home");
+const appSupportDir = join(
+  homeDir,
+  "Library",
+  "Application Support",
+  "Tempest",
+);
+const dotTempestDir = join(homeDir, ".tempest");
+const markerFile = join(targetDir, ".migrated");
 
 afterAll(() => {
   rmSync(tmpRoot, { recursive: true, force: true });
 });
 
 beforeEach(() => {
-  // Clean and recreate directories for each test
+  // Clean and recreate directories for each test.
   rmSync(tmpRoot, { recursive: true, force: true });
-  mkdirSync(targetDir, { recursive: true });
+  mkdirSync(homeDir, { recursive: true });
 });
 
-// We can't easily test the real runMigration because it reads from paths.ts
-// which uses env vars and homedir(). Instead, test the underlying logic
-// by reimplementing the core migration helpers inline.
-
-function copyIfExists(src: string, dest: string): boolean {
-  try {
-    if (existsSync(src) && !existsSync(dest)) {
-      const content = readFileSync(src);
-      writeFileSync(dest, content);
-      return true;
-    }
-  } catch {
-    // ignore
-  }
-  return false;
+function runTestMigration(env: NodeJS.ProcessEnv = {}): void {
+  runMigration({
+    tempestDir: targetDir,
+    homeDir,
+    env,
+    logger: () => {},
+    warnLogger: () => {},
+    errorLogger: () => {},
+  });
 }
 
-function copyGlob(srcDir: string, destDir: string, pattern: RegExp): boolean {
-  let copied = false;
-  try {
-    const { readdirSync } = require("node:fs");
-    const files = readdirSync(srcDir).filter((f: string) => pattern.test(f));
-    for (const file of files) {
-      if (copyIfExists(join(srcDir, file), join(destDir, file))) {
-        copied = true;
-      }
-    }
-  } catch {
-    // ignore
-  }
-  return copied;
-}
-
-describe("migration logic", () => {
+describe("runMigration", () => {
   it("copies session-state.json from Application Support", () => {
     mkdirSync(appSupportDir, { recursive: true });
     writeFileSync(join(appSupportDir, "session-state.json"), '{"version":1}');
 
-    copyIfExists(
-      join(appSupportDir, "session-state.json"),
-      join(targetDir, "session-state.json"),
-    );
+    runTestMigration();
 
     expect(existsSync(join(targetDir, "session-state.json"))).toBe(true);
     expect(readFileSync(join(targetDir, "session-state.json"), "utf-8")).toBe(
       '{"version":1}',
     );
+    expect(existsSync(markerFile)).toBe(true);
   });
 
   it("copies ccusage-state.json from Application Support", () => {
@@ -80,25 +64,20 @@ describe("migration logic", () => {
       '{"pinnedVersion":"1.0"}',
     );
 
-    copyIfExists(
-      join(appSupportDir, "ccusage-state.json"),
-      join(targetDir, "ccusage-state.json"),
-    );
+    runTestMigration();
 
     expect(existsSync(join(targetDir, "ccusage-state.json"))).toBe(true);
+    expect(existsSync(markerFile)).toBe(true);
   });
 
   it("does not overwrite existing files at destination", () => {
     mkdirSync(appSupportDir, { recursive: true });
+    mkdirSync(targetDir, { recursive: true });
     writeFileSync(join(appSupportDir, "session-state.json"), "old-data");
     writeFileSync(join(targetDir, "session-state.json"), "new-data");
 
-    copyIfExists(
-      join(appSupportDir, "session-state.json"),
-      join(targetDir, "session-state.json"),
-    );
+    runTestMigration();
 
-    // Should keep the existing destination content
     expect(readFileSync(join(targetDir, "session-state.json"), "utf-8")).toBe(
       "new-data",
     );
@@ -110,7 +89,7 @@ describe("migration logic", () => {
     writeFileSync(join(dotTempestDir, "settings-111222333444.json"), "{}");
     writeFileSync(join(dotTempestDir, "unrelated.json"), "{}");
 
-    copyGlob(dotTempestDir, targetDir, /^settings-.*\.json$/);
+    runTestMigration();
 
     expect(existsSync(join(targetDir, "settings-abc123def456.json"))).toBe(true);
     expect(existsSync(join(targetDir, "settings-111222333444.json"))).toBe(true);
@@ -121,27 +100,33 @@ describe("migration logic", () => {
     mkdirSync(dotTempestDir, { recursive: true });
     writeFileSync(join(dotTempestDir, "mcp-abc123def456.json"), "{}");
 
-    copyGlob(dotTempestDir, targetDir, /^mcp-.*\.json$/);
+    runTestMigration();
 
     expect(existsSync(join(targetDir, "mcp-abc123def456.json"))).toBe(true);
   });
 
-  it("handles missing source directories gracefully", () => {
-    // appSupportDir doesn't exist — should not throw
-    const result = copyIfExists(
-      join(appSupportDir, "session-state.json"),
-      join(targetDir, "session-state.json"),
-    );
-    expect(result).toBe(false);
+  it("handles missing source directories gracefully and still writes marker", () => {
+    runTestMigration();
+
+    expect(existsSync(join(targetDir, "session-state.json"))).toBe(false);
+    expect(existsSync(join(targetDir, "ccusage-state.json"))).toBe(false);
+    expect(existsSync(markerFile)).toBe(true);
   });
 
-  it("handles missing source dir for glob gracefully", () => {
-    // dotTempestDir doesn't exist — should not throw
-    const result = copyGlob(
-      join(tmpRoot, "nonexistent"),
-      targetDir,
-      /^settings-.*\.json$/,
-    );
-    expect(result).toBe(false);
+  it("does not write marker if migration encounters copy errors", () => {
+    mkdirSync(join(appSupportDir, "session-state.json"), { recursive: true });
+
+    runTestMigration();
+
+    expect(existsSync(markerFile)).toBe(false);
+  });
+
+  it("skips migration entirely when TEMPEST_CONFIG_DIR is set", () => {
+    mkdirSync(appSupportDir, { recursive: true });
+    writeFileSync(join(appSupportDir, "session-state.json"), '{"version":1}');
+
+    runTestMigration({ TEMPEST_CONFIG_DIR: "/custom/tempest" });
+
+    expect(existsSync(targetDir)).toBe(false);
   });
 });

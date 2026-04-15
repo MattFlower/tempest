@@ -1,8 +1,86 @@
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { AppConfig } from "../../shared/ipc-types";
+import type { AppConfig, HttpServerConfig, McpToolConfig } from "../../shared/ipc-types";
 import { TEMPEST_DIR, CONFIG_FILE, REPOS_FILE } from "./paths";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isHttpServerConfig(value: unknown): value is HttpServerConfig {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.enabled === "boolean"
+    && typeof value.port === "number"
+    && Number.isFinite(value.port)
+    && typeof value.hostname === "string"
+    && typeof value.token === "string"
+  );
+}
+
+function isMcpToolConfig(value: unknown): value is McpToolConfig {
+  if (!isRecord(value)) return false;
+  return typeof value.showWebpage === "boolean";
+}
+
+export function normalizeConfig(raw: unknown): AppConfig {
+  const defaults = defaultConfig();
+  if (!isRecord(raw)) return defaults;
+
+  const normalized: AppConfig = { ...defaults };
+
+  if (typeof raw.workspaceRoot === "string" && raw.workspaceRoot.trim().length > 0) {
+    normalized.workspaceRoot = raw.workspaceRoot;
+  }
+
+  if (isStringArray(raw.claudeArgs)) {
+    normalized.claudeArgs = raw.claudeArgs;
+  }
+
+  if (typeof raw.jjPath === "string") normalized.jjPath = raw.jjPath;
+  if (typeof raw.gitPath === "string") normalized.gitPath = raw.gitPath;
+  if (typeof raw.claudePath === "string") normalized.claudePath = raw.claudePath;
+  if (typeof raw.ghPath === "string") normalized.ghPath = raw.ghPath;
+  if (typeof raw.piPath === "string") normalized.piPath = raw.piPath;
+
+  if (isStringArray(raw.piArgs)) {
+    normalized.piArgs = raw.piArgs;
+  }
+
+  if (typeof raw.editor === "string") normalized.editor = raw.editor;
+  if (typeof raw.monacoVimMode === "boolean") normalized.monacoVimMode = raw.monacoVimMode;
+  if (raw.theme === "dark" || raw.theme === "light") normalized.theme = raw.theme;
+
+  if (typeof raw.httpDefaultPlanMode === "boolean") {
+    normalized.httpDefaultPlanMode = raw.httpDefaultPlanMode;
+  }
+  if (typeof raw.httpAllowTerminalConnect === "boolean") {
+    normalized.httpAllowTerminalConnect = raw.httpAllowTerminalConnect;
+  }
+  if (typeof raw.httpAllowTerminalWrite === "boolean") {
+    normalized.httpAllowTerminalWrite = raw.httpAllowTerminalWrite;
+  }
+
+  if (isHttpServerConfig(raw.httpServer)) {
+    normalized.httpServer = raw.httpServer;
+  }
+
+  if (isMcpToolConfig(raw.mcpTools)) {
+    normalized.mcpTools = raw.mcpTools;
+  }
+
+  return normalized;
+}
+
+export function normalizeRepoPaths(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((item): item is string => typeof item === "string");
+}
 
 export function defaultConfig(): AppConfig {
   return {
@@ -15,7 +93,7 @@ export async function loadConfig(): Promise<AppConfig> {
   const file = Bun.file(CONFIG_FILE);
   if (!(await file.exists())) return defaultConfig();
   try {
-    return (await file.json()) as AppConfig;
+    return normalizeConfig(await file.json());
   } catch {
     return defaultConfig();
   }
@@ -30,7 +108,7 @@ export async function loadRepoPaths(): Promise<string[]> {
   const file = Bun.file(REPOS_FILE);
   if (!(await file.exists())) return [];
   try {
-    return (await file.json()) as string[];
+    return normalizeRepoPaths(await file.json());
   } catch {
     return [];
   }

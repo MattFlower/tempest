@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- VCS view now correctly lists untracked files inside new directories. Previously a new file like `a/b.txt` appeared as just `a/` because `git status --porcelain=v2` collapses untracked directories by default — the row rendered with an empty filename and no diff when clicked. The status call now passes `--untracked-files=all` so each individual untracked file is reported and clickable.
 - VCS view AI-tag indicators load much faster and no longer block the diff from appearing when a file is clicked. The pre-fetch is now scoped to the current worktree (via the session's encoded project path) instead of scanning every Claude session across every worktree, and parsed JSONL sessions plus their edited-file sets are cached in-memory keyed by file mtime so repeated lookups skip disk I/O and re-parsing.
 - HistoryStore now prunes stale AI-context parse/edit cache entries for sessions that no longer exist, and bounds cache growth with LRU-style eviction to prevent unbounded memory usage in long-running app sessions.
 - Restoring older session-state files no longer creates blank tabs from removed `diffViewer` pane tabs. Legacy unsupported tab kinds are now ignored during pane hydration.

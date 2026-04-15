@@ -193,7 +193,7 @@ export async function getVCSStatus(
   workspacePath: string,
 ): Promise<VCSStatusResult> {
   const statusOutput = await runGitOrThrow(
-    ["status", "--porcelain=v2", "--branch"],
+    ["status", "--porcelain=v2", "--branch", "--untracked-files=all"],
     workspacePath,
   );
 

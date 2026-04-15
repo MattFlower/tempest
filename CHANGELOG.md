@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Hook/MCP reliability hardening in `src/bun/hooks`: MCP stdio framing now parses by byte length (fixing hangs on unicode payloads), SSE reconnect scheduling is deduplicated to avoid parallel duplicate event streams, and generated Claude hook commands now shell-escape hook/socket paths when they contain spaces.
 - History parsing/search hardening: Claude tool-call `fullInput` now preserves nested JSON fields (fixing stripped nested `edits` payloads), ripgrep-backed history search now treats leading-dash queries as literals via `--` (so searches like `-n` work), and history metadata scanners now always close file descriptors even when reads fail.
 - Hardened editor launch command construction to prevent shell interpolation issues: terminal editor commands now pass the editor binary and file arguments as positional parameters instead of string-interpolating quoted paths, and Neovim's "Open In" terminal command now passes the target directory positionally as well. This fixes failures on paths containing single quotes and closes shell-injection vectors from crafted file/workspace paths.
 - AI Context timeline accuracy for VCS files: file matching now avoids basename substring collisions (e.g. `file.ts` no longer matches `file.tsx`), per-message tool calls now preserve the correct Edit/Write detail when multiple edits target the same file in one assistant message, and timeline entries are now ordered chronologically across sessions.

@@ -260,6 +260,23 @@ export function parseSSEBuffer(buffer: string): {
 
 // --- SSE Listener (receives events from Tempest) ---
 
+export function createReconnectScheduler(
+  connectFn: () => void,
+  delayMs: number,
+): () => void {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  return () => {
+    if (timer) return;
+    timer = setTimeout(() => {
+      timer = null;
+      connectFn();
+    }, delayMs);
+  };
+}
+
+let scheduleSSEReconnect: () => void = () => {};
+
 function connectSSE(): void {
   const sock = connect(resolvedSocket, () => {
     const request = [
@@ -293,13 +310,15 @@ function connectSSE(): void {
   });
 
   sock.on("error", () => {
-    setTimeout(connectSSE, 5000);
+    scheduleSSEReconnect();
   });
 
   sock.on("close", () => {
-    setTimeout(connectSSE, 5000);
+    scheduleSSEReconnect();
   });
 }
+
+scheduleSSEReconnect = createReconnectScheduler(() => connectSSE(), 5000);
 
 export function forwardToChannel(eventType: string, data: string): void {
   try {
@@ -328,39 +347,53 @@ export function forwardToChannel(eventType: string, data: string): void {
 
 // --- Stdio Transport (Content-Length framed JSON-RPC) ---
 
-async function startStdioTransport(): Promise<void> {
-  const decoder = new TextDecoder();
-  let buffer = "";
+export function parseContentLengthFrames(buffer: Uint8Array): {
+  messages: string[];
+  remainder: Uint8Array;
+} {
+  const data = Buffer.from(buffer);
+  const messages: string[] = [];
+  let offset = 0;
 
+  while (true) {
+    const headerEnd = data.indexOf("\r\n\r\n", offset, "utf8");
+    if (headerEnd === -1) break;
+
+    const headerSection = data.subarray(offset, headerEnd).toString("utf8");
+    const contentLengthMatch = headerSection.match(/Content-Length:\s*(\d+)/i);
+    if (!contentLengthMatch) {
+      // Malformed header — skip past it and keep scanning
+      offset = headerEnd + 4;
+      continue;
+    }
+
+    const contentLength = parseInt(contentLengthMatch[1]!, 10);
+    const bodyStart = headerEnd + 4;
+    const bodyEnd = bodyStart + contentLength;
+
+    if (data.length < bodyEnd) break; // Wait for more bytes
+
+    const body = data.subarray(bodyStart, bodyEnd).toString("utf8");
+    messages.push(body);
+    offset = bodyEnd;
+  }
+
+  return {
+    messages,
+    remainder: data.subarray(offset),
+  };
+}
+
+async function startStdioTransport(): Promise<void> {
+  let pending = Buffer.alloc(0);
   const stream = Bun.stdin.stream();
 
   for await (const chunk of stream as any) {
-    buffer += decoder.decode(chunk, { stream: true });
+    pending = Buffer.concat([pending, Buffer.from(chunk)]);
+    const { messages, remainder } = parseContentLengthFrames(pending);
+    pending = Buffer.from(remainder);
 
-    // Parse Content-Length framed messages
-    while (true) {
-      const headerEnd = buffer.indexOf("\r\n\r\n");
-      if (headerEnd === -1) break;
-
-      const headerSection = buffer.slice(0, headerEnd);
-      const contentLengthMatch = headerSection.match(
-        /Content-Length:\s*(\d+)/i,
-      );
-      if (!contentLengthMatch) {
-        // Malformed header — skip past it
-        buffer = buffer.slice(headerEnd + 4);
-        continue;
-      }
-
-      const contentLength = parseInt(contentLengthMatch[1]!, 10);
-      const bodyStart = headerEnd + 4;
-      const bodyEnd = bodyStart + contentLength;
-
-      if (buffer.length < bodyEnd) break; // Wait for more data
-
-      const body = buffer.slice(bodyStart, bodyEnd);
-      buffer = buffer.slice(bodyEnd);
-
+    for (const body of messages) {
       try {
         const msg = JSON.parse(body);
         if (msg.method) {

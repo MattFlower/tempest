@@ -64,6 +64,19 @@ describe("HookSettingsBuilder", () => {
       );
     });
 
+    it("shell-escapes hook/socket paths that contain spaces", () => {
+      const json = HookSettingsBuilder.buildSettingsJSON(
+        "bun /path with spaces/tempest-hook.ts",
+        "/tmp/tempest socket.sock",
+      );
+      const parsed = JSON.parse(json);
+      const command = parsed.hooks.SessionStart[0].hooks[0].command as string;
+
+      expect(command).toBe(
+        "bun '/path with spaces/tempest-hook.ts' session_start '/tmp/tempest socket.sock'",
+      );
+    });
+
     it("Notification hooks have correct matchers", () => {
       const json = HookSettingsBuilder.buildSettingsJSON(hookBinaryPath, socketPath);
       const parsed = JSON.parse(json);

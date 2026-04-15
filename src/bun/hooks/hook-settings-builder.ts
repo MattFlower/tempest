@@ -2,6 +2,36 @@ import { mkdir, unlink, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { TEMPEST_DIR } from "../config/paths";
 
+const SHELL_SAFE_TOKEN = /^[a-zA-Z0-9_@%+=:,./-]+$/;
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+function stripMatchingQuotes(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length >= 2) {
+    const first = trimmed[0];
+    const last = trimmed[trimmed.length - 1];
+    if ((first === "'" && last === "'") || (first === '"' && last === '"')) {
+      return trimmed.slice(1, -1);
+    }
+  }
+  return trimmed;
+}
+
+function shellEscapeIfNeeded(value: string): string {
+  return SHELL_SAFE_TOKEN.test(value) ? value : shellQuote(value);
+}
+
+function normalizeHookCommand(hookBinaryPath: string): string {
+  const trimmed = hookBinaryPath.trim();
+  if (!trimmed.startsWith("bun ")) return trimmed;
+
+  const scriptPath = stripMatchingQuotes(trimmed.slice(4));
+  return `bun ${shellEscapeIfNeeded(scriptPath)}`;
+}
+
 export class HookSettingsBuilder {
   static buildSettingsJSON(
     hookBinaryPath: string,
@@ -9,8 +39,9 @@ export class HookSettingsBuilder {
     channelScriptPath?: string,
     workspaceName?: string,
   ): string {
+    const hookCommand = normalizeHookCommand(hookBinaryPath);
     const cmd = (eventType: string) =>
-      `${hookBinaryPath} ${eventType} ${socketPath}`;
+      `${hookCommand} ${eventType} ${shellEscapeIfNeeded(socketPath)}`;
 
     const entry = (eventType: string, matcher = "") => ({
       matcher,
@@ -141,7 +172,7 @@ export class HookSettingsBuilder {
   // Resolve the tempest-hook script path relative to this file.
   // In production, this will be bundled in the app's Resources directory.
   static get hookBinaryPath(): string {
-    return `bun ${join(import.meta.dir, "tempest-hook.ts")}`;
+    return `bun ${shellEscapeIfNeeded(join(import.meta.dir, "tempest-hook.ts"))}`;
   }
 
   static get channelScriptPath(): string {

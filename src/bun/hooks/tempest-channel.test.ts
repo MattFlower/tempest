@@ -2,12 +2,13 @@ import { describe, it, expect, beforeEach, afterEach, mock } from "bun:test";
 import {
   parseSSEBuffer,
   skipHTTPHeaders,
+  parseContentLengthFrames,
+  createReconnectScheduler,
   handleRequest,
   sendResponse,
   sendError,
   sendNotification,
   forwardToChannel,
-  type SSEEvent,
 } from "./tempest-channel";
 
 // --- stdout capture helper ---
@@ -137,6 +138,59 @@ describe("parseSSEBuffer", () => {
     const { events, remainder } = parseSSEBuffer(input);
     expect(events).toHaveLength(0);
     expect(remainder).toBe(input);
+  });
+});
+
+// ============================================================
+// parseContentLengthFrames
+// ============================================================
+
+describe("parseContentLengthFrames", () => {
+  it("parses framed messages using byte lengths (unicode-safe)", () => {
+    const body = JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "ping",
+      params: { emoji: "😀" },
+    });
+    const framed = `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`;
+
+    const { messages, remainder } = parseContentLengthFrames(Buffer.from(framed));
+    expect(messages).toEqual([body]);
+    expect(remainder.length).toBe(0);
+  });
+
+  it("returns incomplete data in remainder", () => {
+    const body = JSON.stringify({ jsonrpc: "2.0", id: 2, method: "ping" });
+    const framed = `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`;
+    const partial = Buffer.from(framed).subarray(0, framed.length - 2);
+
+    const { messages, remainder } = parseContentLengthFrames(partial);
+    expect(messages).toHaveLength(0);
+    expect(Buffer.from(remainder).equals(partial)).toBe(true);
+  });
+});
+
+// ============================================================
+// createReconnectScheduler
+// ============================================================
+
+describe("createReconnectScheduler", () => {
+  it("deduplicates reconnect scheduling until the timer fires", async () => {
+    let calls = 0;
+    const schedule = createReconnectScheduler(() => {
+      calls += 1;
+    }, 10);
+
+    schedule();
+    schedule();
+    schedule();
+    await Bun.sleep(25);
+    expect(calls).toBe(1);
+
+    schedule();
+    await Bun.sleep(25);
+    expect(calls).toBe(2);
   });
 });
 

@@ -192,6 +192,21 @@ export function extractToolSummary(
 
 // --- Private helpers ---
 
+function sortKeysReplacer(_key: string, value: unknown): unknown {
+  if (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value)
+  ) {
+    const sorted: Record<string, unknown> = {};
+    for (const k of Object.keys(value as Record<string, unknown>).sort()) {
+      sorted[k] = (value as Record<string, unknown>)[k];
+    }
+    return sorted;
+  }
+  return value;
+}
+
 function extractUserContent(obj: Record<string, any>): string | undefined {
   const message = obj.message;
   if (typeof message !== "object" || message === null) return undefined;
@@ -234,7 +249,7 @@ function extractAssistantContent(obj: Record<string, any>): {
         const summary = extractToolSummary(name, inputRaw);
         let fullInput: string | undefined;
         try {
-          fullInput = JSON.stringify(inputRaw, Object.keys(inputRaw).sort(), 2);
+          fullInput = JSON.stringify(inputRaw, sortKeysReplacer, 2);
         } catch {
           fullInput = undefined;
         }

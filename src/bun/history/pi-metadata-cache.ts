@@ -222,8 +222,12 @@ export class PiHistoryMetadataCache {
     try {
       const buffer = new Uint8Array(262144);
       const fd = openSync(filePath, "r");
-      const bytesRead = readSync(fd, buffer, 0, 262144, 0);
-      closeSync(fd);
+      let bytesRead = 0;
+      try {
+        bytesRead = readSync(fd, buffer, 0, 262144, 0);
+      } finally {
+        closeSync(fd);
+      }
       text = new TextDecoder().decode(buffer.subarray(0, bytesRead));
     } catch {
       return {};

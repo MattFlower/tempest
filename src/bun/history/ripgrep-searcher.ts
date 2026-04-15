@@ -41,7 +41,7 @@ export class RipgrepSearcher {
 
     let searchPath: string;
     if (scope === "project") {
-      searchPath = join(this.claudeDir, "projects", projectPath);
+      searchPath = join(this.claudeDir, "projects", projectPath!);
     } else {
       searchPath = join(this.claudeDir, "projects");
     }
@@ -58,6 +58,7 @@ export class RipgrepSearcher {
           "3",
           "--glob",
           "*.jsonl",
+          "--",
           query,
           searchPath,
         ],

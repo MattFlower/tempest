@@ -60,6 +60,7 @@ export class PiRipgrepSearcher {
           "3",
           "--glob",
           "*.jsonl",
+          "--",
           query,
           ...existing,
         ],

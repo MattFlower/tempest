@@ -1,5 +1,9 @@
 import { describe, it, expect } from "bun:test";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { parseRipgrepJSON, RipgrepSearcher } from "./ripgrep-searcher";
+import { PiRipgrepSearcher } from "./pi-ripgrep-searcher";
 
 describe("parseRipgrepJSON", () => {
   it("returns empty array for empty string", () => {
@@ -166,5 +170,53 @@ describe("RipgrepSearcher", () => {
 
     const results = await searcher.search("needle", "project");
     expect(results).toEqual([]);
+  });
+
+  it("handles queries starting with '-' as patterns, not flags", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "rg-search-test-"));
+    try {
+      const projectPath = "encoded-project";
+      const projectDir = join(tempRoot, "projects", projectPath);
+      await mkdir(projectDir, { recursive: true });
+
+      const sessionFile = join(projectDir, "session.jsonl");
+      await writeFile(
+        sessionFile,
+        JSON.stringify({ type: "user", message: { content: "contains -n" } }) + "\n",
+      );
+
+      const searcher = new RipgrepSearcher(tempRoot);
+      (searcher as any).rgPath = "rg";
+
+      const results = await searcher.search("-n", "project", projectPath);
+      expect(results).toEqual([sessionFile]);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("PiRipgrepSearcher", () => {
+  it("handles queries starting with '-' as patterns, not flags", async () => {
+    const sessionsRoot = await mkdtemp(join(tmpdir(), "pi-rg-search-test-"));
+    try {
+      const projectDir = "encoded-workspace";
+      const fullProjectDir = join(sessionsRoot, projectDir);
+      await mkdir(fullProjectDir, { recursive: true });
+
+      const sessionFile = join(fullProjectDir, "session.jsonl");
+      await writeFile(
+        sessionFile,
+        JSON.stringify({ type: "message", message: { role: "user", content: "contains -n" } }) + "\n",
+      );
+
+      const searcher = new PiRipgrepSearcher(sessionsRoot);
+      (searcher as any).rgPath = "rg";
+
+      const results = await searcher.search("-n", "project", [projectDir]);
+      expect(results).toEqual([sessionFile]);
+    } finally {
+      await rm(sessionsRoot, { recursive: true, force: true });
+    }
   });
 });

@@ -187,6 +187,35 @@ describe("parseLine", () => {
       }
     });
 
+    it("preserves nested tool input objects in fullInput", () => {
+      const line = JSON.stringify({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              name: "Edit",
+              input: {
+                file_path: "src/foo.ts",
+                edits: [{ oldText: "before", newText: "after" }],
+              },
+            },
+          ],
+        },
+      });
+      const result = parseLine(line);
+      expect(result.kind).toBe("message");
+      if (result.kind === "message") {
+        const tc = result.message.toolCalls[0]!;
+        expect(tc.fullInput).toBeDefined();
+        const parsed = JSON.parse(tc.fullInput!);
+        expect(parsed.file_path).toBe("src/foo.ts");
+        expect(parsed.edits).toHaveLength(1);
+        expect(parsed.edits[0].oldText).toBe("before");
+        expect(parsed.edits[0].newText).toBe("after");
+      }
+    });
+
     it("extracts mixed text and tool_use blocks", () => {
       const line = JSON.stringify({
         type: "assistant",

@@ -58,7 +58,14 @@ const APP_SPECS: AppSpec[] = [
     category: "editor",
     appPaths: [],
     cliBinaries: ["nvim"],
-    openCommand: (dir) => ["/bin/zsh", "-lic", `cd '${dir}' && exec nvim .`],
+    // Pass directory as a positional parameter to avoid shell interpolation.
+    openCommand: (dir) => [
+      "/bin/zsh",
+      "-lic",
+      'target_dir="$1"; cd "$target_dir" && exec nvim .',
+      "_",
+      dir,
+    ],
   },
   {
     id: "vscode",

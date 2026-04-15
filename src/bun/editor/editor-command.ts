@@ -62,14 +62,28 @@ export function buildEditorCommand(
   if (def) {
     const args = def.args(filePath, lineNumber);
     if (def.isTerminal) {
-      const escaped = args.map((a) => `'${a}'`).join(" ");
-      return { command: ["/bin/zsh", "-lic", `exec ${editor} ${escaped}`] };
+      return { command: terminalCommand(editor, args) };
     }
     return { command: [editor, ...args] };
   }
 
-  // Unknown editor — assume terminal-based, use vim-style +line syntax
+  // Unknown editor — assume terminal-based, use vim-style +line syntax.
   const args = lineNumber ? [`+${lineNumber}`, filePath] : [filePath];
-  const escaped = args.map((a) => `'${a}'`).join(" ");
-  return { command: ["/bin/zsh", "-lic", `exec ${editor} ${escaped}`] };
+  return { command: terminalCommand(editor, args) };
+}
+
+/**
+ * Wrap a terminal editor invocation in a login shell, passing the editor
+ * binary and its arguments as positional parameters. This avoids shell
+ * interpolation so paths containing quotes or other metacharacters are safe.
+ */
+function terminalCommand(editor: string, args: string[]): string[] {
+  return [
+    "/bin/zsh",
+    "-lic",
+    'editor="$1"; shift; exec "$editor" "$@"',
+    "_",
+    editor,
+    ...args,
+  ];
 }

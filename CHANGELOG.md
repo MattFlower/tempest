@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Hardened editor launch command construction to prevent shell interpolation issues: terminal editor commands now pass the editor binary and file arguments as positional parameters instead of string-interpolating quoted paths, and Neovim's "Open In" terminal command now passes the target directory positionally as well. This fixes failures on paths containing single quotes and closes shell-injection vectors from crafted file/workspace paths.
 - AI Context timeline accuracy for VCS files: file matching now avoids basename substring collisions (e.g. `file.ts` no longer matches `file.tsx`), per-message tool calls now preserve the correct Edit/Write detail when multiple edits target the same file in one assistant message, and timeline entries are now ordered chronologically across sessions.
 - Browser bookmark persistence is now robust under concurrent first-use access: bookmark loads are synchronized so parallel calls no longer see transient empty state or lose writes, and bookmark URL edits now preserve deduplication by rejecting updates that would duplicate another bookmark URL.
 - Hardened config and migration startup behavior: config/repo-path JSON is now runtime-validated before use (with safe defaults for malformed data), migration markers are now written only after an error-free pass so failed copies can retry on next launch, and migration tests now exercise the real `runMigration()` flow directly.

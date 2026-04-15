@@ -31,29 +31,32 @@ export function AIContextPanel({
 }: AIContextPanelProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const allFileChangeEvents = useMemo(() => {
-    if (!context) return [];
-    return context.sessions.flatMap((s) => s.fileChanges);
-  }, [context]);
+  const changeByEventId = useMemo(() => {
+    const map = new Map<string, ToolChangeDetail>();
+    for (const change of timeline?.changes ?? []) {
+      map.set(change.eventId, change.detail);
+    }
+    return map;
+  }, [timeline]);
+
+  const currentChange = timeline?.changes[currentChangeIndex];
+  const currentEventId = currentChange?.eventId ?? null;
 
   const isCurrentWaypoint = useCallback(
-    (event: FileChangeEvent) => {
-      if (currentChangeIndex < 0 || currentChangeIndex >= allFileChangeEvents.length) return false;
-      return allFileChangeEvents[currentChangeIndex]?.id === event.id;
-    },
-    [allFileChangeEvents, currentChangeIndex],
+    (event: FileChangeEvent) => currentEventId === event.id,
+    [currentEventId],
   );
 
   // Auto-scroll to current waypoint
   useEffect(() => {
-    if (!scrollContainerRef.current) return;
+    if (!scrollContainerRef.current || !currentEventId) return;
     const el = scrollContainerRef.current.querySelector(
-      `[data-waypoint-index="${currentChangeIndex}"]`,
+      `[data-waypoint-event-id="${currentEventId}"]`,
     );
     if (el) {
       setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "center" }), 100);
     }
-  }, [currentChangeIndex, context?.filePath]);
+  }, [currentEventId, context?.filePath]);
 
   const canGoBack = currentChangeIndex > 0;
   const canGoForward = timeline != null && currentChangeIndex < timeline.changes.length - 1;
@@ -131,25 +134,14 @@ export function AIContextPanel({
                       <MessageBubble message={msg} />
                     )}
                     {eventsForMessage.map((event) => {
-                      // Find global index for this event
-                      let globalIdx = 0;
-                      outer: for (const s of context.sessions) {
-                        for (const e of s.fileChanges) {
-                          if (e.id === event.id) break outer;
-                          globalIdx++;
-                        }
-                      }
-                      // Find matching ToolCallInfo from the message
-                      const matchingToolCall = msg.toolCalls?.find(
-                        (tc) => tc.tool === event.toolName && tc.summary === event.inputSummary,
-                      );
-                      const changeDetail = timeline?.changes[globalIdx]?.detail;
+                      const matchingToolCall = msg.toolCalls?.[event.toolCallIndex];
+                      const changeDetail = changeByEventId.get(event.id);
+
                       return (
                         <ToolCallWaypoint
                           key={event.id}
                           event={event}
                           isCurrent={isCurrentWaypoint(event)}
-                          globalIndex={globalIdx}
                           toolCall={matchingToolCall}
                           detail={changeDetail}
                         />
@@ -285,13 +277,11 @@ function parsedParams(
 function ToolCallWaypoint({
   event,
   isCurrent,
-  globalIndex,
   toolCall,
   detail,
 }: {
   event: FileChangeEvent;
   isCurrent: boolean;
-  globalIndex: number;
   toolCall?: ToolCallInfo;
   detail?: ToolChangeDetail;
 }) {
@@ -303,7 +293,7 @@ function ToolCallWaypoint({
 
   return (
     <div
-      data-waypoint-index={globalIndex}
+      data-waypoint-event-id={event.id}
       className="rounded text-sm"
       style={{
         background: isCurrent

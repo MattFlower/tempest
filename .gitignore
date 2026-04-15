@@ -49,3 +49,4 @@ Tempest.dmg
 *.p12.backup
 
 .env
+.pi-lens

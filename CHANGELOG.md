@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- AI Context timeline accuracy for VCS files: file matching now avoids basename substring collisions (e.g. `file.ts` no longer matches `file.tsx`), per-message tool calls now preserve the correct Edit/Write detail when multiple edits target the same file in one assistant message, and timeline entries are now ordered chronologically across sessions.
+
 ### Changed
 
 ### Removed

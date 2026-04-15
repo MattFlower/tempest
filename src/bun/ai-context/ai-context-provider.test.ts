@@ -4,9 +4,9 @@
 // details, and conversation context from session messages.
 // ============================================================
 
-import { describe, test, expect, mock, beforeEach } from "bun:test";
+import { describe, test, expect, mock } from "bun:test";
 import { AIContextProvider } from "./ai-context-provider";
-import type { SessionMessage, ToolCallInfo } from "../../shared/ipc-types";
+import type { SessionMessage } from "../../shared/ipc-types";
 
 // --- Helper to build SessionMessage ---
 
@@ -33,8 +33,15 @@ function makeMessage(
 
 function createMockStore(
   sessions: Array<{ filePath: string; firstPrompt: string }>,
-  messages: SessionMessage[],
+  messagesOrBySession: SessionMessage[] | Record<string, SessionMessage[]>,
 ) {
+  const messagesBySession = Array.isArray(messagesOrBySession)
+    ? null
+    : messagesOrBySession;
+  const sharedMessages = Array.isArray(messagesOrBySession)
+    ? messagesOrBySession
+    : [];
+
   return {
     sessionsWithToolCallsForFile: mock(async () =>
       sessions.map((s) => ({
@@ -44,7 +51,9 @@ function createMockStore(
         modifiedAt: "2026-01-01T01:00:00Z",
       })),
     ),
-    getMessages: mock(async () => messages),
+    getMessages: mock(async (sessionFilePath: string) =>
+      messagesBySession?.[sessionFilePath] ?? sharedMessages,
+    ),
     // Stubs for other HistoryStore methods
     initialize: mock(async () => {}),
     getSessions: mock(async () => []),
@@ -166,6 +175,32 @@ describe("AIContextProvider", () => {
       expect(result).not.toBeNull();
       expect(result!.totalChanges).toBe(1);
     });
+
+    test("does not match substring filename collisions", async () => {
+      const messages: SessionMessage[] = [
+        makeMessage("user", "Edit a similarly named file"),
+        makeMessage("assistant", "Done.", [
+          {
+            tool: "Edit",
+            summary: "/path/to/file.tsx",
+            input: JSON.stringify({
+              file_path: "/path/to/file.tsx",
+              old_string: "const x = 1",
+              new_string: "const x = 2",
+            }),
+          },
+        ]),
+      ];
+
+      const store = createMockStore(
+        [{ filePath: "/session/4b.jsonl", firstPrompt: "Edit a similarly named file" }],
+        messages,
+      );
+      const provider = new AIContextProvider(store);
+
+      const result = await provider.contextForFile("/path/to/file.ts");
+      expect(result).toBeNull();
+    });
   });
 
   describe("timelineForFile", () => {
@@ -214,6 +249,53 @@ describe("AIContextProvider", () => {
       if (change.detail.type === "edit") {
         expect(change.detail.oldString).toBe("before");
         expect(change.detail.newString).toBe("after");
+      }
+    });
+
+    test("uses the correct detail when multiple edits target the same file in one message", async () => {
+      const messages: SessionMessage[] = [
+        makeMessage("user", "Apply two edits"),
+        makeMessage("assistant", "Applied edits.", [
+          {
+            tool: "Edit",
+            summary: "/path/to/file.ts",
+            input: JSON.stringify({
+              file_path: "/path/to/file.ts",
+              old_string: "first-before",
+              new_string: "first-after",
+            }),
+          },
+          {
+            tool: "Edit",
+            summary: "/path/to/file.ts",
+            input: JSON.stringify({
+              file_path: "/path/to/file.ts",
+              old_string: "second-before",
+              new_string: "second-after",
+            }),
+          },
+        ]),
+      ];
+
+      const store = createMockStore(
+        [{ filePath: "/session/5b.jsonl", firstPrompt: "Apply two edits" }],
+        messages,
+      );
+      const provider = new AIContextProvider(store);
+
+      const timeline = await provider.timelineForFile("/path/to/file.ts");
+      expect(timeline).not.toBeNull();
+      expect(timeline!.changes).toHaveLength(2);
+
+      const details = timeline!.changes.map((c) => c.detail);
+      expect(details[0]!.type).toBe("edit");
+      expect(details[1]!.type).toBe("edit");
+
+      if (details[0]!.type === "edit" && details[1]!.type === "edit") {
+        expect(details[0]!.oldString).toBe("first-before");
+        expect(details[0]!.newString).toBe("first-after");
+        expect(details[1]!.oldString).toBe("second-before");
+        expect(details[1]!.newString).toBe("second-after");
       }
     });
 
@@ -277,6 +359,68 @@ describe("AIContextProvider", () => {
       // Should include messages around index 2 (the Edit message): indices 0-3
       expect(context).toContain("You:");
       expect(context).toContain("Claude:");
+    });
+
+    test("sorts timeline changes chronologically across sessions", async () => {
+      const oldSessionPath = "/session/older.jsonl";
+      const newSessionPath = "/session/newer.jsonl";
+
+      const store = createMockStore(
+        [
+          // Intentionally newest-first to mirror metadata-cache ordering.
+          { filePath: newSessionPath, firstPrompt: "newer session" },
+          { filePath: oldSessionPath, firstPrompt: "older session" },
+        ],
+        {
+          [newSessionPath]: [
+            makeMessage("user", "newer"),
+            makeMessage(
+              "assistant",
+              "new change",
+              [
+                {
+                  tool: "Edit",
+                  summary: "/path/to/file.ts",
+                  input: JSON.stringify({
+                    file_path: "/path/to/file.ts",
+                    old_string: "v1",
+                    new_string: "v2",
+                  }),
+                },
+              ],
+              "2026-01-02T10:00:00Z",
+            ),
+          ],
+          [oldSessionPath]: [
+            makeMessage("user", "older"),
+            makeMessage(
+              "assistant",
+              "old change",
+              [
+                {
+                  tool: "Edit",
+                  summary: "/path/to/file.ts",
+                  input: JSON.stringify({
+                    file_path: "/path/to/file.ts",
+                    old_string: "v0",
+                    new_string: "v1",
+                  }),
+                },
+              ],
+              "2026-01-01T10:00:00Z",
+            ),
+          ],
+        },
+      );
+      const provider = new AIContextProvider(store);
+
+      const timeline = await provider.timelineForFile("/path/to/file.ts");
+      expect(timeline).not.toBeNull();
+      expect(timeline!.changes).toHaveLength(2);
+      expect(timeline!.changes[0]!.sessionId).toBe(oldSessionPath);
+      expect(timeline!.changes[1]!.sessionId).toBe(newSessionPath);
+      expect(timeline!.changes[0]!.index).toBe(0);
+      expect(timeline!.changes[1]!.index).toBe(1);
     });
 
     test("assigns sequential global indices across sessions", async () => {

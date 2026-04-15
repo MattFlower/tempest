@@ -321,6 +321,7 @@ export interface AISessionContext {
 export interface FileChangeEvent {
   id: string;
   messageIndex: number;
+  toolCallIndex: number;
   toolName: string;
   inputSummary: string;
   timestamp?: string; // ISO date
@@ -333,6 +334,7 @@ export interface FileChangeTimeline {
 
 export interface FileVersionChange {
   id: string;
+  eventId: string;
   index: number;
   timestamp?: string; // ISO date
   sessionId: string;

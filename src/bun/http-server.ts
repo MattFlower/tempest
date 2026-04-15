@@ -40,15 +40,53 @@ interface PendingWorkspaceData {
   planMode?: boolean;
 }
 
-const pendingData = new Map<string, PendingWorkspaceData>();
+interface CreateWorkspaceRequest {
+  repoId: string;
+  name: string;
+  prompt?: string;
+  branch?: string;
+  planMode?: boolean;
+}
+
+interface PendingWorkspaceDataEntry extends PendingWorkspaceData {
+  queuedAt: number;
+}
+
+const PENDING_DATA_TTL_MS = 15 * 60 * 1000;
+const MAX_PENDING_DATA_ENTRIES = 500;
+const pendingData = new Map<string, PendingWorkspaceDataEntry>();
+
+function prunePendingData(now = Date.now()): void {
+  for (const [workspacePath, data] of pendingData) {
+    if (now - data.queuedAt > PENDING_DATA_TTL_MS) {
+      pendingData.delete(workspacePath);
+    }
+  }
+}
 
 export function queuePendingData(workspacePath: string, data: PendingWorkspaceData): void {
-  pendingData.set(workspacePath, data);
+  prunePendingData();
+
+  // Delete first so re-queued keys move to the back of the Map's insertion
+  // order, which is what the LRU eviction below relies on.
+  pendingData.delete(workspacePath);
+
+  if (pendingData.size >= MAX_PENDING_DATA_ENTRIES) {
+    const oldestKey = pendingData.keys().next().value as string | undefined;
+    if (oldestKey) pendingData.delete(oldestKey);
+  }
+
+  pendingData.set(workspacePath, { ...data, queuedAt: Date.now() });
 }
 
 export function consumePendingData(workspacePath: string): PendingWorkspaceData | undefined {
-  const data = pendingData.get(workspacePath);
-  if (data !== undefined) pendingData.delete(workspacePath);
+  prunePendingData();
+
+  const entry = pendingData.get(workspacePath);
+  if (entry === undefined) return undefined;
+
+  pendingData.delete(workspacePath);
+  const { queuedAt: _queuedAt, ...data } = entry;
   return data;
 }
 
@@ -138,7 +176,7 @@ export class TempestHttpServer {
     const path = url.pathname;
 
     // Auth check for all routes
-    if (!this.checkAuth(req)) {
+    if (!this.checkAuth(req, path)) {
       // For the HTML page, redirect to a login prompt
       if (path === "/" && req.method === "GET") {
         const provided = url.searchParams.get("token");
@@ -166,14 +204,11 @@ export class TempestHttpServer {
 
       // API: create workspace and launch Claude
       if (path === "/api/workspaces" && req.method === "POST") {
-        const body = await req.json() as {
-          repoId: string;
-          name: string;
-          prompt?: string;
-          branch?: string;
-          planMode?: boolean;
-        };
-        return Response.json(await this.createWorkspaceAndPrompt(body));
+        const parsedBody = await this.parseCreateWorkspaceRequest(req);
+        if (!parsedBody.success) {
+          return Response.json({ error: parsedBody.error }, { status: 400 });
+        }
+        return Response.json(await this.createWorkspaceAndPrompt(parsedBody.body));
       }
 
       // API: list running terminals in a workspace
@@ -239,21 +274,73 @@ export class TempestHttpServer {
     }
   }
 
-  private checkAuth(req: Request): boolean {
+  private checkAuth(req: Request, path: string): boolean {
     // Check Authorization header
     const authHeader = req.headers.get("Authorization");
     if (authHeader?.startsWith("Bearer ")) {
       return authHeader.slice(7) === this.token;
     }
 
-    // Check query parameter (for browser access)
-    const url = new URL(req.url);
-    const tokenParam = url.searchParams.get("token");
-    if (tokenParam === this.token) {
-      return true;
+    // Query token is allowed only for browser routes where custom headers
+    // are awkward or unavailable (dashboard and terminal viewer/WS).
+    if (!this.routeAllowsQueryToken(path)) {
+      return false;
     }
 
-    return false;
+    const url = new URL(req.url);
+    const tokenParam = url.searchParams.get("token");
+    return tokenParam === this.token;
+  }
+
+  private routeAllowsQueryToken(path: string): boolean {
+    return path === "/" || path === "/terminal" || path.startsWith("/ws/terminals/");
+  }
+
+  private async parseCreateWorkspaceRequest(req: Request): Promise<
+    | { success: true; body: CreateWorkspaceRequest }
+    | { success: false; error: string }
+  > {
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
+      return { success: false, error: "Invalid JSON body" };
+    }
+
+    if (!rawBody || typeof rawBody !== "object") {
+      return { success: false, error: "JSON body must be an object" };
+    }
+
+    const body = rawBody as Record<string, unknown>;
+    const repoId = typeof body.repoId === "string" ? body.repoId.trim() : "";
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+
+    if (!repoId) {
+      return { success: false, error: "repoId is required" };
+    }
+    if (!name) {
+      return { success: false, error: "name is required" };
+    }
+    if (body.prompt !== undefined && typeof body.prompt !== "string") {
+      return { success: false, error: "prompt must be a string" };
+    }
+    if (body.branch !== undefined && typeof body.branch !== "string") {
+      return { success: false, error: "branch must be a string" };
+    }
+    if (body.planMode !== undefined && typeof body.planMode !== "boolean") {
+      return { success: false, error: "planMode must be a boolean" };
+    }
+
+    return {
+      success: true,
+      body: {
+        repoId,
+        name,
+        prompt: body.prompt as string | undefined,
+        branch: body.branch as string | undefined,
+        planMode: body.planMode as boolean | undefined,
+      },
+    };
   }
 
   private getStatus(): {
@@ -288,13 +375,7 @@ export class TempestHttpServer {
     };
   }
 
-  private async createWorkspaceAndPrompt(params: {
-    repoId: string;
-    name: string;
-    prompt?: string;
-    branch?: string;
-    planMode?: boolean;
-  }): Promise<{
+  private async createWorkspaceAndPrompt(params: CreateWorkspaceRequest): Promise<{
     success: boolean;
     error?: string;
     workspaceId?: string;
@@ -715,7 +796,11 @@ function dashboardHTML(
           const dotOpacity = activityState === "idle" ? "0.4" : "1";
           const connectCell = allowConnect
             ? `<td class="ws-connect">
-              <button class="btn btn-connect" onclick="showTerminals('${escapeHtml(workspace.path)}', '${escapeHtml(workspace.name)}')">Connect</button>
+              <button
+                class="btn btn-connect ws-connect-btn"
+                data-workspace-path="${escapeHtml(workspace.path)}"
+                data-workspace-name="${escapeHtml(workspace.name)}"
+              >Connect</button>
             </td>`
             : `<td class="ws-connect"></td>`;
           return `<tr data-ws-id="${escapeHtml(workspace.id)}">
@@ -732,7 +817,11 @@ function dashboardHTML(
         <div class="repo-header">
           <h2>${escapeHtml(repo.name)}</h2>
           <span class="vcs-badge">${escapeHtml(repo.vcsType)}</span>
-          <button class="btn btn-add" onclick="showNewWorkspaceForm('${escapeHtml(repo.id)}', '${escapeHtml(repo.name)}')">+ New Workspace</button>
+          <button
+            class="btn btn-add ws-add-btn"
+            data-repo-id="${escapeHtml(repo.id)}"
+            data-repo-name="${escapeHtml(repo.name)}"
+          >+ New Workspace</button>
         </div>
         <table class="ws-table">
           <thead><tr><th></th><th>Workspace</th><th>Status</th><th>Path</th><th></th></tr></thead>
@@ -798,6 +887,31 @@ function dashboardHTML(
   <script>
     const TOKEN = ${JSON.stringify(token)};
     const headers = { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' };
+
+    document.addEventListener('click', handleDashboardClick);
+
+    function handleDashboardClick(event) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+
+      const addBtn = target.closest('.ws-add-btn');
+      if (addBtn instanceof HTMLElement) {
+        showNewWorkspaceForm(addBtn.dataset.repoId || '', addBtn.dataset.repoName || '');
+        return;
+      }
+
+      const connectBtn = target.closest('.ws-connect-btn');
+      if (connectBtn instanceof HTMLElement) {
+        showTerminals(connectBtn.dataset.workspacePath || '', connectBtn.dataset.workspaceName || '');
+        return;
+      }
+
+      const termItem = target.closest('.term-list-item.clickable');
+      if (termItem instanceof HTMLElement) {
+        const terminalId = termItem.dataset.terminalId;
+        if (terminalId) connectTerminal(terminalId);
+      }
+    }
 
     // Auto-refresh status
     setInterval(async () => {
@@ -881,10 +995,10 @@ function dashboardHTML(
           const sessionStr = t.sessionID ? ('<span class="term-session">' + escapeAttr(t.sessionID.slice(0, 8)) + '</span>') : '';
           const statusStr = t.running ? 'running' : 'stopped';
           const liClass = 'term-list-item' + (t.running ? ' clickable' : ' dead');
-          const onclick = t.running
-            ? 'onclick="connectTerminal(\\'' + escapeAttr(t.id) + '\\')"'
+          const terminalAttr = t.running
+            ? ' data-terminal-id="' + escapeAttr(t.id) + '"'
             : '';
-          return '<li class="' + liClass + '" ' + onclick + '>' +
+          return '<li class="' + liClass + '"' + terminalAttr + '>' +
             '<span class="term-kind-badge ' + badgeClass + '">' + escapeAttr(kindLabel) + '</span>' +
             '<span class="term-label">' + escapeAttr(t.label) + '</span>' +
             sessionStr +

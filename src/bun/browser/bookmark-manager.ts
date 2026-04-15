@@ -24,6 +24,7 @@ export class BookmarkManager {
   private filePath: string;
   private bookmarks: Bookmark[] = [];
   private loaded = false;
+  private loadPromise: Promise<void> | null = null;
 
   constructor(repoPath: string) {
     const hash = sha256Hex(repoPath);
@@ -32,20 +33,29 @@ export class BookmarkManager {
 
   private async ensureLoaded(): Promise<void> {
     if (this.loaded) return;
-    this.loaded = true;
-    try {
-      const file = Bun.file(this.filePath);
-      if (await file.exists()) {
-        const data: RepoBookmarks = await file.json();
-        const bookmarks = data.bookmarks ?? [];
-        // Sort by position, filling in missing positions
-        this.bookmarks = bookmarks.sort(
-          (a, b) => (a.position ?? 0) - (b.position ?? 0),
-        );
-      }
-    } catch {
-      this.bookmarks = [];
+
+    if (!this.loadPromise) {
+      this.loadPromise = (async () => {
+        try {
+          const file = Bun.file(this.filePath);
+          if (await file.exists()) {
+            const data: RepoBookmarks = await file.json();
+            const bookmarks = data.bookmarks ?? [];
+            // Sort by position, filling in missing positions
+            this.bookmarks = bookmarks.sort(
+              (a, b) => (a.position ?? 0) - (b.position ?? 0),
+            );
+          }
+        } catch {
+          this.bookmarks = [];
+        } finally {
+          this.loaded = true;
+          this.loadPromise = null;
+        }
+      })();
     }
+
+    await this.loadPromise;
   }
 
   private async save(): Promise<void> {
@@ -105,11 +115,21 @@ export class BookmarkManager {
   async update(id: string, label: string, url?: string): Promise<void> {
     await this.ensureLoaded();
     const bookmark = this.bookmarks.find((b) => b.id === id);
-    if (bookmark) {
-      bookmark.label = label;
-      if (url) bookmark.url = normalizeURL(url);
-      await this.save();
+    if (!bookmark) return;
+
+    bookmark.label = label;
+
+    const normalizedUrl = url ? normalizeURL(url) : undefined;
+    const wouldCollide =
+      normalizedUrl != null
+      && this.bookmarks.some(
+        (b) => b.id !== id && normalizeURL(b.url) === normalizedUrl,
+      );
+    if (normalizedUrl && !wouldCollide) {
+      bookmark.url = normalizedUrl;
     }
+
+    await this.save();
   }
 
   async contains(url: string): Promise<boolean> {

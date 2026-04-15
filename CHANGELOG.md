@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Fixed
+
+### Changed
+
+### Removed
+
+## [0.13.0] - 2026-04-14
+
+### Added
+
 - Tempest Remote can now attach to running terminals (shell and Claude Code) inside a workspace. Each workspace row on the remote dashboard gains a **Connect** button that opens a picker listing the workspace's live terminals; clicking one opens an xterm.js viewer in the browser that replays the cached scrollback and streams live PTY output over WebSocket. Gated by two new toggles in **Settings → Remote**: *Allow Terminal Connect* is a master switch that must be on for any remote terminal attach to work (it hides the Connect button and returns 403 from `/api/terminals`, `/ws/terminals/:id`, and `/terminal` when off), and *Allow Terminal Write* additionally lets remote viewers send keystrokes and resize events into the shared PTY. Both default to off, so out of the box the feature is fully disabled.
 - Chat History viewer now supports both Claude Code and Pi sessions. A new Claude/Pi toggle in the viewer lists sessions from either provider (Pi reads `~/.pi/agent/sessions/*/*.jsonl`), with project-scope filtering keyed off the absolute `cwd` recorded in each Pi session header. The message stream also gains a "Resume in new tab" button that opens a new Claude or Pi tab pointed at the selected session — Claude via `--resume <sessionId>`, Pi via `--session <path>`. Backed by a shared `SessionHistoryProvider` interface and a `HistoryAggregator` so future features (e.g. VCS AI Context) can query both providers through one surface.
 - Pi tabs now resume the previous session when Tempest restarts, matching Claude's behavior. A small Pi extension shipped with Tempest (`src/bun/hooks/pi-tempest-extension.ts`) reports the session file path on `session_start` over the existing hook Unix socket; Tempest persists the path in the saved pane tree and passes it back via `pi --session <path>` next time. Missing session files fall back to a fresh session.

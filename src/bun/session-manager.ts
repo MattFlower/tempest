@@ -1,4 +1,4 @@
-import { accessSync, constants } from "node:fs";
+import { accessSync, constants, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import type { AppConfig } from "../shared/ipc-types";
@@ -86,7 +86,9 @@ export class SessionManager {
 
     // Wrap in login shell so .zshrc/.zprofile are sourced.
     // exec replaces the shell process with claude (no extra process).
-    const command = ["/bin/zsh", "-lic", `exec ${parts.join(" ")}`];
+    // Shell-quote all parts so user/config paths and args are not reinterpreted by zsh.
+    const quoted = parts.map(shellQuote).join(" ");
+    const command = ["/bin/zsh", "-lic", `exec ${quoted}`];
 
     return { command, settingsPath };
   }
@@ -137,9 +139,16 @@ export class SessionManager {
     // Fallback: glob across all project directories
     const glob = new Bun.Glob(`*/${sessionId}.jsonl`);
     const projectsDir = join(home, ".claude", "projects");
-    for await (const _ of glob.scan({ cwd: projectsDir, onlyFiles: true })) {
-      return true;
+    if (!existsSync(projectsDir)) return false;
+
+    try {
+      for await (const _ of glob.scan({ cwd: projectsDir, onlyFiles: true })) {
+        return true;
+      }
+    } catch {
+      return false;
     }
+
     return false;
   }
 

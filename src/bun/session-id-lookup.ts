@@ -1,4 +1,11 @@
-import { readdirSync, readFileSync, existsSync } from "node:fs";
+import {
+  readdirSync,
+  readFileSync,
+  existsSync,
+  openSync,
+  readSync,
+  closeSync,
+} from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
@@ -95,20 +102,57 @@ export function lookupPlanPath(
  * The slug doesn't appear on every line — scan until we find one.
  */
 function extractSlugFromTranscript(transcriptPath: string): string | null {
-  let content: string;
+  let fd: number;
   try {
-    content = readFileSync(transcriptPath, "utf-8");
+    fd = openSync(transcriptPath, "r");
   } catch {
     return null;
   }
 
-  // Scan lines for a "slug" field. It typically appears after the first few lines.
-  // Read up to 100 lines to keep this fast.
-  const lines = content.split("\n");
-  const limit = Math.min(lines.length, 100);
-  for (let i = 0; i < limit; i++) {
-    const match = lines[i]!.match(/"slug":"([a-z]+-[a-z]+-[a-z]+(?:-[a-z]+)*)"/);
-    if (match?.[1]) return match[1];
+  const chunkSize = 8 * 1024;
+  const maxLinesToScan = 100;
+  const maxBytes = 512 * 1024;
+  const buffer = Buffer.allocUnsafe(chunkSize);
+  let buffered = "";
+  let scannedLines = 0;
+  let totalBytesRead = 0;
+
+  try {
+    while (scannedLines < maxLinesToScan) {
+      const bytesRead = readSync(fd, buffer, 0, chunkSize, null);
+      if (bytesRead <= 0) break;
+
+      totalBytesRead += bytesRead;
+      if (totalBytesRead > maxBytes) break;
+
+      buffered += buffer.toString("utf-8", 0, bytesRead);
+
+      let newlineIndex = buffered.indexOf("\n");
+      while (newlineIndex !== -1 && scannedLines < maxLinesToScan) {
+        const line = buffered.slice(0, newlineIndex);
+        buffered = buffered.slice(newlineIndex + 1);
+
+        const match = line.match(/"slug":"([a-z]+-[a-z]+-[a-z]+(?:-[a-z]+)*)"/);
+        if (match?.[1]) return match[1];
+
+        scannedLines++;
+        newlineIndex = buffered.indexOf("\n");
+      }
+    }
+
+    // Handle the final line if the file doesn't end with a newline.
+    if (scannedLines < maxLinesToScan && buffered.length > 0) {
+      const match = buffered.match(/"slug":"([a-z]+-[a-z]+-[a-z]+(?:-[a-z]+)*)"/);
+      if (match?.[1]) return match[1];
+    }
+  } catch {
+    return null;
+  } finally {
+    try {
+      closeSync(fd);
+    } catch {
+      // Ignore close failures
+    }
   }
 
   return null;

@@ -71,3 +71,68 @@ describe("SessionManager.buildPiCommand", () => {
     expect(cmd).not.toContain(shellQuote("--session"));
   });
 });
+
+describe("SessionManager.buildClaudeCommand", () => {
+  it("shell-quotes Claude binary path and args", async () => {
+    mkdirSync(tmpRoot, { recursive: true });
+
+    const config: AppConfig = {
+      workspaceRoot: tmpRoot,
+      claudeArgs: ["--flag", "value with spaces", "--name=O'Brien"],
+      claudePath: "/bin/echo",
+    };
+
+    const manager = new SessionManager(config);
+    const { command } = await manager.buildClaudeCommand({
+      workspacePath: tmpRoot,
+      resume: false,
+      withHooks: false,
+      planMode: true,
+    });
+
+    expect(command[0]).toBe("/bin/zsh");
+    expect(command[1]).toBe("-lic");
+
+    const cmd = command[2]!;
+    expect(cmd).toContain(`exec ${shellQuote("/bin/echo")}`);
+    expect(cmd).toContain(shellQuote("--permission-mode"));
+    expect(cmd).toContain(shellQuote("plan"));
+    expect(cmd).toContain(shellQuote("--flag"));
+    expect(cmd).toContain(shellQuote("value with spaces"));
+    expect(cmd).toContain(shellQuote("--name=O'Brien"));
+  });
+
+  it("does not throw when ~/.claude/projects is missing during resume checks", async () => {
+    mkdirSync(tmpRoot, { recursive: true });
+
+    const isolatedHome = join(tmpRoot, "home-no-projects");
+    mkdirSync(isolatedHome, { recursive: true });
+
+    const previousHome = process.env.HOME;
+    process.env.HOME = isolatedHome;
+
+    try {
+      const config: AppConfig = {
+        workspaceRoot: tmpRoot,
+        claudeArgs: [],
+        claudePath: "/bin/echo",
+      };
+
+      const manager = new SessionManager(config);
+      const { command } = await manager.buildClaudeCommand({
+        workspacePath: tmpRoot,
+        resume: true,
+        sessionId: "missing-session",
+        withHooks: false,
+      });
+
+      expect(command[2]!).not.toContain("--resume");
+    } finally {
+      if (previousHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = previousHome;
+      }
+    }
+  });
+});

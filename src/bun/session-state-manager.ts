@@ -188,7 +188,6 @@ export class SessionStateManager {
 
   async flush(): Promise<void> {
     if (!this.dirty || !this.state) return;
-    this.dirty = false;
 
     try {
       const dir = join(this.stateFilePath, "..");
@@ -197,7 +196,10 @@ export class SessionStateManager {
         this.stateFilePath,
         JSON.stringify(this.state, null, 2),
       );
+      this.dirty = false;
     } catch (err) {
+      // Keep dirty=true so a later flush can retry persisting state.
+      this.dirty = true;
       console.log(`[SessionStateManager] Auto-save failed: ${err}`);
     }
   }

@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from "bun:test";
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { SessionStateManager } from "./session-state-manager";
 
@@ -43,5 +43,17 @@ describe("SessionStateManager repo collapse persistence", () => {
     await third.load();
 
     expect(third.isRepoCollapsed("repo-a")).toBe(false);
+  });
+
+  it("keeps state dirty when a flush fails so a later flush can retry", async () => {
+    const blockedPath = join(tmpRoot, "not-a-directory");
+    writeFileSync(blockedPath, "x");
+
+    const manager = new SessionStateManager(blockedPath);
+    manager.setRepoCollapsed("repo-a", true);
+
+    expect((manager as any).dirty).toBe(true);
+    await manager.flush();
+    expect((manager as any).dirty).toBe(true);
   });
 });

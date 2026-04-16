@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Fixed
+
+### Changed
+
+### Removed
+
+## [0.13.1] - 2026-04-15
+
+### Added
+
 - Regression tests for PTY manager lifecycle edge cases in `src/bun/pty-manager.test.ts`, covering stale `onExit` callback handling across terminal ID reuse and cleanup of preallocated state when process spawn fails.
 - Regression tests for remote terminal hub in `src/bun/remote-terminal-hub.test.ts`, covering stale-subscriber eviction on Bun send status codes (0/−1), send/close exceptions, rate-limited logging, and exit notification best-effort delivery.
 

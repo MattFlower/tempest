@@ -112,9 +112,13 @@ export function formatSSE(event: string, data: string): string {
 
 export function extractWorkspace(path: string): string | null {
   const parts = path.split("/").filter((p) => p.length > 0);
-  // Expect ["workspace", "{name}", ...]
+  // Split before decode so that encoded slashes (%2F) in the key stay intact.
   if (parts.length >= 2 && parts[0] === "workspace") {
-    return parts[1]!;
+    try {
+      return decodeURIComponent(parts[1]!);
+    } catch {
+      return null;
+    }
   }
   return null;
 }
@@ -127,7 +131,7 @@ export class PRSocketServer {
   readonly socketPath: string;
   private server: ReturnType<typeof Bun.listen<SocketData>> | null = null;
 
-  /** Active SSE client sockets keyed by workspace name. */
+  /** Active SSE client sockets keyed by workspace identifier. */
   private sseClients = new Map<string, Set<Socket<SocketData>>>();
 
   /** Callback invoked when a draft POST arrives. */

@@ -11,6 +11,7 @@ import { PR_CHANNEL_SOCKET } from "../config/paths";
 
 const SOCKET_PATH = process.env.TEMPEST_SOCKET_PATH || PR_CHANNEL_SOCKET;
 const WORKSPACE = process.env.TEMPEST_WORKSPACE || "default";
+const WORKSPACE_SEGMENT = encodeURIComponent(WORKSPACE);
 const resolvedSocket = SOCKET_PATH.replace("~", process.env.HOME || "");
 
 // --- Minimal MCP Server (JSON-RPC 2.0 over stdio) ---
@@ -187,7 +188,7 @@ async function postDraft(draft: {
   return new Promise((resolve, reject) => {
     const sock = connect(resolvedSocket, () => {
       const request = [
-        `POST /workspace/${WORKSPACE}/draft HTTP/1.1`,
+        `POST /workspace/${WORKSPACE_SEGMENT}/draft HTTP/1.1`,
         `Content-Length: ${Buffer.byteLength(body)}`,
         `Content-Type: application/json`,
         "",
@@ -280,7 +281,7 @@ let scheduleSSEReconnect: () => void = () => {};
 function connectSSE(): void {
   const sock = connect(resolvedSocket, () => {
     const request = [
-      `GET /workspace/${WORKSPACE}/events HTTP/1.1`,
+      `GET /workspace/${WORKSPACE_SEGMENT}/events HTTP/1.1`,
       `Accept: text/event-stream`,
       "",
       "",

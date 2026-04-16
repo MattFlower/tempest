@@ -134,6 +134,42 @@ describe("HookSettingsBuilder", () => {
         env: { TEMPEST_SOCKET_PATH: socketPath },
       });
     });
+
+    it("uses channelWorkspaceKey when provided", () => {
+      const channelPath = "/some/script/tempest-channel.ts";
+      const json = HookSettingsBuilder.buildSettingsJSON(
+        hookBinaryPath,
+        socketPath,
+        channelPath,
+        "workspace-name",
+        "/full/workspace/path",
+      );
+      const parsed = JSON.parse(json);
+      const server = parsed.mcpServers["tempest-pr"];
+
+      expect(server.env).toEqual({
+        TEMPEST_SOCKET_PATH: socketPath,
+        TEMPEST_WORKSPACE: "/full/workspace/path",
+      });
+    });
+
+    it("falls back to workspaceName when channelWorkspaceKey is undefined", () => {
+      const channelPath = "/some/script/tempest-channel.ts";
+      const json = HookSettingsBuilder.buildSettingsJSON(
+        hookBinaryPath,
+        socketPath,
+        channelPath,
+        "my-workspace",
+        undefined,
+      );
+      const parsed = JSON.parse(json);
+      const server = parsed.mcpServers["tempest-pr"];
+
+      expect(server.env).toEqual({
+        TEMPEST_SOCKET_PATH: socketPath,
+        TEMPEST_WORKSPACE: "my-workspace",
+      });
+    });
   });
 
   describe("writeSettingsFile", () => {
@@ -188,6 +224,27 @@ describe("HookSettingsBuilder", () => {
         socketPath,
         channelPath,
         "workspace-b",
+      );
+      filesToCleanup.push(path1, path2);
+
+      expect(path1).not.toBe(path2);
+    });
+
+    it("returns different paths for different channelWorkspaceKeys", async () => {
+      const channelPath = "/path/to/tempest-channel.ts";
+      const path1 = await HookSettingsBuilder.writeSettingsFile(
+        hookBinaryPath,
+        socketPath,
+        channelPath,
+        "workspace-name",
+        "/repo-a/default",
+      );
+      const path2 = await HookSettingsBuilder.writeSettingsFile(
+        hookBinaryPath,
+        socketPath,
+        channelPath,
+        "workspace-name",
+        "/repo-b/default",
       );
       filesToCleanup.push(path1, path2);
 

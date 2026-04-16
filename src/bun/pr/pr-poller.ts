@@ -179,7 +179,7 @@ export class PRPoller {
       reviewThreads(first: 100) {
         nodes {
           isResolved
-          comments(first: 1) {
+          comments(first: 100) {
             nodes { id }
           }
         }

@@ -81,12 +81,10 @@ export class PRMonitor {
       for (const comment of comments) {
         monitor.storedComments.set(comment.nodeId, comment);
 
-        // Derive workspace name from path (last component)
-        const workspaceName =
-          workspacePath.split("/").pop() ?? "default";
-
+        // Use full workspace path as the channel key to avoid collisions
+        // between same-named workspaces in different repos.
         this.socketServer.sendEvent(
-          workspaceName,
+          workspacePath,
           "new_comment",
           JSON.stringify({
             node_id: comment.nodeId,
@@ -206,14 +204,18 @@ export class PRMonitor {
     return (this.socketServer as any).server !== null;
   }
 
-  private findMonitorByWorkspace(workspaceName: string): MonitorState | null {
-    // The workspace name from the socket path is the last component of workspacePath
+  private findMonitorByWorkspace(workspaceKey: string): MonitorState | null {
+    // Preferred key: full workspace path (sent URL-encoded by tempest-channel.ts).
+    const direct = this.monitors.get(workspaceKey);
+    if (direct) return direct;
+
+    // Backward-compat fallback for older sessions that used basename only.
     for (const [workspacePath, monitor] of this.monitors) {
       const name = workspacePath.split("/").pop() ?? "";
-      if (name === workspaceName) return monitor;
+      if (name === workspaceKey) return monitor;
     }
-    // Fallback: try the workspace name directly
-    return this.monitors.get(workspaceName) ?? null;
+
+    return null;
   }
 
   private async postReplyToGitHub(draft: PRDraft): Promise<void> {

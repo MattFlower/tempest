@@ -30,45 +30,65 @@ async function fetchFromGH(): Promise<AssignedPR[]> {
     return [];
   }
 
-  const proc = Bun.spawn(
-    [
-      ghPath,
-      "search",
-      "prs",
-      "--review-requested=@me",
-      "--state=open",
-      "--json",
-      "number,title,url,repository",
-      "--limit",
-      "50",
-    ],
-    { stdout: "pipe", stderr: "pipe" },
-  );
+  async function runSearch(filter: string): Promise<GHSearchResult[]> {
+    const proc = Bun.spawn(
+      [
+        ghPath,
+        "search",
+        "prs",
+        filter,
+        "--state=open",
+        "--json",
+        "number,title,url,repository",
+        "--limit",
+        "50",
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
 
-  const stdout = await new Response(proc.stdout).text();
-  await proc.exited;
+    const stdout = await new Response(proc.stdout).text();
+    const stderr = await new Response(proc.stderr).text();
+    await proc.exited;
 
-  if (proc.exitCode !== 0) {
-    console.warn("[pr-assigned] gh search failed, exit code:", proc.exitCode);
-    return [];
+    if (proc.exitCode !== 0) {
+      console.warn(
+        `[pr-assigned] gh search failed for '${filter}' (exit ${proc.exitCode}): ${stderr.trim()}`,
+      );
+      return [];
+    }
+
+    try {
+      const results: GHSearchResult[] = JSON.parse(stdout);
+      return Array.isArray(results) ? results : [];
+    } catch (err) {
+      console.warn("[pr-assigned] Failed to parse gh output:", err);
+      return [];
+    }
   }
 
-  try {
-    const results: GHSearchResult[] = JSON.parse(stdout);
-    return results.map((r) => {
-      const [owner, repo] = r.repository.nameWithOwner.split("/");
-      return {
-        owner: owner!,
-        repo: repo!,
-        number: r.number,
-        title: r.title,
-        url: r.url,
-      };
+  // Run separate searches because gh search combines qualifiers with AND.
+  // We need (review-requested=@me) OR (assignee=@me).
+  const [reviewRequested, assigned] = await Promise.all([
+    runSearch("--review-requested=@me"),
+    runSearch("--assignee=@me"),
+  ]);
+
+  const merged = new Map<string, AssignedPR>();
+  for (const r of [...reviewRequested, ...assigned]) {
+    const [owner, repo] = r.repository.nameWithOwner.split("/");
+    if (!owner || !repo) continue;
+
+    const key = `${owner}/${repo}#${r.number}`;
+    merged.set(key, {
+      owner,
+      repo,
+      number: r.number,
+      title: r.title,
+      url: r.url,
     });
-  } catch (err) {
-    console.warn("[pr-assigned] Failed to parse gh output:", err);
-    return [];
   }
+
+  return Array.from(merged.values());
 }
 
 export async function getAssignedPRs(): Promise<AssignedPR[]> {
@@ -76,11 +96,18 @@ export async function getAssignedPRs(): Promise<AssignedPR[]> {
 
   if (fetchPromise) return fetchPromise;
 
-  fetchPromise = fetchFromGH().then((result) => {
-    cachedResult = result;
-    fetchPromise = null;
-    return result;
-  });
+  fetchPromise = (async () => {
+    try {
+      const result = await fetchFromGH();
+      cachedResult = result;
+      return result;
+    } catch (err) {
+      console.warn("[pr-assigned] fetch failed:", err);
+      return [];
+    } finally {
+      fetchPromise = null;
+    }
+  })();
 
   return fetchPromise;
 }

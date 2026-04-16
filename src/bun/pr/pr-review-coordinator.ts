@@ -126,8 +126,12 @@ export async function startPRReview(
     return { success: false, error: "Could not parse PR metadata from GitHub CLI output." };
   }
 
-  // 4. Fetch the remote branch
-  const fetchProc = Bun.spawn([gitPath, "fetch", "origin", prInfo.headRefName], {
+  // 4. Fetch the PR head into a dedicated local branch.
+  // This works for fork-based PRs too (refs/pull/<n>/head lives on origin).
+  const reviewBranch = `tempest/pr-${prInfo.number}`;
+  const prHeadRefspec = `+refs/pull/${prInfo.number}/head:refs/heads/${reviewBranch}`;
+
+  let fetchProc = Bun.spawn([gitPath, "fetch", "origin", prHeadRefspec], {
     cwd: repo.path,
     stdout: "pipe",
     stderr: "pipe",
@@ -135,8 +139,25 @@ export async function startPRReview(
   await fetchProc.exited;
 
   if (fetchProc.exitCode !== 0) {
-    const fetchErr = await new Response(fetchProc.stderr).text();
-    return { success: false, error: `Failed to fetch branch '${prInfo.headRefName}': ${fetchErr.trim()}` };
+    // Drain stderr before reassigning to avoid leaking the piped stream.
+    await new Response(fetchProc.stderr).text();
+
+    // Fallback: some servers may not expose refs/pull/*; try direct head branch.
+    const headRefspec = `+refs/heads/${prInfo.headRefName}:refs/heads/${reviewBranch}`;
+    fetchProc = Bun.spawn([gitPath, "fetch", "origin", headRefspec], {
+      cwd: repo.path,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    await fetchProc.exited;
+
+    if (fetchProc.exitCode !== 0) {
+      const fetchErr = await new Response(fetchProc.stderr).text();
+      return {
+        success: false,
+        error: `Failed to fetch PR #${prInfo.number} head: ${fetchErr.trim()}`,
+      };
+    }
   }
 
   // 5. Create workspace (runs prepare script via createWorkspace)
@@ -144,7 +165,7 @@ export async function startPRReview(
   const result = await workspaceManager.createWorkspace(
     repoId,
     wsName,
-    prInfo.headRefName,
+    reviewBranch,
     true, // useExistingBranch
   );
 

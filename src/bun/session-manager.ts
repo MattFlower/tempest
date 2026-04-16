@@ -64,6 +64,7 @@ export class SessionManager {
         HookSettingsBuilder.socketPath,
         channelPath,
         params.workspaceName,
+        params.workspacePath,
       );
       parts.push("--settings", settingsPath);
     }

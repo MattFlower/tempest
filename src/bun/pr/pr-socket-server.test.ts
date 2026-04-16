@@ -17,6 +17,16 @@ describe("PRSocketServer helpers", () => {
       expect(extractWorkspace("/workspace/default")).toBe("default");
     });
 
+    it("decodes URL-encoded workspace keys", () => {
+      expect(extractWorkspace("/workspace/%2FUsers%2Falice%2Frepo%2Fws/events")).toBe(
+        "/Users/alice/repo/ws",
+      );
+    });
+
+    it("returns null for malformed URL encoding", () => {
+      expect(extractWorkspace("/workspace/%E0%A4%A/events")).toBeNull();
+    });
+
     it("returns null for paths without workspace prefix", () => {
       expect(extractWorkspace("/api/health")).toBeNull();
     });

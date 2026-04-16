@@ -20,6 +20,8 @@ export class PtyManager {
 
   // Sequence counter per terminal for ordered delivery
   private seqCounters = new Map<string, number>();
+  // Terminals that have been asked to terminate but haven't emitted onExit yet.
+  private terminating = new Set<string>();
 
   onOutput(cb: OutputCallback) {
     this.outputCallbacks.push(cb);
@@ -77,6 +79,9 @@ export class PtyManager {
     cols: number;
     rows: number;
   }): { success: boolean; error?: string } {
+    if (this.terminating.has(params.id)) {
+      return { success: false, error: `Terminal ${params.id} is shutting down` };
+    }
     if (this.terminals.has(params.id)) {
       return { success: false, error: `Terminal ${params.id} already exists` };
     }
@@ -93,7 +98,9 @@ export class PtyManager {
       const id = params.id;
       this.seqCounters.set(id, 0);
 
-      const proc = Bun.spawn(params.command, {
+      // `let` + `!` so the onExit closure can reference proc for identity checks.
+      let proc!: ReturnType<typeof Bun.spawn>;
+      proc = Bun.spawn(params.command, {
         cwd: params.cwd,
         env: {
           ...process.env,
@@ -131,11 +138,16 @@ export class PtyManager {
           },
         },
         onExit: (_proc: any, exitCode: number | null) => {
+          // Ignore stale exits from an older process that previously used this id.
+          const current = this.terminals.get(id);
+          if (!current || current.proc !== proc) return;
+
           this.flushOutput(id);
           this.terminals.delete(id);
           this.seqCounters.delete(id);
           this.outputBuffers.delete(id);
           this.pendingFlush.delete(id);
+          this.terminating.delete(id);
           for (const cb of this.exitCallbacks) {
             cb(id, exitCode ?? -1);
           }
@@ -148,6 +160,7 @@ export class PtyManager {
       );
       return { success: true };
     } catch (e) {
+      this.seqCounters.delete(params.id);
       console.error(`[pty] Failed to create terminal "${params.id}":`, e);
       return { success: false, error: String(e) };
     }
@@ -169,16 +182,14 @@ export class PtyManager {
 
   kill(id: string) {
     const terminal = this.terminals.get(id);
-    if (terminal) {
-      console.log(`[pty] Killing terminal "${id}"`);
-      this.flushOutput(id);
-      terminal.proc.terminal?.close();
-      terminal.proc.kill();
-      this.terminals.delete(id);
-      this.seqCounters.delete(id);
-      this.outputBuffers.delete(id);
-      this.pendingFlush.delete(id);
-    }
+    if (!terminal) return;
+    if (this.terminating.has(id)) return;
+
+    console.log(`[pty] Killing terminal "${id}"`);
+    this.terminating.add(id);
+    this.flushOutput(id);
+    terminal.proc.terminal?.close();
+    terminal.proc.kill();
   }
 
   /** Get the PID of the process running in a terminal. */

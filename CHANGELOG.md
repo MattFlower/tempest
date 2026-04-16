@@ -9,8 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Regression tests for PTY manager lifecycle edge cases in `src/bun/pty-manager.test.ts`, covering stale `onExit` callback handling across terminal ID reuse and cleanup of preallocated state when process spawn fails.
+
 ### Fixed
 
+- PTY lifecycle hardening in `src/bun/pty-manager.ts`: terminal IDs are now only fully cleaned up on the matching process `onExit` callback (instead of immediate `kill()` teardown), stale exit callbacks from older processes are ignored via process identity checks, duplicate `kill()` calls are suppressed while a terminal is terminating, create-while-terminating now returns a distinct "shutting down" error, and failed terminal creation now cleans up preallocated sequence counter state to avoid leaks.
 - PR tooling hardening in `src/bun/pr` + `src/bun/hooks`: PR feedback channel routing now keys by full workspace path (URL-encoded) to avoid same-name workspace collisions across repos, PR review workspace creation now fetches PR heads via `refs/pull/<n>/head` into a dedicated local branch so fork-based PRs open reliably, resolved-thread filtering now considers up to 100 comments per thread instead of only the first, assigned-PR caching no longer gets stuck on a rejected in-flight promise, and assigned PR search now includes both `--review-requested=@me` and `--assignee=@me` results.
 - MCP HTTP server hardening in `src/bun/mcp/mcp-http-server.ts`: workspace path segments are now validated to block traversal via encoded separators, JSON-RPC request parsing now rejects malformed/null payloads with `-32600 Invalid Request`, unknown methods now return proper JSON-RPC errors instead of transport-level failures, and batch requests are explicitly rejected instead of being partially processed.
 - Markdown preview hardening in `src/bun/markdown`: file watching now observes parent directories so live reload survives atomic save/rename flows, markdown rendering now disallows raw input HTML to prevent script injection in previews, and fenced/indented code blocks now include `data-source-line` metadata for accurate "Ask Claude" citations.

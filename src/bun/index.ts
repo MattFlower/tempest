@@ -4,7 +4,7 @@
 // All 5 streams integrated.
 // ============================================================
 
-import { readFileSync, watch, type FSWatcher } from "node:fs";
+import { mkdirSync, readFileSync, watch, type FSWatcher } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { homedir, networkInterfaces } from "node:os";
@@ -314,9 +314,38 @@ function enrichTreeWithScrollback(node: any): void {
 // Persistent watcher on ~/.claude/sessions/ — resolves session IDs for all
 // Claude terminals as soon as Claude writes the PID file.
 let sessionsWatcher: FSWatcher | null = null;
+let sessionsWatcherRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let isShuttingDown = false;
+
+function scheduleSessionsWatcherRetry(sessionsPath: string, reason: unknown): void {
+  if (isShuttingDown) return;
+  if (sessionsWatcherRetryTimer) return;
+  console.warn(`[session] Retrying watcher start for ${sessionsPath} in 5s`, reason);
+  sessionsWatcherRetryTimer = setTimeout(() => {
+    sessionsWatcherRetryTimer = null;
+    startSessionsWatcher();
+  }, 5000);
+}
+
+function clearSessionsWatcherRetry(): void {
+  if (!sessionsWatcherRetryTimer) return;
+  clearTimeout(sessionsWatcherRetryTimer);
+  sessionsWatcherRetryTimer = null;
+}
 
 function startSessionsWatcher(): void {
+  if (isShuttingDown) return;
   const sessionsPath = join(homedir(), ".claude", "sessions");
+  if (sessionsWatcher) return;
+
+  try {
+    // Ensure the directory exists so first-time users still get live session resolution.
+    mkdirSync(sessionsPath, { recursive: true });
+  } catch (err) {
+    console.error(`[session] Failed to create ${sessionsPath}:`, err);
+    scheduleSessionsWatcherRetry(sessionsPath, err);
+    return;
+  }
 
   try {
     sessionsWatcher = watch(sessionsPath, (_eventType, filename) => {
@@ -341,14 +370,29 @@ function startSessionsWatcher(): void {
         // File may be partially written — next event will retry
       }
     });
+
+    sessionsWatcher.on("error", (err) => {
+      console.error(`[session] Watcher error for ${sessionsPath}:`, err);
+      try {
+        sessionsWatcher?.close();
+      } catch {
+        // no-op
+      }
+      sessionsWatcher = null;
+      scheduleSessionsWatcherRetry(sessionsPath, err);
+    });
+
+    clearSessionsWatcherRetry();
     console.log(`[session] Watching ${sessionsPath} for session files`);
   } catch (err) {
+    sessionsWatcher = null;
     console.error(`[session] Failed to watch ${sessionsPath}:`, err);
+    scheduleSessionsWatcherRetry(sessionsPath, err);
   }
 }
 
 // Define RPC — all streams' handlers combined
-const rpc = BrowserView.defineRPC({
+const rpc: any = (BrowserView.defineRPC as any)({
   handlers: {
     requests: {
       // --- Terminal (Stream A) ---
@@ -1099,7 +1143,7 @@ const rpc = BrowserView.defineRPC({
 });
 
 // Create the main window
-const win = new BrowserWindow({
+const win: any = new BrowserWindow({
   title: "Tempest",
   url: "views://main/index.html",
   frame: { width: 1400, height: 900, x: 100, y: 100 },
@@ -1112,12 +1156,32 @@ const win = new BrowserWindow({
 win.setWindowButtonPosition(16, 17);
 
 // --- Stream A: Wire PTY output/exit to webview ---
+// Before the webview attaches, RPC sends throw synchronously — swallow those
+// silently. Once we've seen one successful send we flip `webviewSendReady` and
+// any later failure is a real bug (serialization, transport, post-shutdown),
+// so we log it instead of hiding it.
+let webviewSendReady = false;
+
 ptyManager.onOutput((id, data, seq) => {
-  win.webview.rpc.send.terminalOutput({ id, data, seq });
+  try {
+    win.webview.rpc.send.terminalOutput({ id, data, seq });
+    webviewSendReady = true;
+  } catch (err) {
+    if (webviewSendReady) {
+      console.warn("[main] terminalOutput send failed:", err);
+    }
+  }
 });
 
 ptyManager.onExit((id, exitCode) => {
-  win.webview.rpc.send.terminalExit({ id, exitCode });
+  try {
+    win.webview.rpc.send.terminalExit({ id, exitCode });
+    webviewSendReady = true;
+  } catch (err) {
+    if (webviewSendReady) {
+      console.warn("[main] terminalExit send failed:", err);
+    }
+  }
 });
 
 // --- Stream A (remote): Fan-out PTY output/exit to Tempest Remote WS clients ---
@@ -1354,42 +1418,52 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
 })();
 
 // --- Shutdown cleanup (Stream A + D) ---
+let shutdownPromise: Promise<void> | null = null;
+
 async function shutdown() {
-  console.log("[main] Shutting down...");
-  sessionsWatcher?.close();
-  sessionsWatcher = null;
+  if (shutdownPromise) return shutdownPromise;
 
-  // Collect final scrollback from webview before killing PTYs
-  try {
-    const result = await (win.webview.rpc as any).request.getTerminalScrollback();
-    if (result?.entries) {
-      for (const entry of result.entries) {
-        scrollbackCache.set(entry.terminalId, {
-          scrollback: entry.scrollback,
-          cwd: entry.cwd,
-        });
+  shutdownPromise = (async () => {
+    console.log("[main] Shutting down...");
+    isShuttingDown = true;
+    clearSessionsWatcherRetry();
+    sessionsWatcher?.close();
+    sessionsWatcher = null;
+
+    // Collect final scrollback from webview before killing PTYs
+    try {
+      const result = await (win.webview.rpc as any).request.getTerminalScrollback();
+      if (result?.entries) {
+        for (const entry of result.entries) {
+          scrollbackCache.set(entry.terminalId, {
+            scrollback: entry.scrollback,
+            cwd: entry.cwd,
+          });
+        }
+        sessionStateManager.enrichTerminalData(scrollbackCache);
       }
-      sessionStateManager.enrichTerminalData(scrollbackCache);
+    } catch (e) {
+      console.warn("[main] Failed to collect scrollback at shutdown:", e);
     }
-  } catch (e) {
-    console.warn("[main] Failed to collect scrollback at shutdown:", e);
-  }
 
-  ptyManager.killAll();
-  await sessionStateManager.flush();
-  sessionStateManager.stopAutoSave();
-  hookListener.stop();
-  activityTracker.stopCleanupTimer();
-  workspaceManager.stopSidebarRefresh();
-  historyAggregator.stopRefreshTimers();
-  unwatchAllMarkdown();
-  prMonitor.shutdown();
-  httpServer.stop();
-  mcpServer.stop();
+    ptyManager.killAll();
+    await sessionStateManager.flush();
+    sessionStateManager.stopAutoSave();
+    hookListener.stop();
+    activityTracker.stopCleanupTimer();
+    workspaceManager.stopSidebarRefresh();
+    historyAggregator.stopRefreshTimers();
+    unwatchAllMarkdown();
+    prMonitor.shutdown();
+    httpServer.stop();
+    mcpServer.stop();
+  })();
+
+  return shutdownPromise;
 }
 
-process.on("SIGINT", () => { shutdown().then(() => process.exit(0)); });
-process.on("SIGTERM", () => { shutdown().then(() => process.exit(0)); });
+process.once("SIGINT", () => { void shutdown().finally(() => process.exit(0)); });
+process.once("SIGTERM", () => { void shutdown().finally(() => process.exit(0)); });
 process.on("beforeExit", async () => { await shutdown(); });
 
 console.log("[main] Tempest started");

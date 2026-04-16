@@ -5,7 +5,7 @@
 // ============================================================
 
 import { watch, type FSWatcher } from "fs";
-import { basename } from "path";
+import { basename, dirname } from "path";
 import { buildMarkdownHTML } from "./markdown-html-builder";
 
 export interface MarkdownFileResult {
@@ -34,6 +34,23 @@ type FileChangedCallback = (filePath: string, content: string, deleted: boolean)
 
 const activeWatchers = new Map<string, FSWatcher>();
 
+async function notifyCurrentFileState(
+  filePath: string,
+  onChanged: FileChangedCallback,
+): Promise<void> {
+  try {
+    const file = Bun.file(filePath);
+    if (await file.exists()) {
+      const markdown = await file.text();
+      onChanged(filePath, buildMarkdownHTML(markdown), false);
+    } else {
+      onChanged(filePath, "", true);
+    }
+  } catch {
+    onChanged(filePath, "", true);
+  }
+}
+
 /**
  * Start watching a markdown file for changes.
  * When the file changes, calls the callback with the new content.
@@ -46,37 +63,23 @@ export function watchMarkdownFile(
   // Clean up any existing watcher for this path
   unwatchMarkdownFile(filePath);
 
+  const directoryPath = dirname(filePath);
+  const watchedFileName = basename(filePath);
+
   try {
-    const watcher = watch(filePath, async (eventType) => {
-      if (eventType === "change") {
-        try {
-          const file = Bun.file(filePath);
-          const markdown = await file.text();
-          onChanged(filePath, buildMarkdownHTML(markdown), false);
-        } catch {
-          // File may have been deleted during read
-          onChanged(filePath, "", true);
-        }
-      } else if (eventType === "rename") {
-        // "rename" fires for deletions and editor save-and-replace.
-        // Check if the file still exists at the original path.
-        try {
-          const file = Bun.file(filePath);
-          if (await file.exists()) {
-            const markdown = await file.text();
-            onChanged(filePath, buildMarkdownHTML(markdown), false);
-          } else {
-            onChanged(filePath, "", true);
-          }
-        } catch {
-          onChanged(filePath, "", true);
-        }
+    // Watch the parent directory instead of the file itself so we survive
+    // editor atomic-save flows that replace the file inode.
+    const watcher = watch(directoryPath, async (_eventType, changedName) => {
+      if (changedName !== null && basename(changedName) !== watchedFileName) {
+        return;
       }
+
+      await notifyCurrentFileState(filePath, onChanged);
     });
 
     activeWatchers.set(filePath, watcher);
   } catch (err) {
-    console.error(`[markdown-service] Failed to watch ${filePath}:`, err);
+    console.error(`[markdown-service] Failed to watch ${filePath} in ${directoryPath}:`, err);
   }
 }
 

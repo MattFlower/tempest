@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll, afterEach } from "bun:test";
 import { join } from "path";
-import { mkdtemp, rm } from "fs/promises";
+import { mkdtemp, rename, rm } from "fs/promises";
 import { tmpdir } from "os";
 import {
   readMarkdownFile,
@@ -149,7 +149,52 @@ describe("watchMarkdownFile", () => {
     expect(changedPath!).toBe(filePath);
     expect(changedContent!).toContain("<!DOCTYPE html>");
     expect(changedContent!).toMatch(/<h1[^>]*>Modified<\/h1>/);
+  });
 
+  it("continues notifying after atomic save/replace", async () => {
+    const dir = await setupTempDir();
+    const filePath = join(dir, `atomic-${Date.now()}.md`);
+    const tempPath = join(dir, `atomic-${Date.now()}.tmp`);
+    await Bun.write(filePath, "# Original");
+
+    let sawSecondUpdate = false;
+
+    watchMarkdownFile(filePath, (_path, content, deleted) => {
+      if (!deleted && /<h1[^>]*>After atomic replace<\/h1>/.test(content)) {
+        sawSecondUpdate = true;
+      }
+    });
+
+    // Give the watcher a moment to attach.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Simulate editor atomic save: write a temp file then rename over target.
+    await Bun.write(tempPath, "# After rename");
+    await rename(tempPath, filePath);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    // A second regular write should still be observed if watcher survived rename.
+    await Bun.write(filePath, "# After atomic replace");
+
+    const result = await Promise.race([
+      new Promise<boolean>((resolve) => {
+        const started = Date.now();
+        const timer = setInterval(() => {
+          if (sawSecondUpdate) {
+            clearInterval(timer);
+            resolve(true);
+            return;
+          }
+          if (Date.now() - started > 2000) {
+            clearInterval(timer);
+            resolve(false);
+          }
+        }, 50);
+      }),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 2200)),
+    ]);
+
+    expect(result).toBe(true);
   });
 
   it("replaces existing watcher when called twice for same path", async () => {

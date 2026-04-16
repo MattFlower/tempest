@@ -21,7 +21,9 @@ import mermaidSourceText from "mermaid/dist/mermaid.min.js" with { type: "text" 
 
 // Configure markdown-it with highlight.js
 const md = markdownit({
-  html: true,
+  // Do not allow raw HTML in markdown input. This prevents markdown files
+  // from injecting executable scripts into the preview iframe.
+  html: false,
   linkify: true,
   typographer: true,
   highlight(str: string, lang: string) {
@@ -41,13 +43,36 @@ md.use(frontmatterPlugin);
 
 // Tag block-level HTML elements with their source line number (1-based).
 // Used by the "Ask Claude" feature to cite the original markdown location.
-md.core.ruler.push('source_lines', (state) => {
+md.core.ruler.push("source_lines", (state) => {
   for (const token of state.tokens) {
     if (token.map && token.nesting === 1) {
-      token.attrSet('data-source-line', String(token.map[0] + 1));
+      token.attrSet("data-source-line", String(token.map[0] + 1));
     }
   }
 });
+
+function addSourceLineToPreTag(renderedHTML: string, sourceLine?: number): string {
+  if (sourceLine === undefined) {
+    return renderedHTML;
+  }
+  return renderedHTML.replace(/<pre(?=[\s>])/, `<pre data-source-line="${sourceLine + 1}"`);
+}
+
+const defaultFenceRenderer = md.renderer.rules.fence;
+md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+  const rendered = defaultFenceRenderer
+    ? defaultFenceRenderer(tokens, idx, options, env, self)
+    : self.renderToken(tokens, idx, options);
+  return addSourceLineToPreTag(rendered, tokens[idx]?.map?.[0]);
+};
+
+const defaultCodeBlockRenderer = md.renderer.rules.code_block;
+md.renderer.rules.code_block = (tokens, idx, options, env, self) => {
+  const rendered = defaultCodeBlockRenderer
+    ? defaultCodeBlockRenderer(tokens, idx, options, env, self)
+    : self.renderToken(tokens, idx, options);
+  return addSourceLineToPreTag(rendered, tokens[idx]?.map?.[0]);
+};
 
 /**
  * Build a complete self-contained HTML page from markdown.

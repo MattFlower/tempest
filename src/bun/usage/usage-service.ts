@@ -79,7 +79,7 @@ async function runCCUsage(since: string): Promise<Omit<UsageResponse, "isStale">
   const bunPath = process.execPath;
   const args = [bunPath, "x", "ccusage@latest", "daily", "--json", "--since", since, "--instances"];
 
-  console.log(`[usage] running: ccusage@latest`);
+  console.log("[usage] running: ccusage@latest");
 
   const proc = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });
 
@@ -90,23 +90,38 @@ async function runCCUsage(since: string): Promise<Omit<UsageResponse, "isStale">
     try { proc.kill(); } catch {}
   }, 30_000);
 
-  const output = await new Response(proc.stdout).text();
+  const outputPromise = new Response(proc.stdout).text();
+  const stderrPromise = new Response(proc.stderr).text();
+  const [output, stderr] = await Promise.all([outputPromise, stderrPromise]);
   clearTimeout(timer);
 
   if (timedOut) {
     await proc.exited;
+    if (stderr.trim()) {
+      console.error("[usage] ccusage stderr:", summarizeStderr(stderr));
+    }
     return { dailyTotals: null, projectBreakdowns: {} };
   }
 
   const exitCode = await proc.exited;
   if (exitCode !== 0) {
+    if (stderr.trim()) {
+      console.error(`[usage] ccusage failed with exit code ${exitCode}:`, summarizeStderr(stderr));
+    } else {
+      console.error(`[usage] ccusage failed with exit code ${exitCode}`);
+    }
     return { dailyTotals: null, projectBreakdowns: {} };
   }
 
   return parseResponse(output);
 }
 
-/** Parse ccusage JSON response — matches Swift UsageService.parseResponse exactly. */
+function summarizeStderr(stderr: string): string {
+  const normalized = stderr.trim().replace(/\s+/g, " ");
+  return normalized.length > 1000 ? `${normalized.slice(0, 1000)}…` : normalized;
+}
+
+/** Parse ccusage JSON response — handles ccusage --instances project arrays. */
 export function parseResponse(raw: string): Omit<UsageResponse, "isStale"> {
   try {
     const json = JSON.parse(raw);
@@ -123,9 +138,30 @@ export function parseResponse(raw: string): Omit<UsageResponse, "isStale"> {
       for (const [slug, value] of Object.entries(json.projects)) {
         const entries = value as any[];
         if (!Array.isArray(entries) || entries.length === 0) continue;
-        const usage = parseUsageDict(entries[0]);
-        if (usage) {
-          projectBreakdowns[slug] = usage;
+
+        let totalIn = 0;
+        let totalOut = 0;
+        let totalCache = 0;
+        let totalCost = 0;
+        let hasValidEntry = false;
+
+        for (const entry of entries) {
+          const usage = parseUsageDict(entry as Record<string, any>);
+          if (!usage) continue;
+          hasValidEntry = true;
+          totalIn += usage.inputTokens;
+          totalOut += usage.outputTokens;
+          totalCache += usage.cacheReadTokens;
+          totalCost += usage.totalCost;
+        }
+
+        if (hasValidEntry) {
+          projectBreakdowns[slug] = {
+            inputTokens: totalIn,
+            outputTokens: totalOut,
+            cacheReadTokens: totalCache,
+            totalCost: totalCost,
+          };
         }
       }
     }
@@ -179,7 +215,6 @@ export async function getUsageData(since?: string): Promise<UsageResponse> {
   // Trigger background fetch if not already running
   if (!fetchInProgress) {
     fetchInProgress = true;
-    lastFetchFailed = false;
     runCCUsage(sinceDate)
       .then((data) => {
         if (data.dailyTotals) {
@@ -208,5 +243,5 @@ export async function getUsageData(since?: string): Promise<UsageResponse> {
     const dateMismatch = cached.sinceDate !== sinceDate;
     return { ...cached.data, isStale: dateMismatch || lastFetchFailed };
   }
-  return { dailyTotals: null, projectBreakdowns: {}, isStale: false };
+  return { dailyTotals: null, projectBreakdowns: {}, isStale: lastFetchFailed };
 }

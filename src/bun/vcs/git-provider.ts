@@ -3,6 +3,7 @@ import type { DiffStats, TempestWorkspace } from "../../shared/ipc-types";
 import { BranchHealthStatus, VCSType, WorkspaceStatus } from "../../shared/ipc-types";
 import type { VCSProvider, WorkspaceEntry } from "./types";
 import { PathResolver } from "../config/path-resolver";
+import { detectBaseBranch, parseDiffStatSummary } from "./shared";
 
 export class GitProvider implements VCSProvider {
   readonly vcsType = VCSType.Git;
@@ -122,7 +123,10 @@ export class GitProvider implements VCSProvider {
       if (unmerged.trim()) return BranchHealthStatus.HasConflicts;
 
       // Check if main/master is an ancestor of HEAD
-      const baseBranch = await this.detectBaseBranch(workspace.path);
+      const baseBranch = await detectBaseBranch(
+        workspace.path,
+        (a, d) => this.runGit(a, d),
+      );
       try {
         await this.runGit(["merge-base", "--is-ancestor", baseBranch, "HEAD"], workspace.path);
         return BranchHealthStatus.Ok;
@@ -136,7 +140,10 @@ export class GitProvider implements VCSProvider {
   }
 
   async diffStats(workspace: TempestWorkspace): Promise<DiffStats> {
-    const baseBranch = await this.detectBaseBranch(workspace.path);
+    const baseBranch = await detectBaseBranch(
+      workspace.path,
+      (a, d) => this.runGit(a, d),
+    );
     const output = await this.runGit(
       ["diff", "--stat", baseBranch],
       workspace.path,
@@ -144,18 +151,9 @@ export class GitProvider implements VCSProvider {
     return parseDiffStatSummary(output);
   }
 
-  private async detectBaseBranch(directory: string): Promise<string> {
-    try {
-      await this.runGit(["rev-parse", "--verify", "main"], directory);
-      return "main";
-    } catch {
-      return "master";
-    }
-  }
-
   private async runGit(args: string[], directory: string): Promise<string> {
     const gitPath = this.pathResolver.resolve("git", this.configuredGitPath);
-    const proc = Bun.spawn([gitPath, ...args], {
+    const proc = Bun.spawn([gitPath, "-c", "color.ui=never", ...args], {
       cwd: directory,
       stdout: "pipe",
       stderr: "pipe",
@@ -205,24 +203,4 @@ export function parseWorktreeList(output: string): WorkspaceEntry[] {
     }
   }
   return entries;
-}
-
-export function parseDiffStatSummary(output: string): DiffStats {
-  const lines = output.trim().split("\n");
-  const lastLine = lines[lines.length - 1] ?? "";
-
-  let additions = 0;
-  let deletions = 0;
-  let filesChanged = 0;
-
-  const insertMatch = lastLine.match(/(\d+) insertion/);
-  if (insertMatch?.[1]) additions = parseInt(insertMatch[1], 10);
-
-  const deleteMatch = lastLine.match(/(\d+) deletion/);
-  if (deleteMatch?.[1]) deletions = parseInt(deleteMatch[1], 10);
-
-  const filesMatch = lastLine.match(/(\d+) file/);
-  if (filesMatch?.[1]) filesChanged = parseInt(filesMatch[1], 10);
-
-  return { additions, deletions, filesChanged };
 }

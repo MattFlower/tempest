@@ -6,6 +6,7 @@ import type { DiffStats, TempestWorkspace } from "../../shared/ipc-types";
 import { BranchHealthStatus, VCSType, WorkspaceStatus } from "../../shared/ipc-types";
 import type { VCSProvider, WorkspaceEntry } from "./types";
 import { PathResolver } from "../config/path-resolver";
+import { parseDiffStatSummary } from "./shared";
 
 export class JJProvider implements VCSProvider {
   readonly vcsType = VCSType.JJ;
@@ -157,22 +158,3 @@ export class JJProvider implements VCSProvider {
   }
 }
 
-function parseDiffStatSummary(output: string): DiffStats {
-  const lines = output.trim().split("\n");
-  const lastLine = lines[lines.length - 1] ?? "";
-
-  let additions = 0;
-  let deletions = 0;
-  let filesChanged = 0;
-
-  const insertMatch = lastLine.match(/(\d+) insertion/);
-  if (insertMatch?.[1]) additions = parseInt(insertMatch[1], 10);
-
-  const deleteMatch = lastLine.match(/(\d+) deletion/);
-  if (deleteMatch?.[1]) deletions = parseInt(deleteMatch[1], 10);
-
-  const filesMatch = lastLine.match(/(\d+) file/);
-  if (filesMatch?.[1]) filesChanged = parseInt(filesMatch[1], 10);
-
-  return { additions, deletions, filesChanged };
-}

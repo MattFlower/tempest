@@ -23,5 +23,5 @@ export function detectVCS(repoPath: string, config: AppConfig): VCSProvider {
 export function detectVCSType(repoPath: string): VCSType {
   if (existsSync(join(repoPath, ".jj"))) return VCSType.JJ;
   if (existsSync(join(repoPath, ".git"))) return VCSType.Git;
-  return VCSType.Git; // default fallback
+  throw new Error(`Not a repository: ${repoPath}`);
 }

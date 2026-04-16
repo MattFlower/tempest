@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - AI Context timeline accuracy for VCS files: file matching now avoids basename substring collisions (e.g. `file.ts` no longer matches `file.tsx`), per-message tool calls now preserve the correct Edit/Write detail when multiple edits target the same file in one assistant message, and timeline entries are now ordered chronologically across sessions.
 - Browser bookmark persistence is now robust under concurrent first-use access: bookmark loads are synchronized so parallel calls no longer see transient empty state or lose writes, and bookmark URL edits now preserve deduplication by rejecting updates that would duplicate another bookmark URL.
 - Hardened config and migration startup behavior: config/repo-path JSON is now runtime-validated before use (with safe defaults for malformed data), migration markers are now written only after an error-free pass so failed copies can retry on next launch, and migration tests now exercise the real `runMigration()` flow directly.
+- Usage tracking reliability in `src/bun/usage/usage-service.ts`: `--instances` project arrays are now fully aggregated across all returned entries (fixing undercounted multi-day/project totals), ccusage `stderr` is now consumed/logged on timeout and non-zero exits, and empty-cache failure responses are now marked stale so the UI can distinguish failed refreshes from fresh data.
+- VCS reliability fixes in `src/bun/vcs`: git file-revert now fully restores staged-only tracked files (instead of leaving them as unstaged changes), and git/jj commit providers now invalidate cached binary paths when `config.gitPath` / `config.jjPath` changes so updated settings take effect without restarting.
 
 ### Changed
 

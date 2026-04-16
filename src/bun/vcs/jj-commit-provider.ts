@@ -14,12 +14,23 @@ import type {
   VCSFileChangeType,
   VCSFileDiffResult,
 } from "../../shared/ipc-types";
+import { detectLanguage } from "./shared";
 
 const pathResolver = new PathResolver();
 
+// Cache the resolved jj path, but invalidate when config.jjPath changes.
+let cachedJJPath: string | undefined;
+let cachedJJPathKey: string | undefined;
+
 async function getJJPath(): Promise<string> {
   const config = await loadConfig();
-  return pathResolver.resolve("jj", config.jjPath);
+  const cacheKey = config.jjPath ?? "__default__";
+  if (cachedJJPath && cachedJJPathKey === cacheKey) {
+    return cachedJJPath;
+  }
+  cachedJJPath = pathResolver.resolve("jj", config.jjPath);
+  cachedJJPathKey = cacheKey;
+  return cachedJJPath;
 }
 
 async function runJJ(
@@ -46,26 +57,6 @@ async function runJJOrThrow(args: string[], cwd: string): Promise<string> {
     throw new Error(`jj ${args.join(" ")} failed (exit ${exitCode}): ${stderr}`);
   }
   return stdout;
-}
-
-// --- Language detection (shared with git-commit-provider) ---
-
-const LANG_MAP: Record<string, string> = {
-  ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
-  json: "json", md: "markdown", css: "css", html: "html", py: "python",
-  rs: "rust", go: "go", java: "java", rb: "ruby", sh: "shell",
-  bash: "shell", zsh: "shell", yml: "yaml", yaml: "yaml", toml: "toml",
-  xml: "xml", sql: "sql", swift: "swift", kt: "kotlin", c: "c",
-  cpp: "cpp", h: "c", hpp: "cpp", lua: "lua", vim: "vim",
-  dockerfile: "dockerfile", makefile: "makefile",
-};
-
-function detectLanguage(filePath: string): string {
-  const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
-  const basename = filePath.split("/").pop()?.toLowerCase() ?? "";
-  if (basename === "dockerfile") return "dockerfile";
-  if (basename === "makefile") return "makefile";
-  return LANG_MAP[ext] ?? "plaintext";
 }
 
 // --- Template for jj log ---

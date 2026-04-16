@@ -3,6 +3,8 @@
 // Used by the VCS View frontend.
 // ============================================================
 
+import { join } from "node:path";
+import { unlink } from "node:fs/promises";
 import { PathResolver } from "../config/path-resolver";
 import { loadConfig } from "../config/app-config";
 import type {
@@ -17,12 +19,23 @@ import type {
   GitScopedFilesResult,
 } from "../../shared/ipc-types";
 import { DiffScope } from "../../shared/ipc-types";
+import { detectLanguage, detectBaseBranch } from "./shared";
 
 const pathResolver = new PathResolver();
 
+// Cache the resolved git path, but invalidate when config.gitPath changes.
+let cachedGitPath: string | undefined;
+let cachedGitPathKey: string | undefined;
+
 async function getGitPath(): Promise<string> {
   const config = await loadConfig();
-  return pathResolver.resolve("git", config.gitPath);
+  const cacheKey = config.gitPath ?? "__default__";
+  if (cachedGitPath && cachedGitPathKey === cacheKey) {
+    return cachedGitPath;
+  }
+  cachedGitPath = pathResolver.resolve("git", config.gitPath);
+  cachedGitPathKey = cacheKey;
+  return cachedGitPath;
 }
 
 async function runGit(
@@ -30,7 +43,7 @@ async function runGit(
   cwd: string,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const gitPath = await getGitPath();
-  const proc = Bun.spawn([gitPath, ...args], {
+  const proc = Bun.spawn([gitPath, "-c", "color.ui=never", ...args], {
     cwd,
     stdout: "pipe",
     stderr: "pipe",
@@ -49,50 +62,6 @@ async function runGitOrThrow(args: string[], cwd: string): Promise<string> {
     throw new Error(`git ${args.join(" ")} failed (exit ${exitCode}): ${stderr}`);
   }
   return stdout;
-}
-
-// --- Language detection from file extension ---
-
-const LANG_MAP: Record<string, string> = {
-  ts: "typescript",
-  tsx: "typescript",
-  js: "javascript",
-  jsx: "javascript",
-  json: "json",
-  md: "markdown",
-  css: "css",
-  html: "html",
-  py: "python",
-  rs: "rust",
-  go: "go",
-  java: "java",
-  rb: "ruby",
-  sh: "shell",
-  bash: "shell",
-  zsh: "shell",
-  yml: "yaml",
-  yaml: "yaml",
-  toml: "toml",
-  xml: "xml",
-  sql: "sql",
-  swift: "swift",
-  kt: "kotlin",
-  c: "c",
-  cpp: "cpp",
-  h: "c",
-  hpp: "cpp",
-  lua: "lua",
-  vim: "vim",
-  dockerfile: "dockerfile",
-  makefile: "makefile",
-};
-
-function detectLanguage(filePath: string): string {
-  const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
-  const basename = filePath.split("/").pop()?.toLowerCase() ?? "";
-  if (basename === "dockerfile") return "dockerfile";
-  if (basename === "makefile") return "makefile";
-  return LANG_MAP[ext] ?? "plaintext";
 }
 
 // --- Status parsing (git status --porcelain=v2) ---
@@ -156,6 +125,15 @@ function parseStatusV2(output: string): VCSFileEntry[] {
           staged: false,
         });
       }
+    } else if (line.startsWith("u ")) {
+      // Unmerged entry: u XY sub m1 m2 m3 hH hI hW path
+      const parts = line.split(" ");
+      const path = parts.slice(10).join(" ");
+      files.push({
+        path,
+        changeType: "modified",
+        staged: false,
+      });
     } else if (line.startsWith("? ")) {
       // Untracked: ? path
       const path = line.substring(2);
@@ -250,47 +228,54 @@ export async function vcsRevertFiles(
   if (paths.length === 0) return { success: true };
 
   try {
-    // Get status to determine each file's change type and staged state
+    // Get status to determine each file's change type and staged state.
+    // A file can appear twice (once staged, once unstaged), so collect all
+    // entries per path to handle both states correctly.
     const status = await getVCSStatus(workspacePath);
-    const fileMap = new Map<string, VCSFileEntry>();
+    const fileEntries = new Map<string, VCSFileEntry[]>();
     for (const f of status.files) {
-      fileMap.set(f.path, f);
+      const existing = fileEntries.get(f.path);
+      if (existing) {
+        existing.push(f);
+      } else {
+        fileEntries.set(f.path, [f]);
+      }
     }
 
-    const trackedPaths: string[] = [];
-    const untrackedPaths: string[] = [];
-    const stagedPaths: string[] = [];
+    const trackedPaths = new Set<string>();
+    const untrackedPaths = new Set<string>();
+    const stagedPaths = new Set<string>();
 
     for (const p of paths) {
-      const entry = fileMap.get(p);
-      if (!entry) continue;
+      const entries = fileEntries.get(p);
+      if (!entries) continue;
 
-      if (entry.staged) {
-        stagedPaths.push(p);
-      }
+      const hasStagedEntry = entries.some((entry) => entry.staged);
+      const hasTrackedEntry = entries.some((entry) => entry.changeType !== "untracked");
+      const hasOnlyUntrackedEntries = entries.every((entry) => entry.changeType === "untracked");
 
-      if (entry.changeType === "untracked") {
-        untrackedPaths.push(p);
-      } else {
-        trackedPaths.push(p);
-      }
+      if (hasStagedEntry) stagedPaths.add(p);
+      if (hasTrackedEntry) trackedPaths.add(p);
+      if (hasOnlyUntrackedEntries) untrackedPaths.add(p);
     }
 
     // Unstage any staged files first
-    if (stagedPaths.length > 0) {
+    if (stagedPaths.size > 0) {
       await runGitOrThrow(["restore", "--staged", "--", ...stagedPaths], workspacePath);
     }
 
     // Restore tracked files from HEAD
-    if (trackedPaths.length > 0) {
+    if (trackedPaths.size > 0) {
       await runGitOrThrow(["checkout", "HEAD", "--", ...trackedPaths], workspacePath);
     }
 
     // Delete untracked files
     for (const p of untrackedPaths) {
-      const fullPath = `${workspacePath}/${p}`;
+      const fullPath = join(workspacePath, p);
       try {
-        await Bun.file(fullPath).exists() && (await import("node:fs/promises")).unlink(fullPath);
+        if (await Bun.file(fullPath).exists()) {
+          await unlink(fullPath);
+        }
       } catch {
         // Ignore individual file deletion errors
       }
@@ -356,69 +341,52 @@ export async function vcsGetFileDiff(
   let originalContent = "";
   let modifiedContent = "";
 
-  try {
-    if (staged) {
-      // Staged: original = HEAD, modified = index
+  if (staged) {
+    // Staged: original = HEAD, modified = index
+    try {
+      originalContent = await runGitOrThrow(
+        ["show", `HEAD:${filePath}`],
+        workspacePath,
+      );
+    } catch {
+      // New file — no HEAD version
+    }
+    try {
+      modifiedContent = await runGitOrThrow(
+        ["show", `:${filePath}`],
+        workspacePath,
+      );
+    } catch {
+      // Deleted from index
+    }
+  } else {
+    // Unstaged: original = index (or HEAD if not staged), modified = working tree
+    try {
+      modifiedContent = await Bun.file(join(workspacePath, filePath)).text();
+    } catch {
+      // File may not exist on disk (e.g. deleted)
+    }
+    try {
+      originalContent = await runGitOrThrow(
+        ["show", `:${filePath}`],
+        workspacePath,
+      );
+    } catch {
       try {
         originalContent = await runGitOrThrow(
           ["show", `HEAD:${filePath}`],
           workspacePath,
         );
       } catch {
-        // New file — no HEAD version
-        originalContent = "";
-      }
-      try {
-        modifiedContent = await runGitOrThrow(
-          ["show", `:${filePath}`],
-          workspacePath,
-        );
-      } catch {
-        // Deleted from index
-        modifiedContent = "";
-      }
-    } else {
-      // Unstaged: original = index (or HEAD if not staged), modified = working tree
-      try {
-        // Try index first, fall back to HEAD
-        modifiedContent = await Bun.file(`${workspacePath}/${filePath}`).text();
-      } catch {
-        modifiedContent = "";
-      }
-      try {
-        originalContent = await runGitOrThrow(
-          ["show", `:${filePath}`],
-          workspacePath,
-        );
-      } catch {
-        try {
-          originalContent = await runGitOrThrow(
-            ["show", `HEAD:${filePath}`],
-            workspacePath,
-          );
-        } catch {
-          // Untracked file — no original
-          originalContent = "";
-        }
+        // Untracked file — no original
       }
     }
-  } catch {
-    // Fallback: return empty strings
   }
 
   return { originalContent, modifiedContent, filePath, language };
 }
 
 // --- Git Commit/Scope Selection ---
-
-async function detectGitBaseBranch(workspacePath: string): Promise<string> {
-  try {
-    await runGitOrThrow(["rev-parse", "--verify", "main"], workspacePath);
-    return "main";
-  } catch {
-    return "master";
-  }
-}
 
 export async function gitGetRecentCommits(
   workspacePath: string,
@@ -500,7 +468,7 @@ export async function gitGetScopedFiles(
   }
 
   if (scope === DiffScope.SinceTrunk) {
-    const baseBranch = await detectGitBaseBranch(workspacePath);
+    const baseBranch = await detectBaseBranch(workspacePath, runGitOrThrow);
     const mergeBase = (
       await runGitOrThrow(["merge-base", "HEAD", baseBranch], workspacePath)
     ).trim();
@@ -556,7 +524,7 @@ export async function gitGetScopedFileDiff(
       // Deleted in this commit
     }
   } else if (scope === DiffScope.SinceTrunk) {
-    const baseBranch = await detectGitBaseBranch(workspacePath);
+    const baseBranch = await detectBaseBranch(workspacePath, runGitOrThrow);
     const mergeBase = (
       await runGitOrThrow(["merge-base", "HEAD", baseBranch], workspacePath)
     ).trim();

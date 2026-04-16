@@ -41,19 +41,29 @@ describe("parseResponse", () => {
     });
   });
 
-  it("takes only the first entry per project (matches Swift)", () => {
+  it("sums all entries per project for multi-day ranges", () => {
     const input = JSON.stringify({
       projects: {
         "project-a": [
           { inputTokens: 100, outputTokens: 50, cacheReadTokens: 10, totalCost: 0.5 },
-          { inputTokens: 999, outputTokens: 999, cacheReadTokens: 999, totalCost: 99.0 },
+          { inputTokens: 900, outputTokens: 150, cacheReadTokens: 90, totalCost: 1.5 },
         ],
       },
     });
 
     const result = parseResponse(input);
-    expect(result.projectBreakdowns["project-a"]?.inputTokens).toBe(100);
-    expect(result.dailyTotals?.totalCost).toBeCloseTo(0.5);
+    expect(result.projectBreakdowns["project-a"]).toEqual({
+      inputTokens: 1000,
+      outputTokens: 200,
+      cacheReadTokens: 100,
+      totalCost: 2.0,
+    });
+    expect(result.dailyTotals).toEqual({
+      inputTokens: 1000,
+      outputTokens: 200,
+      cacheReadTokens: 100,
+      totalCost: 2.0,
+    });
   });
 
   it("falls back to totals when no projects", () => {
@@ -91,16 +101,29 @@ describe("parseResponse", () => {
     expect(result.dailyTotals).toBeNull();
   });
 
-  it("skips projects with missing required fields", () => {
+  it("skips invalid project entries and keeps valid ones", () => {
     const input = JSON.stringify({
       projects: {
-        "project-a": [{ inputTokens: 100 }], // missing outputTokens, cacheReadTokens, totalCost
+        "project-a": [
+          { inputTokens: 100 }, // missing outputTokens, cacheReadTokens, totalCost
+          { inputTokens: 25, outputTokens: 10, cacheReadTokens: 5, totalCost: 0.2 },
+        ],
       },
     });
 
     const result = parseResponse(input);
-    expect(Object.keys(result.projectBreakdowns)).toHaveLength(0);
-    expect(result.dailyTotals).toBeNull();
+    expect(result.projectBreakdowns["project-a"]).toEqual({
+      inputTokens: 25,
+      outputTokens: 10,
+      cacheReadTokens: 5,
+      totalCost: 0.2,
+    });
+    expect(result.dailyTotals).toEqual({
+      inputTokens: 25,
+      outputTokens: 10,
+      cacheReadTokens: 5,
+      totalCost: 0.2,
+    });
   });
 
   it("skips non-array project entries", () => {

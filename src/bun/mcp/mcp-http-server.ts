@@ -5,8 +5,8 @@
 // ============================================================
 
 import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
 import { randomBytes } from "node:crypto";
+import { join } from "node:path";
 import { WEBPAGE_PREVIEWS_DIR } from "../config/paths";
 
 const INSTRUCTIONS = `You are running inside Tempest, a developer tool with a pane-based UI. The user can see browser panes alongside their terminal.
@@ -41,6 +41,14 @@ const SHOW_WEBPAGE_TOOL = {
     required: ["html", "title"],
   },
 };
+
+class JsonRpcError extends Error {
+  readonly code: number;
+  constructor(code: number, message: string) {
+    super(message);
+    this.code = code;
+  }
+}
 
 export class McpHttpServer {
   private server: ReturnType<typeof Bun.serve> | null = null;
@@ -80,7 +88,16 @@ export class McpHttpServer {
           return new Response("Not Found", { status: 404 });
         }
 
-        const workspaceName = decodeURIComponent(pathParts[1]!);
+        let workspaceName: string;
+        try {
+          workspaceName = decodeURIComponent(pathParts[1]!);
+        } catch {
+          return new Response("Bad Request", { status: 400 });
+        }
+
+        if (!self.isValidWorkspaceName(workspaceName)) {
+          return new Response("Bad Request", { status: 400 });
+        }
 
         if (req.method === "POST") {
           return self.handlePost(req, workspaceName);
@@ -100,7 +117,7 @@ export class McpHttpServer {
       },
     });
 
-    this.port = this.server.port;
+    this.port = this.server?.port ?? 0;
     console.log(`[mcp-http] MCP server listening on http://127.0.0.1:${this.port}`);
   }
 
@@ -109,43 +126,89 @@ export class McpHttpServer {
     this.server = null;
   }
 
+  private jsonRpcResponse(payload: Record<string, unknown>, status = 200): Response {
+    return new Response(JSON.stringify(payload), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  private jsonRpcError(id: unknown, code: number, message: string, status = 200): Response {
+    return this.jsonRpcResponse(
+      {
+        jsonrpc: "2.0",
+        id: id ?? null,
+        error: { code, message },
+      },
+      status,
+    );
+  }
+
+  private isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+
+  // JSON-RPC 2.0 allows array params, but MCP always uses object params.
+  private normalizeParams(params: unknown): Record<string, unknown> {
+    return this.isRecord(params) ? params : {};
+  }
+
+  private toJsonRpcError(err: unknown): { code: number; message: string } {
+    if (err instanceof JsonRpcError) {
+      return { code: err.code, message: err.message };
+    }
+
+    if (err instanceof Error) {
+      return { code: -32603, message: err.message };
+    }
+
+    return { code: -32603, message: String(err) };
+  }
+
+  private isValidWorkspaceName(workspaceName: string): boolean {
+    if (!workspaceName) return false;
+    if (workspaceName === "." || workspaceName === "..") return false;
+    if (workspaceName.includes("/") || workspaceName.includes("\\")) return false;
+    if (workspaceName.includes("\0")) return false;
+    return true;
+  }
+
   private async handlePost(req: Request, workspaceName: string): Promise<Response> {
-    let body: any;
+    let body: unknown;
     try {
       body = await req.json();
     } catch {
-      return new Response(
-        JSON.stringify({ jsonrpc: "2.0", error: { code: -32700, message: "Parse error" } }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
-      );
+      return this.jsonRpcError(null, -32700, "Parse error", 400);
     }
 
-    // Handle JSON-RPC batches
     if (Array.isArray(body)) {
-      // Batch of notifications/responses — accept
-      const hasRequests = body.some((m: any) => m.id !== undefined && m.method);
-      if (!hasRequests) {
-        return new Response(null, { status: 202 });
-      }
-      // We don't support batched requests — process first request only
-      body = body.find((m: any) => m.id !== undefined && m.method) ?? body[0];
+      return this.jsonRpcError(null, -32600, "Batch requests are not supported", 400);
     }
 
-    const { id, method, params } = body;
+    if (!this.isRecord(body)) {
+      return this.jsonRpcError(null, -32600, "Invalid Request", 400);
+    }
+
+    const id = body.id;
+    const method = body.method;
+    const params = this.normalizeParams(body.params);
+
+    if (typeof method !== "string" || method.length === 0) {
+      return this.jsonRpcError(id ?? null, -32600, "Invalid Request", 400);
+    }
 
     // Notifications (no id) — accept
     if (id === undefined || id === null) {
       return new Response(null, { status: 202 });
     }
 
-    // Handle JSON-RPC request
-    const result = await this.handleRequest(method, params ?? {}, workspaceName);
-    const response = JSON.stringify({ jsonrpc: "2.0", id, result });
-
-    return new Response(response, {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    try {
+      const result = await this.handleRequest(method, params, workspaceName);
+      return this.jsonRpcResponse({ jsonrpc: "2.0", id, result }, 200);
+    } catch (err) {
+      const parsedError = this.toJsonRpcError(err);
+      return this.jsonRpcError(id, parsedError.code, parsedError.message, 200);
+    }
   }
 
   private async handleRequest(
@@ -177,7 +240,7 @@ export class McpHttpServer {
         return {};
 
       default:
-        throw { code: -32601, message: `Method not found: ${method}` };
+        throw new JsonRpcError(-32601, `Method not found: ${method}`);
     }
   }
 

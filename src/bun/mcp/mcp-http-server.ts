@@ -1,7 +1,7 @@
 // ============================================================
 // McpHttpServer — MCP Streamable HTTP transport server.
 // Runs inside Tempest's Bun process, serving MCP tools to Claude Code.
-// Each Claude session connects via a unique URL path: /mcp/{workspace}
+// Each Claude session connects via a unique URL path: /mcp/{workspaceKey}
 // ============================================================
 
 import { mkdir } from "node:fs/promises";
@@ -56,7 +56,7 @@ export class McpHttpServer {
   private token: string = "";
 
   /** Called when a show_webpage tool is invoked. */
-  onShowWebpage: ((workspaceName: string, title: string, filePath: string) => void) | null = null;
+  onShowWebpage: ((workspaceKey: string, title: string, filePath: string) => void) | null = null;
 
   getPort(): number {
     return this.port;
@@ -83,24 +83,24 @@ export class McpHttpServer {
         const url = new URL(req.url);
         const pathParts = url.pathname.split("/").filter(Boolean);
 
-        // Expect /mcp/{workspaceName}
+        // Expect /mcp/{workspaceKey}
         if (pathParts.length < 2 || pathParts[0] !== "mcp") {
           return new Response("Not Found", { status: 404 });
         }
 
-        let workspaceName: string;
+        let workspaceKey: string;
         try {
-          workspaceName = decodeURIComponent(pathParts[1]!);
+          workspaceKey = decodeURIComponent(pathParts[1]!);
         } catch {
           return new Response("Bad Request", { status: 400 });
         }
 
-        if (!self.isValidWorkspaceName(workspaceName)) {
+        if (!self.isValidWorkspaceKey(workspaceKey)) {
           return new Response("Bad Request", { status: 400 });
         }
 
         if (req.method === "POST") {
-          return self.handlePost(req, workspaceName);
+          return self.handlePost(req, workspaceKey);
         }
 
         if (req.method === "GET") {
@@ -165,15 +165,15 @@ export class McpHttpServer {
     return { code: -32603, message: String(err) };
   }
 
-  private isValidWorkspaceName(workspaceName: string): boolean {
-    if (!workspaceName) return false;
-    if (workspaceName === "." || workspaceName === "..") return false;
-    if (workspaceName.includes("/") || workspaceName.includes("\\")) return false;
-    if (workspaceName.includes("\0")) return false;
+  private isValidWorkspaceKey(workspaceKey: string): boolean {
+    if (!workspaceKey) return false;
+    if (workspaceKey === "." || workspaceKey === "..") return false;
+    if (workspaceKey.includes("/") || workspaceKey.includes("\\")) return false;
+    if (workspaceKey.includes("\0")) return false;
     return true;
   }
 
-  private async handlePost(req: Request, workspaceName: string): Promise<Response> {
+  private async handlePost(req: Request, workspaceKey: string): Promise<Response> {
     let body: unknown;
     try {
       body = await req.json();
@@ -203,7 +203,7 @@ export class McpHttpServer {
     }
 
     try {
-      const result = await this.handleRequest(method, params, workspaceName);
+      const result = await this.handleRequest(method, params, workspaceKey);
       return this.jsonRpcResponse({ jsonrpc: "2.0", id, result }, 200);
     } catch (err) {
       const parsedError = this.toJsonRpcError(err);
@@ -214,7 +214,7 @@ export class McpHttpServer {
   private async handleRequest(
     method: string,
     params: Record<string, unknown>,
-    workspaceName: string,
+    workspaceKey: string,
   ): Promise<unknown> {
     switch (method) {
       case "initialize":
@@ -231,7 +231,7 @@ export class McpHttpServer {
       case "tools/call": {
         const toolName = (params as { name?: string }).name;
         if (toolName === "show_webpage") {
-          return this.handleShowWebpage(params, workspaceName);
+          return this.handleShowWebpage(params, workspaceKey);
         }
         return { content: [{ type: "text", text: `Unknown tool: ${toolName}` }], isError: true };
       }
@@ -246,7 +246,7 @@ export class McpHttpServer {
 
   private async handleShowWebpage(
     params: Record<string, unknown>,
-    workspaceName: string,
+    workspaceKey: string,
   ): Promise<unknown> {
     const args = (params as { arguments?: Record<string, unknown> }).arguments as {
       html: string;
@@ -254,14 +254,14 @@ export class McpHttpServer {
     };
 
     try {
-      const previewDir = join(WEBPAGE_PREVIEWS_DIR, workspaceName);
+      const previewDir = join(WEBPAGE_PREVIEWS_DIR, workspaceKey);
       await mkdir(previewDir, { recursive: true });
 
       const fileId = crypto.randomUUID();
       const filePath = join(previewDir, `${fileId}.html`);
       await Bun.write(filePath, args.html);
 
-      this.onShowWebpage?.(workspaceName, args.title, filePath);
+      this.onShowWebpage?.(workspaceKey, args.title, filePath);
 
       return {
         content: [{ type: "text", text: "Webpage displayed to the user in a new browser pane." }],

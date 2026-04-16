@@ -125,11 +125,15 @@ export class WorkspaceManager {
     await this.refreshWorkspacesInternal(repo);
   }
 
-  removeRepo(repoId: string): void {
+  async removeRepo(repoId: string): Promise<void> {
+    const repo = this.repos.find((r) => r.id === repoId);
     this.repos = this.repos.filter((r) => r.id !== repoId);
     this.workspacesByRepo.delete(repoId);
     this.providers.delete(repoId);
-    this.persistRepoList();
+    if (repo) {
+      this.remoteReposCache.delete(repo.path);
+    }
+    await this.persistRepoList();
   }
 
   async cloneRepo(params: {
@@ -336,8 +340,9 @@ export class WorkspaceManager {
         }
 
         // Move webpage previews directory
-        const oldPreviewDir = join(WEBPAGE_PREVIEWS_DIR, workspace.name);
-        const newPreviewDir = join(WEBPAGE_PREVIEWS_DIR, newName);
+        const newWorkspaceId = stableId(newPath);
+        const oldPreviewDir = join(WEBPAGE_PREVIEWS_DIR, workspace.id);
+        const newPreviewDir = join(WEBPAGE_PREVIEWS_DIR, newWorkspaceId);
         if (existsSync(oldPreviewDir)) {
           const { rename } = await import("node:fs/promises");
           await rename(oldPreviewDir, newPreviewDir).catch(() => {});
@@ -348,7 +353,7 @@ export class WorkspaceManager {
           w.id === workspaceId
             ? {
                 ...w,
-                id: stableId(newPath),
+                id: newWorkspaceId,
                 name: newName,
                 path: newPath,
               }
@@ -403,11 +408,8 @@ export class WorkspaceManager {
         await provider.archiveWorkspace(workspace);
 
         // Clean up webpage preview files for this workspace
-        const wsName = workspace.name || workspace.path.split("/").pop() || "";
-        if (wsName) {
-          const previewDir = join(WEBPAGE_PREVIEWS_DIR, wsName);
-          await rm(previewDir, { recursive: true, force: true }).catch(() => {});
-        }
+        const previewDir = join(WEBPAGE_PREVIEWS_DIR, workspace.id);
+        await rm(previewDir, { recursive: true, force: true }).catch(() => {});
 
         const updated = workspaces.filter((w) => w.id !== workspaceId);
         this.workspacesByRepo.set(repoId, updated);
@@ -492,11 +494,15 @@ export class WorkspaceManager {
     if (cached) return cached;
 
     try {
-      const gitPath = this.config.gitPath ?? "git";
+      const gitPath = new PathResolver().resolve("git", this.config.gitPath);
       const proc = Bun.spawn([gitPath, "remote", "-v"], {
         cwd: repoPath,
         stdout: "pipe",
         stderr: "pipe",
+        env: {
+          ...process.env,
+          PATH: getResolvedPATH(),
+        },
       });
       const stdout = await new Response(proc.stdout).text();
       await proc.exited;
@@ -559,7 +565,7 @@ export class WorkspaceManager {
     // Determine what to execute
     let command: string[];
     if (scriptPath) {
-      command = ["/bin/zsh", "-l", "-c", scriptPath];
+      command = ["/bin/zsh", "-l", scriptPath];
     } else if (script) {
       command = ["/bin/zsh", "-l", "-c", script];
     } else {

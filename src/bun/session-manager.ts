@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { accessSync, constants, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -70,10 +71,14 @@ export class SessionManager {
     }
 
     if (params.withWebpage && params.mcpPort && params.mcpToken) {
+      const workspaceKey = createHash("sha256")
+        .update(params.workspacePath)
+        .digest("hex")
+        .slice(0, 16);
       const mcpConfigPath = await HookSettingsBuilder.writeMcpConfigFile(
         params.mcpPort,
         params.mcpToken,
-        params.workspaceName ?? "default",
+        workspaceKey,
       );
       parts.push("--mcp-config", mcpConfigPath);
     }

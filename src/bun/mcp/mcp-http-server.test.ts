@@ -81,8 +81,8 @@ describe("McpHttpServer", () => {
     expect(response.status).toBe(202);
   });
 
-  it("rejects invalid workspace names to prevent path traversal", async () => {
-    // Encoded slash decodes to "/tmp", which must be rejected as an invalid workspace name.
+  it("rejects invalid workspace keys to prevent path traversal", async () => {
+    // Encoded slash decodes to "/tmp", which must be rejected as an invalid workspace key.
     const response = await post("/mcp/%2Ftmp", {
       jsonrpc: "2.0",
       id: 1,

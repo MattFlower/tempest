@@ -451,8 +451,8 @@ const rpc: any = (BrowserView.defineRPC as any)({
       addRepo: async (_params: any) => {
         return await workspaceManager.addRepo(_params.path);
       },
-      removeRepo: (_params: any) => {
-        workspaceManager.removeRepo(_params.repoId);
+      removeRepo: async (_params: any) => {
+        await workspaceManager.removeRepo(_params.repoId);
       },
       cloneRepo: async (_params: any) => {
         return await workspaceManager.cloneRepo(_params);
@@ -1381,10 +1381,15 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
 
   // Start MCP HTTP server for the show_webpage tool
   try {
-    mcpServer.onShowWebpage = (workspaceName, title, filePath) => {
+    mcpServer.onShowWebpage = (workspaceKey, title, filePath) => {
       const all = workspaceManager.getAllWorkspaces();
-      const ws = all.find((w) => w.name === workspaceName || w.path.endsWith(`/${workspaceName}`));
-      const workspacePath = ws?.path ?? workspaceName;
+      const ws = all.find(
+        (w) =>
+          w.id === workspaceKey
+          || w.name === workspaceKey
+          || w.path.endsWith(`/${workspaceKey}`),
+      );
+      const workspacePath = ws?.path ?? workspaceKey;
       try {
         win.webview.rpc.send.showWebpage({ title, filePath, workspacePath });
       } catch { /* webview not ready */ }

@@ -117,13 +117,13 @@ export class HookSettingsBuilder {
   static async writeMcpConfigFile(
     mcpPort: number,
     mcpToken: string,
-    workspaceName: string,
+    workspaceKey: string,
   ): Promise<string> {
     const config = {
       mcpServers: {
         "tempest-webpage": {
           type: "http",
-          url: `http://127.0.0.1:${mcpPort}/mcp/${encodeURIComponent(workspaceName)}`,
+          url: `http://127.0.0.1:${mcpPort}/mcp/${encodeURIComponent(workspaceKey)}`,
           headers: {
             Authorization: `Bearer ${mcpToken}`,
           },

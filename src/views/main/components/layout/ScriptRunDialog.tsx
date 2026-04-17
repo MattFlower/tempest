@@ -40,6 +40,7 @@ export function ScriptRunDialog({
   const [exitCode, setExitCode] = useState<number | null>(null);
   const outputRef = useRef<HTMLPreElement>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
+  const isMountedRef = useRef(true);
 
   // Auto-scroll output
   useEffect(() => {
@@ -50,7 +51,10 @@ export function ScriptRunDialog({
 
   // Cleanup subscription on unmount
   useEffect(() => {
-    return () => { cleanupRef.current?.(); };
+    return () => {
+      isMountedRef.current = false;
+      cleanupRef.current?.();
+    };
   }, []);
 
   // Auto-start if no params needed
@@ -74,7 +78,7 @@ export function ScriptRunDialog({
       paramValues: values,
     });
 
-    cleanupRef.current = onScriptRun(
+    const unsubscribe = onScriptRun(
       runId,
       (data) => setOutput((prev) => prev + data),
       (code) => {
@@ -82,6 +86,16 @@ export function ScriptRunDialog({
         setPhase("done");
       },
     );
+
+    if (!isMountedRef.current) {
+      // Dialog was dismissed while we awaited runCustomScript — clean up
+      // immediately instead of leaking the subscription. cleanupRef will
+      // not be read again since the unmount effect has already run.
+      unsubscribe();
+      return;
+    }
+
+    cleanupRef.current = unsubscribe;
   };
 
   const handleSubmitParams = () => {

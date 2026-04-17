@@ -470,24 +470,39 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
 
   // --- Divider drag ---
 
+  const dividerDragRef = useRef<{ move: (e: MouseEvent) => void; up: () => void } | null>(null);
+
+  const cleanupDividerDrag = useCallback(() => {
+    if (dividerDragRef.current) {
+      document.removeEventListener("mousemove", dividerDragRef.current.move);
+      document.removeEventListener("mouseup", dividerDragRef.current.up);
+      dividerDragRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      cleanupDividerDrag();
+    };
+  }, [cleanupDividerDrag]);
+
   const handleDividerDrag = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
       const startX = e.clientX;
       const startWidth = leftPanelWidth;
 
-      const onMove = (ev: MouseEvent) => {
+      const move = (ev: MouseEvent) => {
         const delta = ev.clientX - startX;
         setLeftPanelWidth(Math.max(200, Math.min(500, startWidth + delta)));
       };
-      const onUp = () => {
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
-      };
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
+      const up = () => cleanupDividerDrag();
+
+      dividerDragRef.current = { move, up };
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", up);
     },
-    [leftPanelWidth],
+    [leftPanelWidth, cleanupDividerDrag],
   );
 
   // --- AI panel divider drag ---

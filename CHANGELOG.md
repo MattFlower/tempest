@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed `updateTabSessionId` in `src/views/main/state/rpc-client.ts` mutating `PaneNode` tabs in place when resolving a session id. The helper now returns a new tree (or `null` when no tab matches) and the `sessionIdResolved` handler passes the new tree to `store.setPaneTree` / `notifyPaneTreeChanged`, restoring Zustand reference-equality invalidation and honoring the immutable tree rule.
+
 ### Changed
 
 ### Removed

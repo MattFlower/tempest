@@ -112,24 +112,42 @@ export function onScriptRun(
   };
 }
 
-/** Walk a PaneNode tree and update the sessionId on the tab matching the given terminalId. */
-function updateTabSessionId(node: any, terminalId: string, sessionId: string): boolean {
-  if (!node) return false;
+/**
+ * Walk a PaneNode tree and return a new tree with `sessionId` set on the tab
+ * matching `terminalId`. Returns `null` if no matching tab was found (so
+ * callers can skip the store update entirely).
+ */
+function updateTabSessionId(node: any, terminalId: string, sessionId: string): any | null {
+  if (!node) return null;
   if (node.type === "leaf" && node.pane?.tabs) {
-    for (const tab of node.pane.tabs) {
-      if (tab.terminalId === terminalId) {
-        tab.sessionId = sessionId;
-        return true;
-      }
-    }
-    return false;
+    const idx = node.pane.tabs.findIndex((tab: any) => tab.terminalId === terminalId);
+    if (idx === -1) return null;
+    const newTabs = node.pane.tabs.map((tab: any, i: number) =>
+      i === idx ? { ...tab, sessionId } : tab,
+    );
+    return {
+      ...node,
+      pane: { ...node.pane, tabs: newTabs },
+    };
   }
   if (node.type === "split" && node.children) {
+    const newChildren: any[] = [];
+    let changed = false;
     for (const child of node.children) {
-      if (updateTabSessionId(child, terminalId, sessionId)) return true;
+      if (!changed) {
+        const updated = updateTabSessionId(child, terminalId, sessionId);
+        if (updated !== null) {
+          newChildren.push(updated);
+          changed = true;
+          continue;
+        }
+      }
+      newChildren.push(child);
     }
+    if (!changed) return null;
+    return { ...node, children: newChildren };
   }
-  return false;
+  return null;
 }
 
 // Initialize RPC and Electroview
@@ -171,15 +189,16 @@ const rpc = Electroview.defineRPC({
           const store = useStore.getState();
           // Find the tab with this terminalId across all workspace pane trees and update its sessionId
           for (const [wsPath, tree] of Object.entries(store.paneTrees)) {
-            if (updateTabSessionId(tree as any, msg.terminalId, msg.sessionId)) {
-              store.setPaneTree(wsPath, tree as any);
+            const newTree = updateTabSessionId(tree as any, msg.terminalId, msg.sessionId);
+            if (newTree) {
+              store.setPaneTree(wsPath, newTree);
               // Persist the new sessionId immediately. Claude has a backend
               // safety net (enrichTreeWithSessionIds scans ~/.claude/sessions/
               // on the next paneTreeChanged), but Pi has no such fallback —
               // if we don't notify here, the resolved path could be lost.
               api.notifyPaneTreeChanged(
                 wsPath,
-                paneNode.toNodeState(tree as any),
+                paneNode.toNodeState(newTree),
                 true,
               );
               break;

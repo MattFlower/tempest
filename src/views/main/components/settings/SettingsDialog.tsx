@@ -727,7 +727,14 @@ function RemoteTab({
           min={1024}
           max={65535}
           value={port}
-          onChange={(e) => setPort(parseInt(e.target.value, 10) || 7778)}
+          onChange={(e) => {
+            const parsed = parseInt(e.target.value, 10);
+            if (!Number.isFinite(parsed)) {
+              setPort(7778);
+              return;
+            }
+            setPort(Math.min(65535, Math.max(1024, parsed)));
+          }}
           className="rounded-md px-3 py-1.5 text-sm w-28"
           style={{
             backgroundColor: "var(--ctp-surface0)",

@@ -536,7 +536,7 @@ export function JJView({ workspacePath }: JJViewProps) {
       }
       setIsSaving(false);
     },
-    [selectedChangeId, workspacePath],
+    [selectedChangeId, workspacePath, activeRevset],
   );
 
   const handleAbandon = useCallback(async () => {

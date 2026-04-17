@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed `updateTabSessionId` in `src/views/main/state/rpc-client.ts` mutating `PaneNode` tabs in place when resolving a session id. The helper now returns a new tree (or `null` when no tab matches) and the `sessionIdResolved` handler passes the new tree to `store.setPaneTree` / `notifyPaneTreeChanged`, restoring Zustand reference-equality invalidation and honoring the immutable tree rule.
+- Fixed Monaco memory leak in `src/views/main/components/vcs/MonacoDiffViewer.tsx`: the `DiffEditor` is keyed on `filePath` and `@monaco-editor/react` does not auto-dispose the underlying editor or its text models on unmount, so each file click was leaking one original + one modified `ITextModel` into Monaco's global model registry (growing unbounded during a review session). Added a mount-time `useEffect` whose cleanup disposes both diff models via `editor.getModel()?.original/modified` and the editor itself, then clears `editorRef.current`.
 
 ### Changed
 

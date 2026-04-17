@@ -152,6 +152,23 @@ export const MonacoDiffViewer = forwardRef<
     });
   }, []);
 
+  // Dispose Monaco editor + its text models on unmount to prevent leaking
+  // ITextModel instances into Monaco's global registry. `@monaco-editor/react`
+  // does not auto-dispose, and the `key={filePath}` prop causes a full
+  // unmount/remount on every file switch, so without this cleanup each file
+  // click would leak one original + one modified model.
+  useEffect(() => {
+    return () => {
+      const ed = editorRef.current;
+      if (!ed) return;
+      const models = ed.getModel();
+      models?.original?.dispose();
+      models?.modified?.dispose();
+      ed.dispose();
+      editorRef.current = null;
+    };
+  }, []);
+
   return (
     <DiffEditor
       key={filePath}

@@ -429,7 +429,7 @@ export function CommandPalette() {
           break;
       }
     },
-    [itemCount, executeSelected, dismiss]
+    [itemCount, executeSelected, executeInPane, dismiss]
   );
 
   // Global keyboard shortcut to open palette

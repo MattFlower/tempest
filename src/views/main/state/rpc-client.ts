@@ -114,24 +114,47 @@ export function onScriptRun(
   };
 }
 
-/** Walk a PaneNode tree and update the sessionId on the tab matching the given terminalId. */
-function updateTabSessionId(node: any, terminalId: string, sessionId: string): boolean {
-  if (!node) return false;
+/**
+ * Walk a PaneNode tree and return a new tree with the sessionId updated on the tab
+ * matching the given terminalId. Returns `null` when no update is needed — either
+ * because no tab matched, or because the matching tab already has this sessionId
+ * (idempotent — repeated sessionIdResolved events for the same value are zero-cost).
+ * Preserves reference identity on all unchanged subtrees so Zustand's shallow
+ * reference checks skip unaffected panes.
+ */
+function updateTabSessionId(node: any, terminalId: string, sessionId: string): any | null {
+  if (!node) return null;
   if (node.type === "leaf" && node.pane?.tabs) {
-    for (const tab of node.pane.tabs) {
+    const tabs = node.pane.tabs;
+    for (let i = 0; i < tabs.length; i++) {
+      const tab = tabs[i];
       if (tab.terminalId === terminalId) {
-        tab.sessionId = sessionId;
-        return true;
+        if (tab.sessionId === sessionId) {
+          // Idempotent: the tab already has this sessionId, no change needed.
+          return null;
+        }
+        const newTabs = tabs.slice();
+        newTabs[i] = { ...tab, sessionId };
+        const newPane = { ...node.pane, tabs: newTabs };
+        return { ...node, pane: newPane };
       }
     }
-    return false;
+    return null;
   }
   if (node.type === "split" && node.children) {
-    for (const child of node.children) {
-      if (updateTabSessionId(child, terminalId, sessionId)) return true;
+    const children = node.children;
+    let newChildren: any[] | null = null;
+    for (let i = 0; i < children.length; i++) {
+      const updated = updateTabSessionId(children[i], terminalId, sessionId);
+      if (updated !== null) {
+        if (newChildren === null) newChildren = children.slice();
+        newChildren[i] = updated;
+      }
     }
+    if (newChildren === null) return null;
+    return { ...node, children: newChildren };
   }
-  return false;
+  return null;
 }
 
 // Initialize RPC and Electroview
@@ -171,21 +194,23 @@ const rpc = Electroview.defineRPC({
           import("../models/pane-node"),
         ]).then(([{ useStore }, paneNode]) => {
           const store = useStore.getState();
-          // Find the tab with this terminalId across all workspace pane trees and update its sessionId
+          // Find the tab with this terminalId across all workspace pane trees and update its sessionId.
+          // updateTabSessionId returns a new tree (preserving identity on unchanged subtrees) on a real
+          // change, or null if no match OR if the matching tab already has this sessionId (idempotent).
           for (const [wsPath, tree] of Object.entries(store.paneTrees)) {
-            if (updateTabSessionId(tree as any, msg.terminalId, msg.sessionId)) {
-              store.setPaneTree(wsPath, tree as any);
-              // Persist the new sessionId immediately. Claude has a backend
-              // safety net (enrichTreeWithSessionIds scans ~/.claude/sessions/
-              // on the next paneTreeChanged), but Pi has no such fallback —
-              // if we don't notify here, the resolved path could be lost.
-              api.notifyPaneTreeChanged(
-                wsPath,
-                paneNode.toNodeState(tree as any),
-                true,
-              );
-              break;
-            }
+            const newTree = updateTabSessionId(tree as any, msg.terminalId, msg.sessionId);
+            if (newTree === null) continue;
+            store.setPaneTree(wsPath, newTree);
+            // Persist the new sessionId immediately. Claude has a backend
+            // safety net (enrichTreeWithSessionIds scans ~/.claude/sessions/
+            // on the next paneTreeChanged), but Pi has no such fallback —
+            // if we don't notify here, the resolved path could be lost.
+            api.notifyPaneTreeChanged(
+              wsPath,
+              paneNode.toNodeState(newTree),
+              true,
+            );
+            break;
           }
         });
       },

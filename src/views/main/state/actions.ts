@@ -36,6 +36,21 @@ function currentTree(): { workspacePath: string; tree: PaneNode } | null {
   return { workspacePath: selectedWorkspacePath, tree };
 }
 
+function findWorkspaceWithTerminal(
+  terminalId: string,
+): { workspacePath: string; tree: PaneNode } | null {
+  const { paneTrees } = useStore.getState();
+  for (const [workspacePath, tree] of Object.entries(paneTrees)) {
+    const panes = allPanes(tree);
+    for (const pane of panes) {
+      if (pane.tabs.some((t) => t.terminalId === terminalId)) {
+        return { workspacePath, tree };
+      }
+    }
+  }
+  return null;
+}
+
 function commitTree(workspacePath: string, tree: PaneNode) {
   useStore.getState().setPaneTree(workspacePath, tree);
   api.notifyPaneTreeChanged(workspacePath, toNodeState(tree));
@@ -207,13 +222,18 @@ export function moveTabToNewPane(
 // --- Terminal-driven tab updates ---
 
 export function updateTabLabelByTerminalId(terminalId: string, label: string) {
-  const ctx = currentTree();
+  const ctx = findWorkspaceWithTerminal(terminalId);
   if (!ctx) return;
 
   const panes = allPanes(ctx.tree);
   for (const pane of panes) {
     const tab = pane.tabs.find((t) => t.terminalId === terminalId);
     if (tab) {
+      // Skip the commit entirely if the value is unchanged — terminal
+      // events fire frequently and a no-op commit would still trigger
+      // the `notifyPaneTreeChanged` RPC and a Zustand publish.
+      if (tab.label === label) return;
+
       const newTree = updatingPane(ctx.tree, pane.id, (p) => ({
         ...p,
         tabs: p.tabs.map((t) =>
@@ -227,13 +247,18 @@ export function updateTabLabelByTerminalId(terminalId: string, label: string) {
 }
 
 export function updateTabCwdByTerminalId(terminalId: string, cwd: string) {
-  const ctx = currentTree();
+  const ctx = findWorkspaceWithTerminal(terminalId);
   if (!ctx) return;
 
   const panes = allPanes(ctx.tree);
   for (const pane of panes) {
     const tab = pane.tabs.find((t) => t.terminalId === terminalId);
     if (tab) {
+      // Skip the commit entirely if the value is unchanged — terminal
+      // events fire frequently and a no-op commit would still trigger
+      // the `notifyPaneTreeChanged` RPC and a Zustand publish.
+      if (tab.shellCwd === cwd) return;
+
       const newTree = updatingPane(ctx.tree, pane.id, (p) => ({
         ...p,
         tabs: p.tabs.map((t) =>
@@ -251,7 +276,7 @@ export function updateTabProgressByTerminalId(
   state: 0 | 1 | 2 | 3 | 4,
   value: number,
 ) {
-  const ctx = currentTree();
+  const ctx = findWorkspaceWithTerminal(terminalId);
   if (!ctx) return;
 
   const progressState = state === ProgressState.None ? undefined : (state as ProgressState);
@@ -261,6 +286,17 @@ export function updateTabProgressByTerminalId(
   for (const pane of panes) {
     const tab = pane.tabs.find((t) => t.terminalId === terminalId);
     if (tab) {
+      // Skip the commit entirely if the value is unchanged — progress
+      // events fire on every Claude stream tick and a no-op commit
+      // would still trigger the `notifyPaneTreeChanged` RPC and a
+      // Zustand publish (see D10 regression).
+      if (
+        tab.progressState === progressState &&
+        tab.progressValue === progressValue
+      ) {
+        return;
+      }
+
       const newTree = updatingPane(ctx.tree, pane.id, (p) => ({
         ...p,
         tabs: p.tabs.map((t) =>

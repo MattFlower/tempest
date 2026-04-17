@@ -89,6 +89,7 @@ function PRDetail({ ws }: { ws: WorkspaceProgressInfo }) {
   const [loading, setLoading] = useState(!ws.prDetail);
 
   useEffect(() => {
+    let cancelled = false;
     if (ws.prDetail) {
       setDetail(ws.prDetail);
       setLoading(false);
@@ -98,13 +99,22 @@ function PRDetail({ ws }: { ws: WorkspaceProgressInfo }) {
       api
         .getPRDetail(ws.repoPath, ws.branchName)
         .then((d: PRDetailInfo | null) => {
-          setDetail(d);
-          setLoading(false);
+          if (!cancelled) {
+            setDetail(d);
+            setLoading(false);
+          }
         })
-        .catch(() => setLoading(false));
+        .catch(() => {
+          if (!cancelled) {
+            setLoading(false);
+          }
+        });
     } else {
       setLoading(false);
     }
+    return () => {
+      cancelled = true;
+    };
   }, [ws.prDetail, ws.repoPath, ws.branchName]);
 
   if (loading) {

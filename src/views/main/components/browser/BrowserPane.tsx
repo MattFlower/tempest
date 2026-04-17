@@ -237,6 +237,15 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
     el.on("new-window-open", (event: any) => {
       const url = extractUrl(event);
       if (!url) return;
+      // Validate protocol — a compromised/malicious page can trigger
+      // new-window-open with javascript:, file://, or other dangerous
+      // schemes. Only allow http/https, matching navigate()'s guard.
+      try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return;
+      } catch {
+        return;
+      }
       try {
         setIsLoading(true);
         setCurrentUrl(url);

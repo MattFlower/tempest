@@ -61,6 +61,7 @@ export function CloneRepoDialog({ onCloned, onDismiss }: Props) {
     });
 
     if (result.success) {
+      setIsCloning(false);
       onCloned();
     } else {
       setErrorMessage(result.error ?? "Clone failed");

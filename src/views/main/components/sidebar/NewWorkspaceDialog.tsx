@@ -212,13 +212,19 @@ export function NewWorkspaceDialog({ repo, existingWorkspaces, onCreated, onDism
       e.preventDefault();
       handleCreate();
     } else if (e.key === "Escape") {
+      if (isCreating) return;
       e.preventDefault();
       onDismiss();
     }
   };
 
+  const handleBackdropClick = () => {
+    if (isCreating) return;
+    onDismiss();
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.6)" }} onClick={onDismiss}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.6)" }} onClick={handleBackdropClick}>
       <div
         className="flex flex-col gap-4 rounded-xl p-6 shadow-2xl"
         style={{

@@ -24,6 +24,8 @@ export function JJRebaseDialog({
   const [destination, setDestination] = useState("");
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -31,11 +33,11 @@ export function JJRebaseDialog({
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
+      if (e.key === "Escape") onCancelRef.current();
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onCancel]);
+  }, []);
 
   const handleSubmit = useCallback(() => {
     const trimmed = destination.trim();

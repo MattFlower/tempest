@@ -22,6 +22,8 @@ export function JJBookmarkDialog({
   const [track, setTrack] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
 
   // Focus input on mount
   useEffect(() => {
@@ -31,11 +33,11 @@ export function JJBookmarkDialog({
   // Close on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
+      if (e.key === "Escape") onCancelRef.current();
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onCancel]);
+  }, []);
 
   const handleSubmit = useCallback(() => {
     const trimmed = name.trim();

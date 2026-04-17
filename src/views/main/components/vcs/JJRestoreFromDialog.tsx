@@ -47,6 +47,8 @@ export function JJRestoreFromDialog({
   const isResizingRef = useRef(false);
   const diffPanelRef = useRef<HTMLDivElement>(null);
   const [diffPanelWidth, setDiffPanelWidth] = useState(0);
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
 
   useEffect(() => {
     filterRef.current?.focus();
@@ -67,11 +69,11 @@ export function JJRestoreFromDialog({
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
+      if (e.key === "Escape") onCancelRef.current();
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onCancel]);
+  }, []);
 
   // Load preview when source revision changes
   useEffect(() => {

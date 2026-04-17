@@ -84,7 +84,7 @@ export function closeTab(paneId: string, tabId: string) {
       useStore.getState().setFocusedPaneId(remaining[0]?.id ?? null);
     } else {
       // Tree is empty — clear it
-      const { selectedWorkspacePath, setPaneTree, setFocusedPaneId, setMaximizedPaneId } =
+      const { selectedWorkspacePath, setFocusedPaneId, setMaximizedPaneId } =
         useStore.getState();
       if (selectedWorkspacePath) {
         // Create a fresh default pane
@@ -93,10 +93,9 @@ export function closeTab(paneId: string, tabId: string) {
         });
         const newPane = createPane(tab);
         const tree = createLeaf(newPane);
-        setPaneTree(selectedWorkspacePath, tree);
+        commitTree(selectedWorkspacePath, tree);
         setFocusedPaneId(newPane.id);
         setMaximizedPaneId(null);
-        api.notifyPaneTreeChanged(selectedWorkspacePath, tree);
       }
     }
     // Clear maximize if the maximized pane was removed

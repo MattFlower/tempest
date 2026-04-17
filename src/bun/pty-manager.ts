@@ -107,7 +107,7 @@ export class PtyManager {
           TERM: "xterm-256color",
           COLORTERM: "truecolor",
           TERM_PROGRAM: "tempest",
-          TERM_PROGRAM_VERSION: "0.13.1",
+          TERM_PROGRAM_VERSION: "0.13.2",
           // Clear terminal-specific env vars so shells and CLI tools don't
           // activate integrations for features xterm.js doesn't support.
           // These cause OSC/DCS sequences that leak as stray characters.

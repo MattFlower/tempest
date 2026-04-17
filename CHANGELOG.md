@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+### Changed
+
+### Removed
+
+## [0.13.2] - 2026-04-17
+
+### Added
+
+### Fixed
+
 - Re-fixed D8 VCS view state loss in `src/views/main/components/layout/WorkspaceDetail.tsx` using a lazy-first-mount + keep-alive strategy. The original fix rendered `<VCSView />` unconditionally (hidden via `opacity-0 pointer-events-none`) so its internal state (scroll position, selected file, staged/partial diffs) would survive view-mode switches, matching the Terminal/Dashboard lifecycle rule. That approach was reverted because always-mounting VCSView kept JJView's mount-time effects (jj log, file watchers, store subscriptions) active during Terminal mode and put JJView + descendants in the render tree for every `paneTrees` publish — contributing to a 15–30s stall during Claude session resume. The reland introduces a `hasEnteredVCS` `useState` flag (latched to `true` by a `useEffect` the first time `viewMode === ViewMode.VCS`, never reset) and renders `{hasEnteredVCS && <VCSView />}` inside the always-present opacity-toggled wrapper `div`. Before the user ever visits VCS, VCSView is not in the tree at all (identical to the reverted behavior — session resume pays no VCSView cost). After the first visit, VCSView stays mounted for the remainder of the component's lifetime, hidden with opacity when not in VCS mode, so subsequent VCS↔Terminal switches preserve its state.
 - Fixed terminal-event-driven tab updates (`updateTabLabelByTerminalId`, `updateTabCwdByTerminalId`, `updateTabProgressByTerminalId`) in `src/views/main/state/actions.ts` silently dropping events for terminals in background workspaces. Each function resolved the target tree via `currentTree()`, which only returns the currently-selected workspace, so label/cwd/progress events from a terminal living in an unselected workspace never landed on the tab. Reinstated a `findWorkspaceWithTerminal(terminalId)` helper that iterates `Object.entries(paneTrees)` and returns the `{ workspacePath, tree }` that contains a tab whose `terminalId` matches. A prior attempt at this fix (D10) was reverted because these functions — especially `updateTabProgressByTerminalId` — fire on every Claude streaming tick and were committing unchanged state on every event, triggering a `notifyPaneTreeChanged` RPC plus a forced Zustand publish per tick and combining with D8/D3 to stall the UI for 15–30s. Each function now compares the incoming value to the matched tab's current value and early-returns (no `commitTree`) when unchanged: `tab.label === label`, `tab.shellCwd === cwd`, and `tab.progressState === progressState && tab.progressValue === progressValue` respectively. Mutating events still rebuild the tree via the existing `updatingPane` path.
 - Fixed stale-revset bug in `handleDescriptionSave` in `src/views/main/components/vcs/JJView.tsx`. The `useCallback` dependency array was `[selectedChangeId, workspacePath]`, but the callback body calls `api.jjLog(workspacePath, activeRevset)` after saving a description. Because `activeRevset` was captured via closure, if the user changed the active revset while a description save was in flight, the subsequent log refresh would fetch revisions for the stale revset. Added `activeRevset` to the dependency array so the callback always sees the current revset.

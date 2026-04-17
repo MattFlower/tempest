@@ -91,12 +91,13 @@ export function MarkdownViewer({ filePath, paneId }: MarkdownViewerProps) {
   // Initial load + set up file watching
   useEffect(() => {
     if (!filePath) return;
-    currentPathRef.current = filePath;
+    const pathForThisEffect = filePath;
+    currentPathRef.current = pathForThisEffect;
 
     loadFile();
 
     // Start watching
-    api.watchMarkdownFile(filePath);
+    api.watchMarkdownFile(pathForThisEffect);
 
     // Listen for push notifications
     const unsubscribe = onMarkdownFileChanged((changedPath, newContent, deleted) => {
@@ -113,9 +114,7 @@ export function MarkdownViewer({ filePath, paneId }: MarkdownViewerProps) {
     });
 
     return () => {
-      if (currentPathRef.current) {
-        api.unwatchMarkdownFile(currentPathRef.current);
-      }
+      api.unwatchMarkdownFile(pathForThisEffect);
       unsubscribe();
     };
   }, [filePath, loadFile]);

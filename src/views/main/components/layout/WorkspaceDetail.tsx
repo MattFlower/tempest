@@ -166,7 +166,7 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
           <PRDashboard />
         </div>
 
-        {/* VCS mode */}
+        {/* VCS mode — always rendered to preserve scroll/selection/staged state */}
         <div
           className={`absolute inset-0 ${
             viewMode === ViewMode.VCS
@@ -174,7 +174,7 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
               : "opacity-0 pointer-events-none"
           }`}
         >
-          {viewMode === ViewMode.VCS && <VCSView />}
+          <VCSView />
         </div>
       </div>
     </div>

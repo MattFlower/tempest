@@ -210,7 +210,7 @@ export function MonacoEditorPane({
     // Also bind Cmd+S inside Monaco's own keybinding system
     editor.addCommand(
       monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
-      () => handleSave(),
+      () => handleSaveRef.current(),
     );
 
     // Register import link provider for TS/JS files.

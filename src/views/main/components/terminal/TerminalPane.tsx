@@ -11,11 +11,11 @@ import {
 import {
   registerTerminalInstance,
   unregisterTerminalInstance,
+  consumeTerminalMoving,
 } from "../../state/terminal-registry";
 import { consumePendingInput } from "../../state/pending-terminal-input";
 import { updateTabLabelByTerminalId, updateTabProgressByTerminalId, updateTabCwdByTerminalId } from "../../state/actions";
 import { useStore } from "../../state/store";
-import { allPanes } from "../../models/pane-node";
 
 interface TerminalPaneProps {
   terminalId: string;
@@ -239,19 +239,11 @@ export function TerminalPane({
       instance.dispose();
 
       // Only kill the PTY if the tab was actually closed, not moved to another
-      // pane. When a tab is dragged between panes, the Zustand store is updated
-      // before React re-renders, so the terminal ID will still be in the tree.
-      const { selectedWorkspacePath, paneTrees } = useStore.getState();
-      const tree = selectedWorkspacePath
-        ? paneTrees[selectedWorkspacePath]
-        : undefined;
-      if (tree) {
-        const panes = allPanes(tree);
-        const stillInTree = panes.some((p) =>
-          p.tabs.some((t) => t.terminalId === terminalId),
-        );
-        if (stillInTree) return;
-      }
+      // pane. The move action sets an explicit flag before committing the tree
+      // change; checking a flag (rather than scanning the Zustand tree) avoids
+      // a TOCTOU race when unmount runs in the same event batch as the store
+      // update and would otherwise see the stale pre-move tree.
+      if (consumeTerminalMoving(terminalId)) return;
 
       api.killTerminal({ id: terminalId });
     };

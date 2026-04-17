@@ -24,6 +24,7 @@ import {
 import { useStore } from "./store";
 import { api } from "./rpc-client";
 import { queueTerminalInput } from "./pending-terminal-input";
+import { markTerminalMoving } from "./terminal-registry";
 
 // --- Helpers ---
 
@@ -130,6 +131,13 @@ export function moveTab(
   const ctx = currentTree();
   if (!ctx) return;
 
+  // Tell the TerminalPane (if this tab owns one) that its upcoming unmount
+  // cleanup — if React re-parents instead of reusing the instance — is a move,
+  // not a close, so it must not kill the PTY.
+  const sourcePane = findPane(ctx.tree, fromPaneId);
+  const movingTerminalId = sourcePane?.tabs.find((t) => t.id === tabId)?.terminalId;
+  if (movingTerminalId) markTerminalMoving(movingTerminalId);
+
   const newTree = movingTab(ctx.tree, tabId, fromPaneId, toPaneId, atIndex);
   commitTree(ctx.workspacePath, newTree);
   useStore.getState().setFocusedPaneId(toPaneId);
@@ -155,6 +163,10 @@ export function moveTabToNewPane(
 
   const tab = sourcePane.tabs.find((t) => t.id === tabId);
   if (!tab) return;
+
+  // See moveTab: mark the terminal as "being moved" so the TerminalPane
+  // cleanup (which may run before Zustand re-renders) does not kill the PTY.
+  if (tab.terminalId) markTerminalMoving(tab.terminalId);
 
   // Create new pane containing just this tab
   const newPane = createPane(tab);

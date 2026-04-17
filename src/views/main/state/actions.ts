@@ -36,6 +36,29 @@ function currentTree(): { workspacePath: string; tree: PaneNode } | null {
   return { workspacePath: selectedWorkspacePath, tree };
 }
 
+/**
+ * Locate the workspace whose pane tree contains a tab with the given
+ * `terminalId`. Terminals in background (non-selected) workspaces stay
+ * mounted via the opacity-hide pattern, so terminal-event-driven updates
+ * (label/cwd/progress) must search every workspace — not just the
+ * currently selected one — otherwise background-workspace events are
+ * silently dropped.
+ */
+function findWorkspaceWithTerminal(
+  terminalId: string,
+): { workspacePath: string; tree: PaneNode } | null {
+  const { paneTrees } = useStore.getState();
+  for (const [workspacePath, tree] of Object.entries(paneTrees)) {
+    if (!tree) continue;
+    for (const pane of allPanes(tree)) {
+      if (pane.tabs.some((t) => t.terminalId === terminalId)) {
+        return { workspacePath, tree };
+      }
+    }
+  }
+  return null;
+}
+
 function commitTree(workspacePath: string, tree: PaneNode) {
   useStore.getState().setPaneTree(workspacePath, tree);
   api.notifyPaneTreeChanged(workspacePath, toNodeState(tree));
@@ -207,7 +230,7 @@ export function moveTabToNewPane(
 // --- Terminal-driven tab updates ---
 
 export function updateTabLabelByTerminalId(terminalId: string, label: string) {
-  const ctx = currentTree();
+  const ctx = findWorkspaceWithTerminal(terminalId);
   if (!ctx) return;
 
   const panes = allPanes(ctx.tree);
@@ -227,7 +250,7 @@ export function updateTabLabelByTerminalId(terminalId: string, label: string) {
 }
 
 export function updateTabCwdByTerminalId(terminalId: string, cwd: string) {
-  const ctx = currentTree();
+  const ctx = findWorkspaceWithTerminal(terminalId);
   if (!ctx) return;
 
   const panes = allPanes(ctx.tree);
@@ -251,7 +274,7 @@ export function updateTabProgressByTerminalId(
   state: 0 | 1 | 2 | 3 | 4,
   value: number,
 ) {
-  const ctx = currentTree();
+  const ctx = findWorkspaceWithTerminal(terminalId);
   if (!ctx) return;
 
   const progressState = state === ProgressState.None ? undefined : (state as ProgressState);

@@ -293,16 +293,20 @@ export function MarkdownViewer({ filePath, paneId }: MarkdownViewerProps) {
       <div
         className="relative flex-1 overflow-hidden"
         onWheel={(e) => {
-          const win = iframeRef.current?.contentWindow;
-          if (win) {
-            win.scrollBy(e.deltaX, e.deltaY);
+          try {
+            const win = iframeRef.current?.contentWindow;
+            if (win) {
+              win.scrollBy(e.deltaX, e.deltaY);
+            }
+          } catch {
+            // Cross-origin iframe access may fail in some sandbox configs
           }
         }}
       >
         <iframe
           ref={iframeRef}
           srcDoc={srcdoc ?? ""}
-          sandbox="allow-scripts allow-same-origin"
+          sandbox="allow-scripts"
           className="h-full w-full border-0"
           style={{ backgroundColor: "var(--ctp-base)" }}
           title={`Markdown: ${fileName}`}

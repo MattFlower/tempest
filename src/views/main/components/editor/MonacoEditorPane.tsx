@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Editor, { loader, type OnMount } from "@monaco-editor/react";
-import type { editor } from "monaco-editor";
+import type { editor, IDisposable } from "monaco-editor";
 // monaco-vim is pre-built as a self-contained ESM bundle (src/vendor/monaco-vim.bundle.js)
 // that resolves monaco-editor imports from window.monaco at runtime.
 // Loaded dynamically via import() to avoid Bun's bundler pulling in monaco-editor ESM.
@@ -69,6 +69,9 @@ export function MonacoEditorPane({
   const themeRegistered = useRef(false);
   const vimModeRef = useRef<VimMode | null>(null);
   const statusBarRef = useRef<HTMLDivElement>(null);
+  // Monaco link providers are registered globally; capture their disposables
+  // so they don't accumulate across editor mounts (e.g., tab switches / remounts).
+  const disposablesRef = useRef<IDisposable[]>([]);
 
   const vimEnabled = useStore((s) => s.config?.monacoVimMode ?? false);
   const fileName = filePath.split("/").pop() ?? filePath;
@@ -163,6 +166,18 @@ export function MonacoEditorPane({
     };
   }, [vimEnabled, editorReady]);
 
+  // Dispose any Monaco global registrations (e.g. link providers) registered
+  // by handleEditorMount when the component unmounts. Idempotent: the array
+  // is cleared after disposal so re-mounts start fresh.
+  useEffect(() => {
+    return () => {
+      for (const d of disposablesRef.current) {
+        try { d.dispose(); } catch { /* ignore */ }
+      }
+      disposablesRef.current = [];
+    };
+  }, []);
+
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     setEditorReady(true);
@@ -198,10 +213,15 @@ export function MonacoEditorPane({
       () => handleSave(),
     );
 
-    // Register import link provider for TS/JS files
+    // Register import link provider for TS/JS files.
+    // registerLinkProvider returns an IDisposable; if we don't dispose it on
+    // unmount, every editor mount leaks two global providers that fire for all
+    // future editors. Track them in disposablesRef and clean up on unmount.
     const linkProvider = new ImportLinkProvider(filePath);
-    monaco.languages.registerLinkProvider({ language: "typescript" }, linkProvider);
-    monaco.languages.registerLinkProvider({ language: "javascript" }, linkProvider);
+    disposablesRef.current.push(
+      monaco.languages.registerLinkProvider({ language: "typescript" }, linkProvider),
+      monaco.languages.registerLinkProvider({ language: "javascript" }, linkProvider),
+    );
 
     // Handle Cmd+click on import specifiers: resolve the module and open it.
     // Monaco's standalone opener ignores custom URI schemes, so we handle

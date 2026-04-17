@@ -115,7 +115,7 @@ export function HistoryViewer() {
         clearTimeout(searchDebounceRef.current);
       }
     };
-  }, [searchQuery]);
+  }, [searchQuery, loadSessions]);
 
   // Refresh timer (30s)
   useEffect(() => {

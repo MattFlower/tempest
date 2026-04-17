@@ -56,7 +56,9 @@ function processTerminalOutput(id: string, data: string, seq: number) {
         terminalOutputHandler?.(id, pending.get(s)!);
       }
       pending.clear();
-      nextExpectedSeq.set(id, sorted[sorted.length - 1] + 1);
+      if (sorted.length > 0) {
+        nextExpectedSeq.set(id, sorted[sorted.length - 1] + 1);
+      }
     }
   }
 }

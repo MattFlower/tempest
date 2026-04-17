@@ -8,6 +8,7 @@ const SCROLLBACK_LINES = 200;
 const AUTOSAVE_INTERVAL_MS = 30_000;
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
+let beforeUnloadListener: (() => void) | null = null;
 
 function sendScrollbackUpdate() {
   const instances = getAllTerminalInstances();
@@ -38,15 +39,20 @@ export function startScrollbackAutosave() {
   intervalId = setInterval(sendScrollbackUpdate, AUTOSAVE_INTERVAL_MS);
 
   // Flush scrollback before the webview unloads (app quit / reload)
-  window.addEventListener("beforeunload", () => {
+  beforeUnloadListener = () => {
     sendScrollbackUpdate();
-  });
+  };
+  window.addEventListener("beforeunload", beforeUnloadListener);
 }
 
 export function stopScrollbackAutosave() {
   if (intervalId !== null) {
     clearInterval(intervalId);
     intervalId = null;
+  }
+  if (beforeUnloadListener !== null) {
+    window.removeEventListener("beforeunload", beforeUnloadListener);
+    beforeUnloadListener = null;
   }
 }
 

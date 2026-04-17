@@ -2,14 +2,20 @@
 // Used by "Ask Claude about selection" — input is queued before the terminal
 // exists, then consumed by TerminalPane after the PTY is created.
 
-const pendingInputs = new Map<string, string>();
+const pendingInputs = new Map<string, string[]>();
 
 export function queueTerminalInput(terminalId: string, input: string) {
-  pendingInputs.set(terminalId, input);
+  const existing = pendingInputs.get(terminalId);
+  if (existing) {
+    existing.push(input);
+  } else {
+    pendingInputs.set(terminalId, [input]);
+  }
 }
 
 export function consumePendingInput(terminalId: string): string | undefined {
-  const input = pendingInputs.get(terminalId);
-  if (input !== undefined) pendingInputs.delete(terminalId);
-  return input;
+  const inputs = pendingInputs.get(terminalId);
+  if (inputs === undefined) return undefined;
+  pendingInputs.delete(terminalId);
+  return inputs.join("");
 }

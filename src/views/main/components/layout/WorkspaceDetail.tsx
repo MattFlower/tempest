@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { PaneTabKind, ViewMode } from "../../../../shared/ipc-types";
 import type { PaneNode } from "../../models/pane-node";
 import { createPane, createTab, createLeaf, createSplit, allPanes, findPane } from "../../models/pane-node";
@@ -34,12 +34,25 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
   );
   const setViewMode = useStore((s) => s.setViewMode);
 
+  // Tracks whether the user has ever entered VCS mode during this component's lifetime.
+  // Used to lazy-mount VCSView on first visit and keep it mounted thereafter so its
+  // internal state (scroll position, selected file, staged/partial diffs) survives
+  // subsequent view-mode switches — without paying VCSView's mount cost (jj log,
+  // file watchers, store subscriptions) on startup before the user ever visits VCS.
+  const [hasEnteredVCS, setHasEnteredVCS] = useState(false);
+
   const tree = paneTrees[workspacePath];
 
   // Initialize terminal dispatch once
   useEffect(() => {
     initTerminalDispatch();
   }, []);
+
+  // Latch hasEnteredVCS to true the first time the user switches to VCS mode.
+  // Never flips back to false — VCSView stays alive for the rest of this component's lifetime.
+  useEffect(() => {
+    if (viewMode === ViewMode.VCS) setHasEnteredVCS(true);
+  }, [viewMode]);
 
   // Keyboard shortcuts for pane operations and view mode switching
   useEffect(() => {
@@ -166,7 +179,11 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
           <PRDashboard />
         </div>
 
-        {/* VCS mode */}
+        {/* VCS mode — lazy-mounted on first visit, then kept alive (hidden via opacity)
+            so JJView's scroll position, selected file, and staged/partial diff state
+            survive subsequent VCS↔Terminal switches. Staying unmounted until first visit
+            avoids paying VCSView/JJView mount cost (jj log, file watchers, store
+            subscriptions) during startup session resume when the user is in Terminal mode. */}
         <div
           className={`absolute inset-0 ${
             viewMode === ViewMode.VCS
@@ -174,7 +191,7 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
               : "opacity-0 pointer-events-none"
           }`}
         >
-          {viewMode === ViewMode.VCS && <VCSView />}
+          {hasEnteredVCS && <VCSView />}
         </div>
       </div>
     </div>

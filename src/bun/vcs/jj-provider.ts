@@ -30,8 +30,8 @@ export class JJProvider implements VCSProvider {
       this.repoPath,
     );
     if (useExistingBranch && branch) {
-      await this.runJJ(["git", "fetch", "-b", branch], atPath);
-      await this.runJJ(["new", `${branch}@origin`], atPath);
+      await this.runJJ(["git", "import"], atPath);
+      await this.runJJ(["new", branch], atPath);
     }
     return {
       id: createHash("sha256").update(atPath).digest("hex").slice(0, 16),

@@ -163,6 +163,28 @@ function useCommands(): PaletteCommand[] {
       api.setOpenPRState(selectedWorkspacePath, { prURL: result.url });
     }},
 
+    // Claude settings
+    { id: "open-user-claude-settings", label: "Open User Claude Settings", canOpenAsPane: true, action: async () => {
+      const result = await api.browsePath("~/.claude/settings.json", selectedWorkspacePath ?? "/");
+      addTabToFocusedPane(PaneTabKind.Editor, "settings.json", { editorFilePath: result.resolvedPath });
+    }},
+    { id: "open-workspace-claude-settings", label: "Open Workspace Claude Settings", canOpenAsPane: true, action: async () => {
+      if (!selectedWorkspacePath) return;
+      const settingsPath = `${selectedWorkspacePath}/.claude/settings.json`;
+      const result = await api.browsePath(settingsPath, selectedWorkspacePath);
+      if (result.kind === "file") {
+        addTabToFocusedPane(PaneTabKind.Editor, "settings.json", { editorFilePath: settingsPath });
+        return;
+      }
+      useStore.getState().showCreateClaudeSettingsDialog({
+        path: settingsPath,
+        onConfirm: async () => {
+          await api.writeFileForEditor(settingsPath, "{}\n");
+          addTabToFocusedPane(PaneTabKind.Editor, "settings.json", { editorFilePath: settingsPath });
+        },
+      });
+    }},
+
     // App
     { id: "toggle-sidebar", label: "Toggle Sidebar", shortcutHint: "⌘\\", canOpenAsPane: false, action: toggleSidebar },
     { id: "toggle-devtools", label: "Toggle Developer Tools", shortcutHint: "⌘⌥I", canOpenAsPane: false, action: () => toggleDevTools() },

@@ -3,6 +3,7 @@ import { useStore } from "./state/store";
 import { Sidebar } from "./components/sidebar/Sidebar";
 import { ActivityBar } from "./components/sidebar/ActivityBar";
 import { CommandPalette } from "./components/palette/CommandPalette";
+import { CreateClaudeSettingsDialog } from "./components/palette/CreateClaudeSettingsDialog";
 import { WorkspaceDetail } from "./components/layout";
 import { ViewModeBar } from "./components/layout/ViewModeBar";
 import { ProgressView } from "./components/progress/ProgressView";
@@ -291,6 +292,9 @@ export function App() {
 
       {/* Settings dialog */}
       {settingsDialogVisible && <SettingsDialog />}
+
+      {/* Create Claude settings dialog */}
+      <CreateClaudeSettingsDialog />
     </div>
   );
 }

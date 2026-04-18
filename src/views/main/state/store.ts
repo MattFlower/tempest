@@ -10,6 +10,11 @@ import type { SourceRepo, TempestWorkspace, WorkspaceSidebarInfo, AppConfig } fr
 import { type ActivityState, ViewMode, type DirEntry, type SidebarView, type VCSStatusResult } from "../../../shared/ipc-types";
 import type { PaneNode } from "../models/pane-node";
 
+export interface CreateClaudeSettingsRequest {
+  path: string;
+  onConfirm: () => Promise<void> | void;
+}
+
 export interface TempestStore {
   // --- Repos & Workspaces (synced from Bun) ---
   repos: SourceRepo[];
@@ -49,6 +54,7 @@ export interface TempestStore {
   settingsDialogVisible: boolean;
   settingsDialogInitialTab: "general" | "remote" | "tools" | "appearance";
   cloneRepoDialogVisible: boolean;
+  createClaudeSettingsRequest: CreateClaudeSettingsRequest | null;
   httpServerRunning: boolean;
   httpServerError: string | null;
   newWorkspaceRepoId: string | null;
@@ -121,6 +127,8 @@ export interface TempestStore {
   openSettingsTab: (tab: "general" | "remote" | "tools" | "appearance") => void;
   showCloneRepoDialog: () => void;
   hideCloneRepoDialog: () => void;
+  showCreateClaudeSettingsDialog: (req: CreateClaudeSettingsRequest) => void;
+  hideCreateClaudeSettingsDialog: () => void;
   setHttpServerStatus: (running: boolean, error?: string | null) => void;
   migrateWorkspacePath: (oldPath: string, newPath: string) => void;
   requestNewWorkspace: (repoId: string | null) => void;
@@ -161,6 +169,7 @@ export const useStore = create<TempestStore>((set) => ({
   settingsDialogVisible: false,
   settingsDialogInitialTab: "general" as const,
   cloneRepoDialogVisible: false,
+  createClaudeSettingsRequest: null,
   httpServerRunning: false,
   httpServerError: null,
   newWorkspaceRepoId: null,
@@ -357,6 +366,8 @@ export const useStore = create<TempestStore>((set) => ({
     set({ settingsDialogVisible: true, settingsDialogInitialTab: tab }),
   showCloneRepoDialog: () => set({ cloneRepoDialogVisible: true }),
   hideCloneRepoDialog: () => set({ cloneRepoDialogVisible: false }),
+  showCreateClaudeSettingsDialog: (req) => set({ createClaudeSettingsRequest: req }),
+  hideCreateClaudeSettingsDialog: () => set({ createClaudeSettingsRequest: null }),
   setHttpServerStatus: (running, error) =>
     set({ httpServerRunning: running, httpServerError: error ?? null }),
   migrateWorkspacePath: (oldPath, newPath) =>

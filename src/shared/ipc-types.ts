@@ -139,6 +139,7 @@ export interface AppConfig {
   piPath?: string;
   claudeArgs: string[];
   piArgs?: string[];
+  piEnvVarNames?: string[]; // Names of env vars passed to Pi at launch; values live in the macOS Keychain.
   editor?: string; // e.g. "nvim", "hx", "vim", "code". Defaults to "nvim".
   monacoVimMode?: boolean; // Enable vim keybindings in Monaco editor. Defaults to false.
   theme?: "dark" | "light"; // Appearance theme. Defaults to "dark".

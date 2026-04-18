@@ -11,7 +11,7 @@ import { useStore } from "../../state/store";
 import { useOverlay } from "../../state/useOverlay";
 import { applyTheme } from "../../state/theme";
 
-type Tab = "general" | "remote" | "tools" | "appearance";
+type Tab = "general" | "remote" | "tools" | "appearance" | "pi";
 
 export function SettingsDialog() {
   useOverlay();
@@ -258,6 +258,11 @@ export function SettingsDialog() {
             active={activeTab === "tools"}
             onClick={() => setActiveTab("tools")}
           />
+          <TabButton
+            label="Pi"
+            active={activeTab === "pi"}
+            onClick={() => setActiveTab("pi")}
+          />
         </div>
 
         {!config ? (
@@ -286,6 +291,7 @@ export function SettingsDialog() {
                 setShowWebpage={setShowWebpage}
               />
             )}
+            {activeTab === "pi" && <PiEnvVarsTab />}
             {activeTab === "remote" && (
               <RemoteTab
                 enabled={httpEnabled}
@@ -827,6 +833,292 @@ function RemoteTab({
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+// --- Pi Env Vars Tab ---
+
+const ENV_VAR_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function PiEnvVarsTab() {
+  const [names, setNames] = useState<string[] | null>(null);
+  const [newName, setNewName] = useState("");
+  const [newValue, setNewValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [replacing, setReplacing] = useState<string | null>(null);
+  const [replaceValue, setReplaceValue] = useState("");
+
+  useEffect(() => {
+    api.listPiEnvVarNames().then((result: string[]) => setNames(result));
+  }, []);
+
+  const handleAdd = async () => {
+    const name = newName.trim();
+    const value = newValue;
+    if (!ENV_VAR_NAME_PATTERN.test(name)) {
+      setError("Name must match [A-Za-z_][A-Za-z0-9_]*");
+      return;
+    }
+    if (value.length === 0) {
+      setError("Value cannot be empty");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const result = await api.setPiEnvVar(name, value);
+    setBusy(false);
+    if (!result.success) {
+      setError(result.error ?? "Failed to save");
+      return;
+    }
+    const refreshed = await api.listPiEnvVarNames();
+    setNames(refreshed);
+    setNewName("");
+    setNewValue("");
+  };
+
+  const handleReplaceStart = (name: string) => {
+    setReplacing(name);
+    setReplaceValue("");
+    setError(null);
+  };
+
+  const handleReplaceCancel = () => {
+    setReplacing(null);
+    setReplaceValue("");
+  };
+
+  const handleReplaceSave = async () => {
+    if (replacing === null || replaceValue.length === 0) return;
+    setBusy(true);
+    setError(null);
+    const result = await api.setPiEnvVar(replacing, replaceValue);
+    setBusy(false);
+    if (!result.success) {
+      setError(result.error ?? "Failed to update");
+      return;
+    }
+    setReplacing(null);
+    setReplaceValue("");
+  };
+
+  const handleDelete = async (name: string) => {
+    setBusy(true);
+    setError(null);
+    const result = await api.deletePiEnvVar(name);
+    setBusy(false);
+    if (!result.success) {
+      setError(result.error ?? "Failed to delete");
+      return;
+    }
+    const refreshed = await api.listPiEnvVarNames();
+    setNames(refreshed);
+  };
+
+  return (
+    <>
+      <p className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
+        Environment variables passed to the Pi coding agent at launch. Values
+        are stored in the macOS Keychain and are never written to configuration
+        files. Changes take effect for new Pi sessions.
+      </p>
+
+      {names === null ? (
+        <div className="text-[11px]" style={{ color: "var(--ctp-overlay1)" }}>
+          Loading...
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {names.length === 0 ? (
+            <div
+              className="text-[11px] italic"
+              style={{ color: "var(--ctp-overlay0)" }}
+            >
+              No env vars configured.
+            </div>
+          ) : (
+            names.map((name) => (
+              <div
+                key={name}
+                className="flex items-center gap-2 rounded-md px-3 py-1.5"
+                style={{
+                  backgroundColor: "var(--ctp-surface0)",
+                  border: "1px solid var(--ctp-surface1)",
+                }}
+              >
+                <span
+                  className="flex-1 text-[12px] font-mono"
+                  style={{ color: "var(--ctp-text)" }}
+                >
+                  {name}
+                </span>
+                {replacing === name ? (
+                  <>
+                    <input
+                      type="password"
+                      autoFocus
+                      placeholder="new value"
+                      value={replaceValue}
+                      onChange={(e) => setReplaceValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleReplaceSave();
+                        } else if (e.key === "Escape") {
+                          e.preventDefault();
+                          handleReplaceCancel();
+                        }
+                      }}
+                      className="rounded-md px-2 py-1 text-[11px] font-mono"
+                      style={{
+                        backgroundColor: "var(--ctp-base)",
+                        color: "var(--ctp-text)",
+                        border: "1px solid var(--ctp-surface1)",
+                        outline: "none",
+                        width: 140,
+                      }}
+                    />
+                    <button
+                      onClick={handleReplaceSave}
+                      disabled={busy || replaceValue.length === 0}
+                      className="px-2 py-1 rounded text-[11px] font-medium"
+                      style={{
+                        backgroundColor: "var(--ctp-blue)",
+                        color: "var(--ctp-base)",
+                        cursor:
+                          busy || replaceValue.length === 0
+                            ? "not-allowed"
+                            : "pointer",
+                      }}
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={handleReplaceCancel}
+                      disabled={busy}
+                      className="px-2 py-1 rounded text-[11px] font-medium"
+                      style={{
+                        backgroundColor: "var(--ctp-surface1)",
+                        color: "var(--ctp-overlay1)",
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span
+                      className="text-[11px] font-mono"
+                      style={{ color: "var(--ctp-overlay0)" }}
+                    >
+                      ••••••••
+                    </span>
+                    <button
+                      onClick={() => handleReplaceStart(name)}
+                      disabled={busy}
+                      className="px-2 py-1 rounded text-[11px] font-medium"
+                      style={{
+                        backgroundColor: "var(--ctp-surface1)",
+                        color: "var(--ctp-text)",
+                        cursor: busy ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      Replace
+                    </button>
+                    <button
+                      onClick={() => handleDelete(name)}
+                      disabled={busy}
+                      className="px-2 py-1 rounded text-[11px] font-medium"
+                      style={{
+                        backgroundColor: "var(--ctp-surface1)",
+                        color: "var(--ctp-red)",
+                        cursor: busy ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      <div
+        className="flex flex-col gap-2 pt-3"
+        style={{ borderTop: "1px solid var(--ctp-surface0)" }}
+      >
+        <label
+          className="text-[11px] font-semibold"
+          style={{ color: "var(--ctp-subtext0)" }}
+        >
+          Add env var
+        </label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="NAME"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            className="flex-1 rounded-md px-3 py-1.5 text-[12px] font-mono"
+            style={{
+              backgroundColor: "var(--ctp-surface0)",
+              color: "var(--ctp-text)",
+              border: "1px solid var(--ctp-surface1)",
+              outline: "none",
+            }}
+          />
+          <input
+            type="password"
+            placeholder="value"
+            value={newValue}
+            onChange={(e) => setNewValue(e.target.value)}
+            className="flex-1 rounded-md px-3 py-1.5 text-[12px] font-mono"
+            style={{
+              backgroundColor: "var(--ctp-surface0)",
+              color: "var(--ctp-text)",
+              border: "1px solid var(--ctp-surface1)",
+              outline: "none",
+            }}
+          />
+          <button
+            onClick={handleAdd}
+            disabled={busy || !newName.trim() || newValue.length === 0}
+            className="px-3 py-1.5 rounded-md text-[11px] font-semibold"
+            style={{
+              backgroundColor:
+                !busy && newName.trim() && newValue.length > 0
+                  ? "var(--ctp-blue)"
+                  : "var(--ctp-surface1)",
+              color:
+                !busy && newName.trim() && newValue.length > 0
+                  ? "var(--ctp-base)"
+                  : "var(--ctp-overlay0)",
+              cursor:
+                busy || !newName.trim() || newValue.length === 0
+                  ? "not-allowed"
+                  : "pointer",
+            }}
+          >
+            Add
+          </button>
+        </div>
+        {error && (
+          <div
+            className="rounded-md px-3 py-2 text-[11px]"
+            style={{
+              background: "color-mix(in srgb, var(--ctp-red) 15%, transparent)",
+              border: "1px solid var(--ctp-red)",
+              color: "var(--ctp-red)",
+            }}
+          >
+            {error}
+          </div>
+        )}
+      </div>
     </>
   );
 }

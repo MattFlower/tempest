@@ -181,6 +181,20 @@ export interface BunRequests {
     response: void;
   };
 
+  // Pi env vars (secrets stored in macOS Keychain)
+  listPiEnvVarNames: {
+    params: void;
+    response: string[];
+  };
+  setPiEnvVar: {
+    params: { name: string; value: string };
+    response: { success: boolean; error?: string };
+  };
+  deletePiEnvVar: {
+    params: { name: string };
+    response: { success: boolean; error?: string };
+  };
+
   // Repo settings
   getRepoSettings: {
     params: { repoPath: string };

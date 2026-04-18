@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Keychain-backed environment variables for the Pi coding agent. A new "Pi" tab in Settings (`src/views/main/components/settings/SettingsDialog.tsx`) lets users add, replace, and delete named secrets (API keys, etc.) that are stored in the macOS Keychain via `/usr/bin/security` (`src/bun/keychain.ts`). Only the *names* are persisted to `~/.config/tempest/config.json` as `piEnvVarNames`; values never touch disk outside the keychain. `SessionManager.buildPiCommand` in `src/bun/session-manager.ts` now resolves each configured name to its keychain value at launch time and shell-quotes `NAME='value'` assignments in front of the existing `TEMPEST_HOOK_SOCKET` assignment so Pi inherits the secrets via the normal `zsh -lic "… exec pi …"` invocation. Names that can't be resolved (missing from the keychain) are skipped with a console warning rather than blocking the launch. RPC surface: `listPiEnvVarNames`, `setPiEnvVar`, `deletePiEnvVar`.
+
 ### Fixed
 
 ### Changed

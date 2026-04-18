@@ -52,6 +52,10 @@ export function normalizeConfig(raw: unknown): AppConfig {
     normalized.piArgs = raw.piArgs;
   }
 
+  if (isStringArray(raw.piEnvVarNames)) {
+    normalized.piEnvVarNames = raw.piEnvVarNames;
+  }
+
   if (typeof raw.editor === "string") normalized.editor = raw.editor;
   if (typeof raw.monacoVimMode === "boolean") normalized.monacoVimMode = raw.monacoVimMode;
   if (raw.theme === "dark" || raw.theme === "light") normalized.theme = raw.theme;

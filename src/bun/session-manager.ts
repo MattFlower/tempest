@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import type { AppConfig } from "../shared/ipc-types";
 import { HookSettingsBuilder } from "./hooks/hook-settings-builder";
+import type { KeychainClient } from "./keychain";
 
 /** POSIX single-quote escape so a string is safe to splice into a shell command. */
 function shellQuote(s: string): string {
@@ -13,9 +14,11 @@ function shellQuote(s: string): string {
 export class SessionManager {
   private config: AppConfig;
   private cachedPATH: string;
+  private keychain: KeychainClient | null;
 
-  constructor(config: AppConfig) {
+  constructor(config: AppConfig, keychain: KeychainClient | null = null) {
     this.config = config;
+    this.keychain = keychain;
     this.cachedPATH = this.captureLoginShellPATH();
   }
 
@@ -127,9 +130,40 @@ export class SessionManager {
     // (workspaces with spaces, session files, configured piArgs) that
     // would otherwise be reinterpreted by zsh -lic.
     const quoted = parts.map(shellQuote).join(" ");
-    const envAssign = `TEMPEST_HOOK_SOCKET=${shellQuote(HookSettingsBuilder.socketPath)}`;
-    const command = ["/bin/zsh", "-lic", `${envAssign} exec ${quoted}`];
+    const envAssignments = [
+      `TEMPEST_HOOK_SOCKET=${shellQuote(HookSettingsBuilder.socketPath)}`,
+      ...(await this.buildPiEnvAssignments()),
+    ].join(" ");
+    const command = ["/bin/zsh", "-lic", `${envAssignments} exec ${quoted}`];
     return { command };
+  }
+
+  /**
+   * Resolve each configured Pi env var name to a keychain value and return
+   * shell-quoted `NAME='value'` fragments. Names that fail to resolve (missing
+   * from keychain, or keychain unavailable) are skipped with a warning so a
+   * partial config can't block Pi from launching entirely.
+   */
+  private async buildPiEnvAssignments(): Promise<string[]> {
+    const names = this.config.piEnvVarNames ?? [];
+    if (names.length === 0 || !this.keychain) return [];
+
+    const assignments: string[] = [];
+    for (const name of names) {
+      try {
+        const value = await this.keychain.getSecret(name);
+        if (value === null) {
+          console.warn(
+            `[session] Pi env var ${name} not found in keychain, skipping`,
+          );
+          continue;
+        }
+        assignments.push(`${name}=${shellQuote(value)}`);
+      } catch (err) {
+        console.warn(`[session] Failed to read keychain for ${name}:`, err);
+      }
+    }
+    return assignments;
   }
 
   /** Check if a Claude session JSONL file exists under ~/.claude/projects/ */

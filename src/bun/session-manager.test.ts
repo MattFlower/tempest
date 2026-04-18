@@ -52,6 +52,40 @@ describe("SessionManager.buildPiCommand", () => {
     expect(cmd).toContain(shellQuote("--name=O'Brien"));
   });
 
+  it("injects configured Pi env vars from the keychain before exec", async () => {
+    mkdirSync(tmpRoot, { recursive: true });
+
+    const config: AppConfig = {
+      workspaceRoot: tmpRoot,
+      claudeArgs: [],
+      piPath: "/bin/echo",
+      piEnvVarNames: ["OPENAI_API_KEY", "MISSING_VAR", "ANTHROPIC_API_KEY"],
+    };
+
+    const fakeKeychain = {
+      setSecret: async () => {},
+      deleteSecret: async () => {},
+      getSecret: async (name: string) => {
+        if (name === "OPENAI_API_KEY") return "sk-test-O'Brien";
+        if (name === "ANTHROPIC_API_KEY") return "ant-key";
+        return null;
+      },
+    };
+
+    const manager = new SessionManager(config, fakeKeychain);
+    const { command } = await manager.buildPiCommand({
+      workspacePath: tmpRoot,
+    });
+
+    const cmd = command[2]!;
+    expect(cmd).toContain(`OPENAI_API_KEY=${shellQuote("sk-test-O'Brien")}`);
+    expect(cmd).toContain(`ANTHROPIC_API_KEY=${shellQuote("ant-key")}`);
+    // Missing var should simply be absent, not crash the launch.
+    expect(cmd).not.toContain("MISSING_VAR=");
+    // Assignments come before exec so the child process inherits them.
+    expect(cmd.indexOf("OPENAI_API_KEY=")).toBeLessThan(cmd.indexOf("exec "));
+  });
+
   it("omits --session when the saved Pi session file does not exist", async () => {
     mkdirSync(tmpRoot, { recursive: true });
 

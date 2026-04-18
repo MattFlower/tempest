@@ -11,6 +11,7 @@ import { homedir, networkInterfaces } from "node:os";
 import { BrowserWindow, BrowserView, ApplicationMenu, Utils } from "electrobun/bun";
 import { PtyManager } from "./pty-manager";
 import { SessionManager } from "./session-manager";
+import { MacKeychain, isValidEnvVarName } from "./keychain";
 import { BookmarkManager } from "./browser/bookmark-manager";
 import { WorkspaceManager } from "./workspace-manager";
 import { SessionStateManager } from "./session-state-manager";
@@ -81,8 +82,10 @@ import {
 
 // --- Stream A: Terminal + Session ---
 const ptyManager = new PtyManager();
+// Keychain for Pi agent secrets (macOS only; other platforms throw on use).
+const keychain = new MacKeychain();
 // SessionManager starts with defaults, updated with real config after async load
-const sessionManager = new SessionManager(defaultConfig());
+const sessionManager = new SessionManager(defaultConfig(), keychain);
 
 // --- Stream C: Bookmark Managers ---
 const bookmarkManagers = new Map<string, BookmarkManager>();
@@ -517,6 +520,48 @@ const rpc: any = (BrowserView.defineRPC as any)({
       getConfig: () => workspaceManager.getConfig(),
       saveConfig: async (_params: any) => {
         await workspaceManager.saveConfig(_params);
+      },
+
+      // --- Pi env vars (keychain-backed) ---
+      listPiEnvVarNames: () => {
+        return workspaceManager.getConfig().piEnvVarNames ?? [];
+      },
+      setPiEnvVar: async (_params: any) => {
+        const { name, value } = _params as { name: string; value: string };
+        if (!isValidEnvVarName(name)) {
+          return { success: false, error: `Invalid env var name: ${name}` };
+        }
+        try {
+          await keychain.setSecret(name, value);
+          const config = workspaceManager.getConfig();
+          const existing = config.piEnvVarNames ?? [];
+          if (!existing.includes(name)) {
+            await workspaceManager.saveConfig({
+              ...config,
+              piEnvVarNames: [...existing, name].sort(),
+            });
+          }
+          return { success: true };
+        } catch (err: any) {
+          return { success: false, error: err?.message ?? String(err) };
+        }
+      },
+      deletePiEnvVar: async (_params: any) => {
+        const { name } = _params as { name: string };
+        try {
+          await keychain.deleteSecret(name);
+          const config = workspaceManager.getConfig();
+          const existing = config.piEnvVarNames ?? [];
+          if (existing.includes(name)) {
+            await workspaceManager.saveConfig({
+              ...config,
+              piEnvVarNames: existing.filter((n) => n !== name),
+            });
+          }
+          return { success: true };
+        } catch (err: any) {
+          return { success: false, error: err?.message ?? String(err) };
+        }
       },
 
       // --- Repo Settings ---

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed Progress-view Claude plan link discovery in `src/bun/pr/pr-detail.ts`: `resolveSessionPlanPath` no longer writes permanent negative cache entries (`""`) for sessions whose transcript slug is not yet present. This prevents a race where an early poll (before Claude writes the slug/plan) could suppress the plan link forever for that session. Existing legacy `""` cache entries are now cleared on read so affected sessions self-heal.
+- Toggling Progress view (⌘5) no longer appears to wipe running programs in every tab. The workspace tree was previously unmounted while Progress view was active, which disposed every `TerminalPane`'s xterm.js instance and dropped all scrollback; on return the backend PTYs were still alive but the UI was blank. Progress view now overlays on top of an always-mounted workspace stack (matching the opacity pattern already used for workspace and view-mode switches), so terminals and their scrollback survive the toggle.
 
 ### Changed
 

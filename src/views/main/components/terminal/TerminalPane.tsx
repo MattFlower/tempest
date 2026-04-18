@@ -293,8 +293,34 @@ export function TerminalPane({
     setSearchVisible(false);
   }, []);
 
+  // Accept file drops from the sidebar's file tree: insert the shell-quoted
+  // absolute path at the PTY's current cursor. Uses the plain-text type
+  // (set by FileTreeView's drag handler) so we don't reach across into
+  // sidebar-specific MIME code from here.
+  const handleTerminalDragOver = useCallback((e: React.DragEvent) => {
+    if (!useStore.getState().isFileTreeDragActive) return;
+    if (!e.dataTransfer.types.includes("text/plain")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const handleTerminalDrop = useCallback((e: React.DragEvent) => {
+    if (!useStore.getState().isFileTreeDragActive) return;
+    const path = e.dataTransfer.getData("text/plain");
+    if (!path) return;
+    e.preventDefault();
+    useStore.getState().setFileTreeDragActive(false);
+    // Shell-safe single-quoted path: close-quote, escaped-quote, reopen.
+    const quoted = `'${path.replace(/'/g, "'\\''")}' `;
+    api.writeToTerminal(terminalId, quoted);
+  }, [terminalId]);
+
   return (
-    <div className="relative h-full w-full">
+    <div
+      className="relative h-full w-full"
+      onDragOver={handleTerminalDragOver}
+      onDrop={handleTerminalDrop}
+    >
       {searchVisible && instanceRef.current && (
         <TerminalSearchBar
           instance={instanceRef.current}

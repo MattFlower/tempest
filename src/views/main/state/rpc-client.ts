@@ -558,14 +558,16 @@ export const api = {
     rpcRequest.browsePath({ query, workspacePath }),
 
   // File tree (sidebar)
-  listDir: (dirPath: string) =>
-    rpcRequest.listDir({ dirPath }),
+  listDir: (dirPath: string, workspacePath?: string) =>
+    rpcRequest.listDir({ dirPath, workspacePath }),
   watchDirectoryTree: (workspacePath: string) =>
     rpcRequest.watchDirectoryTree({ workspacePath }),
   unwatchDirectoryTree: (workspacePath: string) =>
     rpcRequest.unwatchDirectoryTree({ workspacePath }),
   unwatchAllDirectoryTrees: () =>
     rpcRequest.unwatchAllDirectoryTrees(),
+  revealInFinder: (path: string) =>
+    rpcRequest.revealInFinder({ path }),
 
   // Pane tree sync
   notifyPaneTreeChanged: (workspacePath: string, tree: any, flushNow?: boolean) =>

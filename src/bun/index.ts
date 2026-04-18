@@ -656,8 +656,11 @@ const rpc: any = (BrowserView.defineRPC as any)({
 
       // --- File tree (sidebar) ---
       listDir: async (params: any) => {
-        const { dirPath } = params as { dirPath: string };
-        return await listDir(dirPath);
+        const { dirPath, workspacePath } = params as {
+          dirPath: string;
+          workspacePath?: string;
+        };
+        return await listDir(dirPath, workspacePath);
       },
       watchDirectoryTree: (params: any) => {
         const { workspacePath } = params as { workspacePath: string };
@@ -679,6 +682,18 @@ const rpc: any = (BrowserView.defineRPC as any)({
       },
       unwatchAllDirectoryTrees: () => {
         unwatchAllDirectoryTrees();
+      },
+      revealInFinder: (params: any) => {
+        const { path } = params as { path: string };
+        // macOS "open -R <path>" reveals the item in Finder (highlights it in
+        // its parent directory). For directories, -R likewise selects the
+        // folder in its parent. If the path doesn't exist, open emits an
+        // error to stderr which we swallow.
+        try {
+          Bun.spawn(["open", "-R", path], { stderr: "ignore", stdout: "ignore" });
+        } catch (err) {
+          console.warn("[revealInFinder] failed:", err);
+        }
       },
 
       // --- Onboarding (Stream F) ---

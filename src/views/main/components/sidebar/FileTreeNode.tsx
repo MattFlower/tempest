@@ -1,5 +1,15 @@
 import type { ReactNode } from "react";
 
+/** Custom MIME type for file rows dragged out of the tree. The payload is a
+ *  JSON object of shape { workspacePath: string, filePath: string } so
+ *  drop-targets can route the open operation correctly. */
+export const FILE_TREE_DRAG_MIME = "application/x-tempest-filetree";
+
+export interface FileTreeDragData {
+  workspacePath: string;
+  filePath: string;
+}
+
 export type TreeNodeKind = "repo" | "workspace" | "dir" | "file";
 
 export interface TreeNode {
@@ -20,6 +30,18 @@ export interface TreeNode {
   trailingMeta?: string;
   /** Optional extension shorthand (ts/tsx/md/json/css) for file icon styling. */
   fileExtKey?: string;
+  /** True when the entry is ignored (gitignore / .jj-ignore / node_modules etc.)
+   *  — row is rendered with reduced opacity. */
+  isIgnored?: boolean;
+  /** True when the entry is a dotfile (name starts with "."). Also dimmed
+   *  unless the hidden-files toggle is on. */
+  isDotfile?: boolean;
+  /** One-letter VCS change indicator — M/A/D/R/U (modified/added/deleted/
+   *  renamed-or-copied/untracked). Omitted when the file is unchanged. */
+  vcsBadge?: "M" | "A" | "D" | "R" | "U";
+  /** True for workspace-level nodes when any file inside has changes
+   *  (roll-up indicator). */
+  hasVcsChanges?: boolean;
 }
 
 interface Props {
@@ -28,6 +50,12 @@ interface Props {
   onClick: (node: TreeNode, event: React.MouseEvent) => void;
   onContextMenu?: (node: TreeNode, event: React.MouseEvent) => void;
   rowRef?: React.Ref<HTMLDivElement>;
+  /** When true, the row is rendered at full opacity even if ignored / dotfile. */
+  showHiddenAtFullOpacity?: boolean;
+  /** Called on drag start/end for file rows. Parent uses this to toggle the
+   *  global isFileTreeDragActive flag so pane drop zones light up. */
+  onDragStart?: (node: TreeNode, event: React.DragEvent) => void;
+  onDragEnd?: () => void;
 }
 
 function Chevron({ hidden, expanded }: { hidden: boolean; expanded: boolean }) {
@@ -96,6 +124,21 @@ function NodeIcon({ node }: { node: TreeNode }) {
   }
 }
 
+function vcsBadgeColor(badge: "M" | "A" | "D" | "R" | "U"): string {
+  switch (badge) {
+    case "M":
+      return "var(--ctp-yellow)";
+    case "A":
+      return "var(--ctp-green)";
+    case "D":
+      return "var(--ctp-red)";
+    case "R":
+      return "var(--ctp-mauve)";
+    case "U":
+      return "var(--ctp-peach)";
+  }
+}
+
 function fileColor(key?: string): string {
   switch (key) {
     case "ts":
@@ -112,7 +155,16 @@ function fileColor(key?: string): string {
   }
 }
 
-export function FileTreeNode({ node, isCursor, onClick, onContextMenu, rowRef }: Props) {
+export function FileTreeNode({
+  node,
+  isCursor,
+  onClick,
+  onContextMenu,
+  rowRef,
+  showHiddenAtFullOpacity,
+  onDragStart,
+  onDragEnd,
+}: Props) {
   const indentPx = 6 + node.depth * 14;
 
   let background: string | undefined;
@@ -122,6 +174,9 @@ export function FileTreeNode({ node, isCursor, onClick, onContextMenu, rowRef }:
     background = "var(--ctp-surface0)";
   }
 
+  const dimmed = !showHiddenAtFullOpacity && (node.isIgnored || node.isDotfile);
+  const rowOpacity = dimmed ? 0.5 : 1;
+
   const trailing: ReactNode = node.trailingMeta ? (
     <span
       className="ml-auto flex-shrink-0 text-[10px] truncate"
@@ -130,6 +185,8 @@ export function FileTreeNode({ node, isCursor, onClick, onContextMenu, rowRef }:
       {node.trailingMeta}
     </span>
   ) : null;
+
+  const vcsColor = node.vcsBadge ? vcsBadgeColor(node.vcsBadge) : undefined;
 
   return (
     <div
@@ -145,11 +202,21 @@ export function FileTreeNode({ node, isCursor, onClick, onContextMenu, rowRef }:
           onContextMenu(node, e);
         }
       }}
+      draggable={node.kind === "file"}
+      onDragStart={(e) => {
+        if (node.kind !== "file") return;
+        onDragStart?.(node, e);
+      }}
+      onDragEnd={() => {
+        if (node.kind !== "file") return;
+        onDragEnd?.();
+      }}
       className="relative flex items-center gap-1.5 text-[12px] py-[3px] pr-2 cursor-pointer hover:bg-[var(--ctp-surface0)]"
       style={{
         paddingLeft: indentPx,
         background,
         color: "var(--ctp-text)",
+        opacity: rowOpacity,
       }}
     >
       {node.isActiveFile && (
@@ -163,6 +230,23 @@ export function FileTreeNode({ node, isCursor, onClick, onContextMenu, rowRef }:
       <NodeIcon node={node} />
       <span className="truncate">{node.label}</span>
       {trailing}
+      {node.vcsBadge && (
+        <span
+          aria-label={`VCS status: ${node.vcsBadge}`}
+          className="ml-1 flex-shrink-0 text-[10px] font-bold"
+          style={{ color: vcsColor }}
+        >
+          {node.vcsBadge}
+        </span>
+      )}
+      {node.hasVcsChanges && !node.vcsBadge && (
+        <span
+          aria-label="Has changes"
+          aria-hidden
+          className="ml-1 flex-shrink-0 w-1.5 h-1.5 rounded-full"
+          style={{ backgroundColor: "var(--ctp-yellow)" }}
+        />
+      )}
       {node.isFocusedWorkspace && (
         <span
           aria-hidden

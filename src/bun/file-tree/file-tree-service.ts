@@ -8,12 +8,14 @@
 
 import { watch, type FSWatcher } from "node:fs";
 import { readdir } from "node:fs/promises";
-import { dirname, resolve, basename } from "node:path";
+import { dirname, resolve, basename, relative, sep } from "node:path";
+import ignore, { type Ignore } from "ignore";
 import type { DirEntry } from "../../shared/ipc-types";
 
-// Directory names that should never appear in the tree, anywhere.
-// Mirrors the hardcoded list used by listFiles in src/bun/index.ts.
-const IGNORE_DIRS = new Set([
+// Directory names treated as "ignored by default" — they're rendered dimmed
+// in the tree rather than hidden, matching the behavior for .gitignore matches.
+// These are the usual suspects that users almost never want to browse into.
+const DEFAULT_IGNORED_DIRS = new Set([
   "node_modules",
   ".git",
   ".jj",
@@ -30,6 +32,87 @@ const IGNORE_DIRS = new Set([
   ".vscode",
 ]);
 
+// Per-workspace gitignore cache. We rebuild when the workspace's .gitignore
+// files change — the existing fs.watch registry will fire directoryChanged
+// events which invalidate the cache via clearIgnoreCache().
+interface IgnoreCache {
+  workspacePath: string;
+  // Keyed by absolute directory path — each cached matcher reflects the
+  // combined rules from all .gitignore files between workspacePath and that
+  // directory (inclusive).
+  matchers: Map<string, Ignore>;
+}
+
+const ignoreCaches = new Map<string, IgnoreCache>();
+
+function clearIgnoreCacheForWorkspace(workspacePath: string): void {
+  ignoreCaches.delete(workspacePath);
+}
+
+/** Try to read and append a directory's .gitignore / .jj-ignore rules to the
+ *  matcher. Silently skips missing or unreadable files. */
+async function appendIgnoreFile(
+  matcher: Ignore,
+  dirPath: string,
+): Promise<void> {
+  for (const name of [".gitignore", ".jj-ignore"]) {
+    try {
+      const content = await Bun.file(resolve(dirPath, name)).text();
+      matcher.add(content);
+    } catch {
+      // missing or unreadable — skip
+    }
+  }
+}
+
+/** Build (or reuse from cache) an ignore matcher for a specific directory
+ *  within a workspace, combining all .gitignore rules along the path from
+ *  workspacePath to dirPath. */
+async function getIgnoreMatcher(
+  workspacePath: string,
+  dirPath: string,
+): Promise<Ignore> {
+  let cache = ignoreCaches.get(workspacePath);
+  if (!cache) {
+    cache = { workspacePath, matchers: new Map() };
+    ignoreCaches.set(workspacePath, cache);
+  }
+  const cached = cache.matchers.get(dirPath);
+  if (cached) return cached;
+
+  const matcher = ignore();
+
+  // Walk from workspace root down to dirPath, adding each .gitignore we find.
+  // This correctly handles nested .gitignore files.
+  const rel = relative(workspacePath, dirPath);
+  const segments = rel === "" ? [] : rel.split(sep);
+
+  let current = workspacePath;
+  await appendIgnoreFile(matcher, current);
+  for (const seg of segments) {
+    current = resolve(current, seg);
+    await appendIgnoreFile(matcher, current);
+  }
+
+  cache.matchers.set(dirPath, matcher);
+  return matcher;
+}
+
+/** Test whether an absolute path is ignored within a workspace. Handles the
+ *  directory-vs-file distinction since `ignore` library's matcher needs a
+ *  trailing slash for dirs to match directory-only patterns like `dist/`. */
+function isPathIgnored(
+  matcher: Ignore,
+  workspacePath: string,
+  absolutePath: string,
+  isDirectory: boolean,
+): boolean {
+  const rel = relative(workspacePath, absolutePath);
+  if (rel === "" || rel.startsWith("..")) return false;
+  const testPath = isDirectory ? rel + "/" : rel;
+  return matcher.ignores(testPath);
+}
+
 export interface ListDirResult {
   ok: boolean;
   entries?: DirEntry[];
@@ -39,12 +122,23 @@ export interface ListDirResult {
 
 /** List the immediate children of a directory as structured DirEntry objects.
  *  Directories are returned first (alphabetical), then files (alphabetical).
- *  Ignored directory names (IGNORE_DIRS) are filtered out. */
-export async function listDir(dirPath: string): Promise<ListDirResult> {
+ *  When `workspacePath` is provided, entries are marked with `isIgnored=true`
+ *  if they match any .gitignore / .jj-ignore rule in the workspace, or if
+ *  they're one of the always-ignored directory names (node_modules, etc.).
+ *  Ignored entries are NOT filtered out — they're returned for the UI to
+ *  render dimmed. */
+export async function listDir(
+  dirPath: string,
+  workspacePath?: string,
+): Promise<ListDirResult> {
   try {
     const dirents = await readdir(dirPath, { withFileTypes: true });
     const dirs: DirEntry[] = [];
     const files: DirEntry[] = [];
+
+    const matcher = workspacePath
+      ? await getIgnoreMatcher(workspacePath, dirPath)
+      : null;
 
     for (const d of dirents) {
       const fullPath = resolve(dirPath, d.name);
@@ -52,14 +146,23 @@ export async function listDir(dirPath: string): Promise<ListDirResult> {
       // Mirror listDirEntries at src/bun/index.ts:230 — treat symlinks as files
       // (avoids cycles without needing a followed-paths set).
       const isDirectory = !isSymlink && d.isDirectory();
-      const entry: DirEntry = { name: d.name, fullPath, isDirectory, isSymlink };
 
-      if (isDirectory) {
-        if (IGNORE_DIRS.has(d.name)) continue;
-        dirs.push(entry);
-      } else {
-        files.push(entry);
-      }
+      const hardcodedIgnore = isDirectory && DEFAULT_IGNORED_DIRS.has(d.name);
+      const ignoreMatch = matcher
+        ? isPathIgnored(matcher, workspacePath!, fullPath, isDirectory)
+        : false;
+      const isIgnored = hardcodedIgnore || ignoreMatch;
+
+      const entry: DirEntry = {
+        name: d.name,
+        fullPath,
+        isDirectory,
+        isSymlink,
+        ...(isIgnored ? { isIgnored: true } : {}),
+      };
+
+      if (isDirectory) dirs.push(entry);
+      else files.push(entry);
     }
 
     dirs.sort((a, b) => a.name.localeCompare(b.name));
@@ -115,10 +218,20 @@ export function watchDirectoryTree(
       (eventType, changedRelPath) => {
         if (changedRelPath === null) return;
 
-        // Skip events for paths inside ignored directories (node_modules, etc.)
-        // relative path uses forward slashes on macOS.
-        const parts = String(changedRelPath).split("/");
-        if (parts.some((p) => IGNORE_DIRS.has(p))) return;
+        // If the changed file is a .gitignore / .jj-ignore, invalidate the
+        // ignore-matcher cache so subsequent listDir calls re-read the rules.
+        const relStr = String(changedRelPath);
+        const changedBase = basename(relStr);
+        if (changedBase === ".gitignore" || changedBase === ".jj-ignore") {
+          clearIgnoreCacheForWorkspace(workspacePath);
+        }
+
+        // Skip events for paths inside always-ignored directories
+        // (node_modules, .git, etc.) — we don't need to refresh those in the
+        // tree since they're not meaningfully browsable. Relative paths use
+        // forward slashes on macOS.
+        const parts = relStr.split("/");
+        if (parts.some((p) => DEFAULT_IGNORED_DIRS.has(p))) return;
 
         const absolutePath = resolve(workspacePath, String(changedRelPath));
         const changedDirPath = dirname(absolutePath);
@@ -167,7 +280,8 @@ export function watchDirectoryTree(
   }
 }
 
-/** Stop watching a workspace. Flushes any pending debounce timers. */
+/** Stop watching a workspace. Flushes any pending debounce timers and clears
+ *  the ignore-matcher cache for that workspace. */
 export function unwatchDirectoryTree(workspacePath: string): void {
   const state = watchers.get(workspacePath);
   if (!state) return;
@@ -179,6 +293,7 @@ export function unwatchDirectoryTree(workspacePath: string): void {
     // noop
   }
   watchers.delete(workspacePath);
+  clearIgnoreCacheForWorkspace(workspacePath);
 }
 
 /** Stop every active watcher. Called on webview disconnect / shutdown. */

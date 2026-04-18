@@ -111,6 +111,7 @@ export function App() {
         expandedDirs: Object.keys(s.fileTreeExpandedDirs),
         cursor: s.fileTreeCursor,
         scrollTop: s.fileTreeScrollTop,
+        showHidden: s.fileTreeShowHidden,
       }).catch(() => { /* swallow */ });
     };
     const unsub = useStore.subscribe((s, prev) => {
@@ -120,7 +121,8 @@ export function App() {
         s.fileTreeExpandedWorkspaces === prev.fileTreeExpandedWorkspaces &&
         s.fileTreeExpandedDirs === prev.fileTreeExpandedDirs &&
         s.fileTreeCursor === prev.fileTreeCursor &&
-        s.fileTreeScrollTop === prev.fileTreeScrollTop
+        s.fileTreeScrollTop === prev.fileTreeScrollTop &&
+        s.fileTreeShowHidden === prev.fileTreeShowHidden
       ) return;
       if (timer) clearTimeout(timer);
       timer = setTimeout(flush, 250);

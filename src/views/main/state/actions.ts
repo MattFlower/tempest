@@ -594,6 +594,64 @@ export function openFileInWorkspace(
   setTimeout(() => unsub(), 5000);
 }
 
+/**
+ * Open a file in a new pane (split-right) inside its owning workspace.
+ * Used by the file-tree context menu's "Open in Split" action. Skips the
+ * dedup check since the intent is explicitly to create a second view of
+ * the file in a side-by-side layout.
+ */
+export function openFileInSplit(
+  workspacePath: string,
+  filePath: string,
+): void {
+  const isMarkdown = /\.(?:md|markdown)$/i.test(filePath);
+  const kind = isMarkdown ? PaneTabKind.MarkdownViewer : PaneTabKind.Editor;
+  const label = filePath.split("/").pop() ?? "File";
+  const overrides = isMarkdown
+    ? { markdownFilePath: filePath }
+    : { editorFilePath: filePath };
+
+  const trySplit = (): boolean => {
+    const s = useStore.getState();
+    if (s.selectedWorkspacePath !== workspacePath) return false;
+    const tree = s.paneTrees[workspacePath];
+    if (!tree) return false;
+    const panes = allPanes(tree);
+    if (panes.length === 0) return false;
+    const anchorPane = s.focusedPaneId && panes.some((p) => p.id === s.focusedPaneId)
+      ? s.focusedPaneId
+      : panes[0]!.id;
+
+    const isMonacoDefault = s.config?.editor === "monaco";
+    const needsTerminalId = kind === PaneTabKind.Editor && !isMonacoDefault;
+
+    const tab = createTab(kind, label, {
+      ...(needsTerminalId ? { terminalId: crypto.randomUUID() } : {}),
+      ...overrides,
+    });
+    const newPane = createPane(tab);
+    const newTree = addingPane(tree, newPane, anchorPane);
+    s.setPaneTree(workspacePath, newTree);
+    s.setFocusedPaneId(newPane.id);
+    s.setMaximizedPaneId(null);
+    api.notifyPaneTreeChanged(workspacePath, toNodeState(newTree));
+    return true;
+  };
+
+  if (
+    useStore.getState().selectedWorkspacePath === workspacePath &&
+    trySplit()
+  ) return;
+
+  useStore.getState().selectWorkspace(workspacePath);
+  if (trySplit()) return;
+
+  const unsub = useStore.subscribe(() => {
+    if (trySplit()) unsub();
+  });
+  setTimeout(() => unsub(), 5000);
+}
+
 // --- Ask Claude about selection ---
 
 export function askClaudeAboutSelection(selectedText: string, filePath: string, sourceLine?: number | null) {

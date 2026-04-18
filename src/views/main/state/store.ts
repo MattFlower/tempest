@@ -7,7 +7,7 @@
 
 import { create } from "zustand";
 import type { SourceRepo, TempestWorkspace, WorkspaceSidebarInfo, AppConfig } from "../models/workspace";
-import { type ActivityState, ViewMode, type DirEntry, type SidebarView } from "../../../shared/ipc-types";
+import { type ActivityState, ViewMode, type DirEntry, type SidebarView, type VCSStatusResult } from "../../../shared/ipc-types";
 import type { PaneNode } from "../models/pane-node";
 
 export interface TempestStore {
@@ -33,6 +33,8 @@ export interface TempestStore {
   // --- Drag state ---
   isTabDragActive: boolean;
   setTabDragActive: (active: boolean) => void;
+  isFileTreeDragActive: boolean;
+  setFileTreeDragActive: (active: boolean) => void;
 
   // --- Progress view (app-level, cross-workspace) ---
   progressViewActive: boolean;
@@ -61,6 +63,13 @@ export interface TempestStore {
   fileTreeError: Record<string, string>;
   fileTreeCursor: string | null;
   fileTreeScrollTop: number;
+  /** When true, ignored / dotfile rows render at full opacity; otherwise they
+   *  render dimmed. Nothing is actually hidden — this only affects emphasis. */
+  fileTreeShowHidden: boolean;
+  /** VCS status per workspace for tree decorations. Populated lazily when a
+   *  workspace is expanded; kept small — only workspaces currently expanded
+   *  in the tree have entries. */
+  fileTreeVcsStatus: Record<string, VCSStatusResult>;
 
   // --- Actions (set by action creators) ---
   setRepos: (repos: SourceRepo[]) => void;
@@ -94,6 +103,8 @@ export interface TempestStore {
   invalidateFileTreeDir: (dirPath: string) => void;
   setFileTreeCursor: (cursor: string | null) => void;
   setFileTreeScrollTop: (scrollTop: number) => void;
+  setFileTreeShowHidden: (showHidden: boolean) => void;
+  setFileTreeVcsStatus: (workspacePath: string, status: VCSStatusResult | null) => void;
   hydrateFileTree: (state: {
     activeSidebarView?: SidebarView;
     expandedRepoIds?: string[];
@@ -101,6 +112,7 @@ export interface TempestStore {
     expandedDirs?: string[];
     cursor?: string | null;
     scrollTop?: number;
+    showHidden?: boolean;
   }) => void;
 
   toggleCommandPalette: () => void;
@@ -135,6 +147,8 @@ export const useStore = create<TempestStore>((set) => ({
 
   isTabDragActive: false,
   setTabDragActive: (active) => set({ isTabDragActive: active }),
+  isFileTreeDragActive: false,
+  setFileTreeDragActive: (active) => set({ isFileTreeDragActive: active }),
 
   progressViewActive: false,
   setProgressViewActive: (active) => set({ progressViewActive: active }),
@@ -160,6 +174,8 @@ export const useStore = create<TempestStore>((set) => ({
   fileTreeError: {},
   fileTreeCursor: null,
   fileTreeScrollTop: 0,
+  fileTreeShowHidden: false,
+  fileTreeVcsStatus: {},
 
   // Actions
   setRepos: (repos) => set({ repos }),
@@ -287,6 +303,18 @@ export const useStore = create<TempestStore>((set) => ({
 
   setFileTreeCursor: (cursor) => set({ fileTreeCursor: cursor }),
   setFileTreeScrollTop: (scrollTop) => set({ fileTreeScrollTop: scrollTop }),
+  setFileTreeShowHidden: (showHidden) => set({ fileTreeShowHidden: showHidden }),
+  setFileTreeVcsStatus: (workspacePath, status) =>
+    set((s) => {
+      if (status === null) {
+        if (!(workspacePath in s.fileTreeVcsStatus)) return {};
+        const { [workspacePath]: _removed, ...rest } = s.fileTreeVcsStatus;
+        return { fileTreeVcsStatus: rest };
+      }
+      return {
+        fileTreeVcsStatus: { ...s.fileTreeVcsStatus, [workspacePath]: status },
+      };
+    }),
 
   hydrateFileTree: (state) =>
     set(() => {
@@ -309,6 +337,7 @@ export const useStore = create<TempestStore>((set) => ({
       }
       if (state.cursor !== undefined) next.fileTreeCursor = state.cursor;
       if (typeof state.scrollTop === "number") next.fileTreeScrollTop = state.scrollTop;
+      if (typeof state.showHidden === "boolean") next.fileTreeShowHidden = state.showHidden;
       return next;
     }),
 

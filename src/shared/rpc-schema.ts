@@ -299,7 +299,7 @@ export interface BunRequests {
 
   // File tree
   listDir: {
-    params: { dirPath: string };
+    params: { dirPath: string; workspacePath?: string };
     response: {
       ok: boolean;
       entries?: DirEntry[];
@@ -317,6 +317,10 @@ export interface BunRequests {
   };
   unwatchAllDirectoryTrees: {
     params: void;
+    response: void;
+  };
+  revealInFinder: {
+    params: { path: string };
     response: void;
   };
 

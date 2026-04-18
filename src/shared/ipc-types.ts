@@ -225,6 +225,10 @@ export interface DirEntry {
   fullPath: string;
   isDirectory: boolean;
   isSymlink: boolean;
+  /** True if the entry matches .gitignore / .jj-ignore rules, or one of the
+   *  hardcoded "always ignore" directory names (node_modules, dist, etc.).
+   *  Ignored entries are rendered dimmed but still shown. */
+  isIgnored?: boolean;
 }
 
 export type SidebarView = "workspaces" | "files";
@@ -236,6 +240,8 @@ export interface FileTreeSessionState {
   expandedDirs?: string[];
   cursor?: string | null;
   scrollTop?: number;
+  /** When true, ignored files / dotfiles render at full opacity. */
+  showHidden?: boolean;
 }
 
 // --- Session State (Persistence) ---

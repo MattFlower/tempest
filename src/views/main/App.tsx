@@ -14,6 +14,7 @@ import { api } from "./state/rpc-client";
 import { fromNodeState } from "./models/pane-node";
 import type { ActivityState, AppConfig } from "../../shared/ipc-types";
 import { applyTheme } from "./state/theme";
+import { mountDevTools } from "./state/devtools";
 
 const MIN_SIDEBAR_WIDTH = 180;
 const MAX_SIDEBAR_WIDTH = 400;
@@ -27,6 +28,7 @@ export function App() {
   const config = useStore((s) => s.config);
   const settingsDialogVisible = useStore((s) => s.settingsDialogVisible);
   const progressViewActive = useStore((s) => s.progressViewActive);
+  const devtoolsVisible = useStore((s) => s.devtoolsVisible);
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [configLoaded, setConfigLoaded] = useState(false);
@@ -284,6 +286,9 @@ export function App() {
         )}
       </div>
 
+      {/* Developer tools pane — docks eruda inline above the footer */}
+      <DevToolsPane visible={devtoolsVisible} />
+
       {/* Usage footer — token counts and costs */}
       <UsageFooter />
 
@@ -295,6 +300,40 @@ export function App() {
 
       {/* Create Claude settings dialog */}
       <CreateClaudeSettingsDialog />
+    </div>
+  );
+}
+
+// Host element for eruda's inline-mode dev tools. Stays mounted once the
+// user opens devtools for the first time (eruda.init() attaches a shadow
+// root to the container, so unmounting it would orphan eruda's DOM);
+// toggling visibility just swaps the height between 50vh and 0.
+//
+// The inner container is `position: relative` to anchor eruda's internal
+// `._container` element — which we override to `position: absolute` via a
+// style injected into the shadow root (see state/devtools.ts).
+function DevToolsPane({ visible }: { visible: boolean }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [everOpened, setEverOpened] = useState(visible);
+
+  useEffect(() => {
+    if (visible) setEverOpened(true);
+  }, [visible]);
+
+  useEffect(() => {
+    if (everOpened && containerRef.current) {
+      mountDevTools(containerRef.current);
+    }
+  }, [everOpened]);
+
+  if (!everOpened) return null;
+
+  return (
+    <div
+      className="flex-shrink-0 w-full overflow-hidden"
+      style={{ height: visible ? "50vh" : 0, position: "relative" }}
+    >
+      <div ref={containerRef} className="h-full w-full" />
     </div>
   );
 }

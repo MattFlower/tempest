@@ -45,6 +45,10 @@ export interface TempestStore {
   progressViewActive: boolean;
   setProgressViewActive: (active: boolean) => void;
 
+  // --- Developer tools (eruda) — rendered as a bottom pane ---
+  devtoolsVisible: boolean;
+  setDevtoolsVisible: (visible: boolean) => void;
+
   // --- UI state ---
   sidebarWidth: number;
   sidebarVisible: boolean;
@@ -160,6 +164,9 @@ export const useStore = create<TempestStore>((set) => ({
 
   progressViewActive: false,
   setProgressViewActive: (active) => set({ progressViewActive: active }),
+
+  devtoolsVisible: false,
+  setDevtoolsVisible: (visible) => set({ devtoolsVisible: visible }),
 
   sidebarWidth: 240,
   sidebarVisible: true,

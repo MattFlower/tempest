@@ -7,7 +7,7 @@
 
 import { create } from "zustand";
 import type { SourceRepo, TempestWorkspace, WorkspaceSidebarInfo, AppConfig } from "../models/workspace";
-import { type ActivityState, ViewMode } from "../../../shared/ipc-types";
+import { type ActivityState, ViewMode, type DirEntry, type SidebarView } from "../../../shared/ipc-types";
 import type { PaneNode } from "../models/pane-node";
 
 export interface TempestStore {
@@ -41,6 +41,7 @@ export interface TempestStore {
   // --- UI state ---
   sidebarWidth: number;
   sidebarVisible: boolean;
+  activeSidebarView: SidebarView;
   commandPaletteVisible: boolean;
   commandPaletteInitialMode: "commands" | "files";
   settingsDialogVisible: boolean;
@@ -50,6 +51,16 @@ export interface TempestStore {
   httpServerError: string | null;
   newWorkspaceRepoId: string | null;
   overlayCount: number;
+
+  // --- File tree ---
+  fileTreeExpandedRepos: Record<string, true>;
+  fileTreeExpandedWorkspaces: Record<string, true>;
+  fileTreeExpandedDirs: Record<string, true>;
+  fileTreeEntries: Record<string, DirEntry[]>;
+  fileTreeLoading: Record<string, true>;
+  fileTreeError: Record<string, string>;
+  fileTreeCursor: string | null;
+  fileTreeScrollTop: number;
 
   // --- Actions (set by action creators) ---
   setRepos: (repos: SourceRepo[]) => void;
@@ -69,6 +80,29 @@ export interface TempestStore {
 
   setSidebarWidth: (width: number) => void;
   toggleSidebar: () => void;
+  setActiveSidebarView: (view: SidebarView) => void;
+  activateSidebarView: (view: SidebarView) => void;
+
+  setFileTreeExpanded: (
+    kind: "repo" | "workspace" | "dir",
+    key: string,
+    expanded: boolean,
+  ) => void;
+  setFileTreeEntries: (dirPath: string, entries: DirEntry[]) => void;
+  setFileTreeLoading: (dirPath: string, loading: boolean) => void;
+  setFileTreeError: (dirPath: string, error: string | null) => void;
+  invalidateFileTreeDir: (dirPath: string) => void;
+  setFileTreeCursor: (cursor: string | null) => void;
+  setFileTreeScrollTop: (scrollTop: number) => void;
+  hydrateFileTree: (state: {
+    activeSidebarView?: SidebarView;
+    expandedRepoIds?: string[];
+    expandedWorkspacePaths?: string[];
+    expandedDirs?: string[];
+    cursor?: string | null;
+    scrollTop?: number;
+  }) => void;
+
   toggleCommandPalette: () => void;
   openCommandPaletteFiles: () => void;
   toggleSettingsDialog: () => void;
@@ -107,6 +141,7 @@ export const useStore = create<TempestStore>((set) => ({
 
   sidebarWidth: 240,
   sidebarVisible: true,
+  activeSidebarView: "workspaces" as const,
   commandPaletteVisible: false,
   commandPaletteInitialMode: "commands" as const,
   settingsDialogVisible: false,
@@ -116,6 +151,15 @@ export const useStore = create<TempestStore>((set) => ({
   httpServerError: null,
   newWorkspaceRepoId: null,
   overlayCount: 0,
+
+  fileTreeExpandedRepos: {},
+  fileTreeExpandedWorkspaces: {},
+  fileTreeExpandedDirs: {},
+  fileTreeEntries: {},
+  fileTreeLoading: {},
+  fileTreeError: {},
+  fileTreeCursor: null,
+  fileTreeScrollTop: 0,
 
   // Actions
   setRepos: (repos) => set({ repos }),
@@ -171,6 +215,103 @@ export const useStore = create<TempestStore>((set) => ({
 
   setSidebarWidth: (width) => set({ sidebarWidth: width }),
   toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
+  setActiveSidebarView: (view) => set({ activeSidebarView: view }),
+  activateSidebarView: (view) =>
+    set((s) => {
+      if (!s.sidebarVisible) {
+        return { sidebarVisible: true, activeSidebarView: view };
+      }
+      if (s.activeSidebarView === view) {
+        return { sidebarVisible: false };
+      }
+      return { activeSidebarView: view };
+    }),
+
+  setFileTreeExpanded: (kind, key, expanded) =>
+    set((s) => {
+      const mapKey =
+        kind === "repo"
+          ? "fileTreeExpandedRepos"
+          : kind === "workspace"
+          ? "fileTreeExpandedWorkspaces"
+          : "fileTreeExpandedDirs";
+      const current = s[mapKey];
+      if (expanded) {
+        if (current[key]) return {};
+        return { [mapKey]: { ...current, [key]: true as const } } as any;
+      }
+      if (!current[key]) return {};
+      const { [key]: _removed, ...rest } = current;
+      return { [mapKey]: rest } as any;
+    }),
+
+  setFileTreeEntries: (dirPath, entries) =>
+    set((s) => {
+      const nextEntries = { ...s.fileTreeEntries, [dirPath]: entries };
+      const { [dirPath]: _l, ...restLoading } = s.fileTreeLoading;
+      const { [dirPath]: _e, ...restError } = s.fileTreeError;
+      return {
+        fileTreeEntries: nextEntries,
+        fileTreeLoading: restLoading,
+        fileTreeError: restError,
+      };
+    }),
+
+  setFileTreeLoading: (dirPath, loading) =>
+    set((s) => {
+      if (loading) {
+        if (s.fileTreeLoading[dirPath]) return {};
+        return { fileTreeLoading: { ...s.fileTreeLoading, [dirPath]: true as const } };
+      }
+      if (!s.fileTreeLoading[dirPath]) return {};
+      const { [dirPath]: _removed, ...rest } = s.fileTreeLoading;
+      return { fileTreeLoading: rest };
+    }),
+
+  setFileTreeError: (dirPath, error) =>
+    set((s) => {
+      if (error === null) {
+        if (!s.fileTreeError[dirPath]) return {};
+        const { [dirPath]: _removed, ...rest } = s.fileTreeError;
+        return { fileTreeError: rest };
+      }
+      return { fileTreeError: { ...s.fileTreeError, [dirPath]: error } };
+    }),
+
+  invalidateFileTreeDir: (dirPath) =>
+    set((s) => {
+      if (!(dirPath in s.fileTreeEntries)) return {};
+      const { [dirPath]: _removed, ...rest } = s.fileTreeEntries;
+      return { fileTreeEntries: rest };
+    }),
+
+  setFileTreeCursor: (cursor) => set({ fileTreeCursor: cursor }),
+  setFileTreeScrollTop: (scrollTop) => set({ fileTreeScrollTop: scrollTop }),
+
+  hydrateFileTree: (state) =>
+    set(() => {
+      const next: Partial<TempestStore> = {};
+      if (state.activeSidebarView) next.activeSidebarView = state.activeSidebarView;
+      if (state.expandedRepoIds) {
+        next.fileTreeExpandedRepos = Object.fromEntries(
+          state.expandedRepoIds.map((id) => [id, true as const]),
+        );
+      }
+      if (state.expandedWorkspacePaths) {
+        next.fileTreeExpandedWorkspaces = Object.fromEntries(
+          state.expandedWorkspacePaths.map((p) => [p, true as const]),
+        );
+      }
+      if (state.expandedDirs) {
+        next.fileTreeExpandedDirs = Object.fromEntries(
+          state.expandedDirs.map((p) => [p, true as const]),
+        );
+      }
+      if (state.cursor !== undefined) next.fileTreeCursor = state.cursor;
+      if (typeof state.scrollTop === "number") next.fileTreeScrollTop = state.scrollTop;
+      return next;
+    }),
+
   toggleCommandPalette: () =>
     set((s) => ({
       commandPaletteVisible: !s.commandPaletteVisible,

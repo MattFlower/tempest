@@ -9,6 +9,7 @@ import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { RepoSettingsDialog } from "./RepoSettingsDialog";
 import { RenameWorkspaceDialog } from "./RenameWorkspaceDialog";
 import { CloneRepoDialog } from "./CloneRepoDialog";
+import { FileTreeView } from "./FileTreeView";
 
 export function Sidebar() {
   const repos = useStore((s) => s.repos);
@@ -21,6 +22,7 @@ export function Sidebar() {
   const cloneRepoDialogVisible = useStore((s) => s.cloneRepoDialogVisible);
   const showCloneRepoDialog = useStore((s) => s.showCloneRepoDialog);
   const hideCloneRepoDialog = useStore((s) => s.hideCloneRepoDialog);
+  const activeSidebarView = useStore((s) => s.activeSidebarView);
 
   const setSidebarInfo = useStore((s) => s.setSidebarInfo);
   const newWorkspaceRepoId = useStore((s) => s.newWorkspaceRepoId);
@@ -124,55 +126,60 @@ export function Sidebar() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[var(--ctp-mantle)] select-none">
+    <div className="flex flex-col h-full bg-[var(--ctp-mantle)]">
 
-      {/* Scrollable repo list */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden py-1">
-        {addRepoError && (
-          <div className="px-3 py-2 border-b border-[var(--ctp-surface0)]">
-            <p className="text-[11px] text-[var(--ctp-red)]">{addRepoError}</p>
+      {activeSidebarView === "files" ? (
+        <FileTreeView />
+      ) : (
+        <>
+          <div className="flex-1 overflow-y-auto overflow-x-hidden py-1 select-none">
+            {addRepoError && (
+              <div className="px-3 py-2 border-b border-[var(--ctp-surface0)]">
+                <p className="text-[11px] text-[var(--ctp-red)]">{addRepoError}</p>
+              </div>
+            )}
+            {repos.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-[12px] text-[var(--ctp-overlay0)]">
+                No repositories added
+              </div>
+            ) : (
+              repos.map((repo, index) => (
+                <RepoSection
+                  key={repo.id}
+                  repo={repo}
+                  workspaces={[...(workspacesByRepo[repo.id] ?? [])].sort((a, b) =>
+                    a.name === "default" ? -1 : b.name === "default" ? 1 : 0
+                  )}
+                  sidebarInfo={sidebarInfo}
+                  selectedWorkspacePath={selectedWorkspacePath}
+                  showDivider={index > 0}
+                  onSelectWorkspace={selectWorkspace}
+                  onArchiveWorkspace={handleArchiveWorkspace}
+                  onRenameWorkspace={(workspace) => setRenameTarget({ workspace, repo })}
+                  onToggleExpanded={() => handleToggleExpanded(index)}
+                  onNewWorkspace={() => setNewWorkspaceRepo(repo)}
+                  onRefreshWorkspaces={() => {
+                    api.getWorkspaces(repo.id).then((ws: TempestWorkspace[]) => setWorkspaces(repo.id, ws));
+                  }}
+                  onRemoveRepo={async () => {
+                    await api.removeRepo(repo.id);
+                    const loadedRepos = await api.getRepos();
+                    setRepos(loadedRepos);
+                  }}
+                  onOpenSettings={() => setSettingsRepo(repo)}
+                  onRefreshSidebarInfo={(workspacePath) => {
+                    api.getSidebarInfo(workspacePath).then((info: any) => {
+                      if (info) setSidebarInfo(workspacePath, info);
+                    });
+                  }}
+                />
+              ))
+            )}
           </div>
-        )}
-        {repos.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-[12px] text-[var(--ctp-overlay0)]">
-            No repositories added
-          </div>
-        ) : (
-          repos.map((repo, index) => (
-            <RepoSection
-              key={repo.id}
-              repo={repo}
-              workspaces={[...(workspacesByRepo[repo.id] ?? [])].sort((a, b) =>
-                a.name === "default" ? -1 : b.name === "default" ? 1 : 0
-              )}
-              sidebarInfo={sidebarInfo}
-              selectedWorkspacePath={selectedWorkspacePath}
-              showDivider={index > 0}
-              onSelectWorkspace={selectWorkspace}
-              onArchiveWorkspace={handleArchiveWorkspace}
-              onRenameWorkspace={(workspace) => setRenameTarget({ workspace, repo })}
-              onToggleExpanded={() => handleToggleExpanded(index)}
-              onNewWorkspace={() => setNewWorkspaceRepo(repo)}
-              onRefreshWorkspaces={() => {
-                api.getWorkspaces(repo.id).then((ws: TempestWorkspace[]) => setWorkspaces(repo.id, ws));
-              }}
-              onRemoveRepo={async () => {
-                await api.removeRepo(repo.id);
-                const loadedRepos = await api.getRepos();
-                setRepos(loadedRepos);
-              }}
-              onOpenSettings={() => setSettingsRepo(repo)}
-              onRefreshSidebarInfo={(workspacePath) => {
-                api.getSidebarInfo(workspacePath).then((info: any) => {
-                  if (info) setSidebarInfo(workspacePath, info);
-                });
-              }}
-            />
-          ))
-        )}
-      </div>
 
-      <SidebarToolbar onAddRepo={handleAddRepo} onCloneRepo={showCloneRepoDialog} />
+          <SidebarToolbar onAddRepo={handleAddRepo} onCloneRepo={showCloneRepoDialog} />
+        </>
+      )}
 
       {newWorkspaceRepo && (
         <NewWorkspaceDialog

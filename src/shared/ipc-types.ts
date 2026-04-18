@@ -218,6 +218,26 @@ export interface OpenPRState {
   prURL: string;
 }
 
+// --- File Tree ---
+
+export interface DirEntry {
+  name: string;
+  fullPath: string;
+  isDirectory: boolean;
+  isSymlink: boolean;
+}
+
+export type SidebarView = "workspaces" | "files";
+
+export interface FileTreeSessionState {
+  activeSidebarView?: SidebarView;
+  expandedRepoIds?: string[];
+  expandedWorkspacePaths?: string[];
+  expandedDirs?: string[];
+  cursor?: string | null;
+  scrollTop?: number;
+}
+
 // --- Session State (Persistence) ---
 
 export interface SessionState {
@@ -226,6 +246,7 @@ export interface SessionState {
   selectedWorkspacePath?: string;
   workspaces: Record<string, WorkspacePaneState>;
   collapsedRepoIds?: string[];
+  fileTree?: FileTreeSessionState;
 }
 
 export interface WorkspacePaneState {

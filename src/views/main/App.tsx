@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useStore } from "./state/store";
 import { Sidebar } from "./components/sidebar/Sidebar";
+import { ActivityBar } from "./components/sidebar/ActivityBar";
 import { CommandPalette } from "./components/palette/CommandPalette";
 import { WorkspaceDetail } from "./components/layout";
 import { ViewModeBar } from "./components/layout/ViewModeBar";
@@ -81,6 +82,11 @@ export function App() {
         store.selectWorkspace(state.selectedWorkspacePath);
       }
 
+      // Restore file tree state (activeSidebarView, expanded sets, cursor).
+      if (state.fileTree) {
+        store.hydrateFileTree(state.fileTree);
+      }
+
       console.log(
         "[App] Session restored:",
         Object.keys(state.workspaces).length,
@@ -89,6 +95,40 @@ export function App() {
     }).catch((err: any) => {
       console.error("[App] Session restore failed:", err);
     });
+  }, []);
+
+  // Persist file tree state changes. Debounced so rapid expand/collapse
+  // sequences don't spam the backend. The Bun process auto-flushes the
+  // session file every 30s on top of this.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const flush = () => {
+      const s = useStore.getState();
+      api.saveFileTreeState({
+        activeSidebarView: s.activeSidebarView,
+        expandedRepoIds: Object.keys(s.fileTreeExpandedRepos),
+        expandedWorkspacePaths: Object.keys(s.fileTreeExpandedWorkspaces),
+        expandedDirs: Object.keys(s.fileTreeExpandedDirs),
+        cursor: s.fileTreeCursor,
+        scrollTop: s.fileTreeScrollTop,
+      }).catch(() => { /* swallow */ });
+    };
+    const unsub = useStore.subscribe((s, prev) => {
+      if (
+        s.activeSidebarView === prev.activeSidebarView &&
+        s.fileTreeExpandedRepos === prev.fileTreeExpandedRepos &&
+        s.fileTreeExpandedWorkspaces === prev.fileTreeExpandedWorkspaces &&
+        s.fileTreeExpandedDirs === prev.fileTreeExpandedDirs &&
+        s.fileTreeCursor === prev.fileTreeCursor &&
+        s.fileTreeScrollTop === prev.fileTreeScrollTop
+      ) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(flush, 250);
+    });
+    return () => {
+      unsub();
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   // Cmd+5 toggles Progress view
@@ -174,6 +214,9 @@ export function App() {
             progressViewActive ? "opacity-0 pointer-events-none" : "opacity-100"
           }`}
         >
+          {/* Activity bar — always visible, even when sidebar is hidden */}
+          <ActivityBar />
+
           {/* Sidebar */}
           {sidebarVisible && (
             <>

@@ -492,6 +492,108 @@ export function resumeSessionInNewTab(
   addTab(targetPaneId, newTab);
 }
 
+// --- Open a file in a specific workspace (cross-workspace switch + open) ---
+
+/**
+ * Find an existing tab anywhere (across all workspaces) whose editorFilePath
+ * or markdownFilePath matches. Returns the workspacePath/paneId/tabId that
+ * owns it, or null if no such tab exists. Used by openFileInWorkspace to
+ * focus an existing tab instead of creating a duplicate.
+ */
+function findOpenTabForFile(
+  filePath: string,
+): { workspacePath: string; paneId: string; tabId: string } | null {
+  const { paneTrees } = useStore.getState();
+  for (const [wsPath, tree] of Object.entries(paneTrees)) {
+    for (const pane of allPanes(tree)) {
+      for (const tab of pane.tabs) {
+        if (tab.editorFilePath === filePath || tab.markdownFilePath === filePath) {
+          return { workspacePath: wsPath, paneId: pane.id, tabId: tab.id };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Open a file in `workspacePath`, switching the focused workspace if needed.
+ * If the file is already open in any workspace's pane tree, that tab is
+ * refocused instead of creating a duplicate.
+ *
+ * Mirrors the switch-then-open dance used by {@link ProgressRowDetail.openPlanInWorkspace}:
+ * the target workspace's pane tree may not be mounted yet (WorkspaceDetail creates it
+ * via an init effect on first visit), so we subscribe to the store and retry until it
+ * materializes, with a 5s safety timeout.
+ */
+export function openFileInWorkspace(
+  workspacePath: string,
+  filePath: string,
+): void {
+  // Dedup: if this file is already open anywhere, focus the existing tab
+  // instead of creating a second one. Searches across all workspaces so
+  // refocusing works even when the existing tab lives in a different one.
+  const existing = findOpenTabForFile(filePath);
+  if (existing) {
+    const store = useStore.getState();
+    if (store.selectedWorkspacePath !== existing.workspacePath) {
+      store.selectWorkspace(existing.workspacePath);
+    }
+    selectTab(existing.paneId, existing.tabId);
+    return;
+  }
+
+  const isMarkdown = /\.(?:md|markdown)$/i.test(filePath);
+  const kind = isMarkdown ? PaneTabKind.MarkdownViewer : PaneTabKind.Editor;
+  const label = filePath.split("/").pop() ?? "File";
+  const overrides = isMarkdown
+    ? { markdownFilePath: filePath }
+    : { editorFilePath: filePath };
+
+  const tryOpen = (): boolean => {
+    const s = useStore.getState();
+    if (s.selectedWorkspacePath !== workspacePath) return false;
+    const tree = s.paneTrees[workspacePath];
+    if (!tree) return false;
+
+    const panes = allPanes(tree);
+    if (panes.length === 0) return false;
+    const cached = s.focusedPaneIds[workspacePath] ?? s.focusedPaneId;
+    const paneId = cached && panes.some((p) => p.id === cached) ? cached : panes[0]!.id;
+
+    // Terminal-hosted editor (nvim, vim, etc.) needs a terminalId; Monaco doesn't.
+    const isMonacoDefault = s.config?.editor === "monaco";
+    const needsTerminalId = kind === PaneTabKind.Editor && !isMonacoDefault;
+
+    s.setFocusedPaneId(paneId);
+    const tab = createTab(kind, label, {
+      ...(needsTerminalId ? { terminalId: crypto.randomUUID() } : {}),
+      ...overrides,
+    });
+    addTab(paneId, tab);
+    return true;
+  };
+
+  // Fast path: already focused on the target workspace and tree exists.
+  const current = useStore.getState();
+  if (
+    current.selectedWorkspacePath === workspacePath &&
+    current.paneTrees[workspacePath] &&
+    tryOpen()
+  ) {
+    return;
+  }
+
+  // Slow path: switch, then retry until the tree materializes.
+  useStore.getState().selectWorkspace(workspacePath);
+  if (tryOpen()) return;
+
+  const unsub = useStore.subscribe(() => {
+    if (tryOpen()) unsub();
+  });
+  setTimeout(() => unsub(), 5000);
+}
+
 // --- Ask Claude about selection ---
 
 export function askClaudeAboutSelection(selectedText: string, filePath: string, sourceLine?: number | null) {

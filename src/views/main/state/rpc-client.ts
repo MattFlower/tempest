@@ -253,6 +253,37 @@ const rpc = Electroview.defineRPC({
           handler(msg.filePath, msg.content, msg.deleted);
         }
       },
+      directoryChanged: (msg: any) => {
+        import("./store").then(({ useStore }) => {
+          const store = useStore.getState();
+          const dirPath: string = msg.changedDirPath;
+          // If the directory is currently cached, re-fetch its entries (if
+          // still expanded) or drop the stale cache (if not expanded). The
+          // webview's tree state is the source of truth for "is this dir
+          // still visible to the user?".
+          const isExpanded = !!store.fileTreeExpandedDirs[dirPath]
+            || !!store.fileTreeExpandedWorkspaces[dirPath];
+          if (!isExpanded) {
+            store.invalidateFileTreeDir(dirPath);
+            return;
+          }
+          // Re-fetch — but only while the Files view is active. If the user
+          // has switched away, we've unwatched already, so this is defensive.
+          if (store.activeSidebarView !== "files" || !store.sidebarVisible) {
+            store.invalidateFileTreeDir(dirPath);
+            return;
+          }
+          api.listDir(dirPath).then((res: any) => {
+            if (res?.ok && res.entries) {
+              store.setFileTreeEntries(dirPath, res.entries);
+            } else if (res?.error) {
+              store.setFileTreeError(dirPath, res.error);
+            }
+          }).catch((err: any) => {
+            console.warn("[file-tree] refetch after directoryChanged failed:", err);
+          });
+        });
+      },
       prDraftsChanged: (msg: any) => {
         if (prDraftsChangedHandler) {
           prDraftsChangedHandler(msg.workspacePath, msg.drafts);
@@ -511,12 +542,30 @@ export const api = {
     rpcRequest.savePaneState({ workspacePath, paneTree }),
   setRepoExpanded: (repoId: string, isExpanded: boolean) =>
     rpcRequest.setRepoExpanded({ repoId, isExpanded }),
+  saveFileTreeState: (state: {
+    activeSidebarView?: "workspaces" | "files";
+    expandedRepoIds?: string[];
+    expandedWorkspacePaths?: string[];
+    expandedDirs?: string[];
+    cursor?: string | null;
+    scrollTop?: number;
+  }) => rpcRequest.saveFileTreeState(state),
 
   // Files
   listFiles: (workspacePath: string) =>
     rpcRequest.listFiles({ workspacePath }),
   browsePath: (query: string, workspacePath: string) =>
     rpcRequest.browsePath({ query, workspacePath }),
+
+  // File tree (sidebar)
+  listDir: (dirPath: string) =>
+    rpcRequest.listDir({ dirPath }),
+  watchDirectoryTree: (workspacePath: string) =>
+    rpcRequest.watchDirectoryTree({ workspacePath }),
+  unwatchDirectoryTree: (workspacePath: string) =>
+    rpcRequest.unwatchDirectoryTree({ workspacePath }),
+  unwatchAllDirectoryTrees: () =>
+    rpcRequest.unwatchAllDirectoryTrees(),
 
   // Pane tree sync
   notifyPaneTreeChanged: (workspacePath: string, tree: any, flushNow?: boolean) =>

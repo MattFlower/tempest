@@ -9,6 +9,8 @@ import type {
   BinaryStatus,
   Bookmark,
   CustomScript,
+  DirEntry,
+  FileTreeSessionState,
   HookEvent,
   HttpServerConfig,
   JJBookmark,
@@ -275,6 +277,10 @@ export interface BunRequests {
     params: { repoId: string; isExpanded: boolean };
     response: void;
   };
+  saveFileTreeState: {
+    params: FileTreeSessionState;
+    response: void;
+  };
 
   // File operations (for command palette)
   listFiles: {
@@ -289,6 +295,29 @@ export interface BunRequests {
       entries?: string[];
       error?: string;
     };
+  };
+
+  // File tree
+  listDir: {
+    params: { dirPath: string };
+    response: {
+      ok: boolean;
+      entries?: DirEntry[];
+      error?: string;
+      errorKind?: "not_found" | "permission" | "not_a_directory" | "other";
+    };
+  };
+  watchDirectoryTree: {
+    params: { workspacePath: string };
+    response: void;
+  };
+  unwatchDirectoryTree: {
+    params: { workspacePath: string };
+    response: void;
+  };
+  unwatchAllDirectoryTrees: {
+    params: void;
+    response: void;
   };
 
   // Onboarding
@@ -680,6 +709,11 @@ export interface WebviewMessages {
   configChanged: AppConfig;
   menuAction: { action: string };
   markdownFileChanged: { filePath: string; content: string; deleted?: boolean };
+  directoryChanged: {
+    workspacePath: string;
+    changedDirPath: string;
+    changeKind?: "create" | "delete" | "rename" | "unknown";
+  };
   prDraftsChanged: { workspacePath: string; drafts: PRDraftSummary[] };
   scriptOutput: { runId: string; data: string };
   scriptExit: { runId: string; exitCode: number };

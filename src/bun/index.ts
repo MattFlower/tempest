@@ -36,6 +36,12 @@ import {
   unwatchMarkdownFile,
   unwatchAll as unwatchAllMarkdown,
 } from "./markdown/markdown-service";
+import {
+  listDir,
+  watchDirectoryTree,
+  unwatchDirectoryTree,
+  unwatchAllDirectoryTrees,
+} from "./file-tree/file-tree-service";
 import { buildEditorCommand } from "./editor/editor-command";
 import { getInstalledEditors, openInEditor } from "./editor/open-in";
 import { readFileForEditor, writeFileForEditor, resolveModulePath } from "./editor/file-service";
@@ -635,6 +641,9 @@ const rpc: any = (BrowserView.defineRPC as any)({
         sessionStateManager.setRepoCollapsed(repoId, !isExpanded);
         await sessionStateManager.flush();
       },
+      saveFileTreeState: (_params: any) => {
+        sessionStateManager.saveFileTreeState(_params);
+      },
 
       // --- Files (Stream E) ---
       listFiles: async (params: any) => {
@@ -643,6 +652,33 @@ const rpc: any = (BrowserView.defineRPC as any)({
       browsePath: async (params: any) => {
         const { query, workspacePath } = params as { query: string; workspacePath: string };
         return browsePath(query, workspacePath);
+      },
+
+      // --- File tree (sidebar) ---
+      listDir: async (params: any) => {
+        const { dirPath } = params as { dirPath: string };
+        return await listDir(dirPath);
+      },
+      watchDirectoryTree: (params: any) => {
+        const { workspacePath } = params as { workspacePath: string };
+        watchDirectoryTree(workspacePath, (wsPath, changedDirPath, kind) => {
+          try {
+            win.webview.rpc.send.directoryChanged({
+              workspacePath: wsPath,
+              changedDirPath,
+              changeKind: kind,
+            });
+          } catch {
+            // webview not ready — swallow
+          }
+        });
+      },
+      unwatchDirectoryTree: (params: any) => {
+        const { workspacePath } = params as { workspacePath: string };
+        unwatchDirectoryTree(workspacePath);
+      },
+      unwatchAllDirectoryTrees: () => {
+        unwatchAllDirectoryTrees();
       },
 
       // --- Onboarding (Stream F) ---
@@ -1514,6 +1550,7 @@ async function shutdown() {
     workspaceManager.stopSidebarRefresh();
     historyAggregator.stopRefreshTimers();
     unwatchAllMarkdown();
+    unwatchAllDirectoryTrees();
     prMonitor.shutdown();
     httpServer.stop();
     mcpServer.stop();

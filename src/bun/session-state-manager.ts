@@ -5,6 +5,7 @@ import type {
   PaneNodeState,
   OpenPRState,
   WorkspacePaneState,
+  FileTreeSessionState,
 } from "../shared/ipc-types";
 import { PaneTabKind } from "../shared/ipc-types";
 import { TEMPEST_DIR } from "./config/paths";
@@ -104,6 +105,16 @@ export class SessionStateManager {
 
   isRepoCollapsed(repoId: string): boolean {
     return this.state?.collapsedRepoIds?.includes(repoId) ?? false;
+  }
+
+  saveFileTreeState(fileTree: FileTreeSessionState): void {
+    this.ensureState();
+    this.state!.fileTree = fileTree;
+    this.dirty = true;
+  }
+
+  getFileTreeState(): FileTreeSessionState | null {
+    return this.state?.fileTree ?? null;
   }
 
   setRepoCollapsed(repoId: string, collapsed: boolean): void {

@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed mouse-wheel scrolling in the MarkdownViewer for users on wheel mice. `src/views/main/components/markdown/MarkdownViewer.tsx` forwards wheel events from the wrapper to the iframe's `contentWindow` (WKWebView doesn't reliably deliver wheel over srcDoc iframes) but passed `e.deltaX` / `e.deltaY` straight to `win.scrollBy` without honoring `WheelEvent.deltaMode`. Trackpads report `DOM_DELTA_PIXEL` (mode 0, deltas already in pixels) so they worked, but wheel mice report `DOM_DELTA_LINE` (mode 1) where `deltaY ≈ 3` means "3 lines" — passed as pixels, each tick scrolled ~3 pixels, which looked like the wheel was broken. The handler now multiplies mode-1 deltas by a 16px line height and mode-2 (`DOM_DELTA_PAGE`) deltas by the iframe viewport dimensions before forwarding.
+
 ### Changed
 
 ### Removed

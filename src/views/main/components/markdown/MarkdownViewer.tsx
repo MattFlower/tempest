@@ -288,15 +288,30 @@ export function MarkdownViewer({ filePath, paneId }: MarkdownViewerProps) {
         scroll the sub-document (arrow keys do, because they dispatch via
         keyboard focus). As a workaround, catch wheel events on the wrapper
         and forward them to the iframe's contentWindow.
+
+        WheelEvent.deltaMode must be honored: trackpads report DOM_DELTA_PIXEL
+        (0) so deltaY is already pixels, but wheel mice report DOM_DELTA_LINE
+        (1) with small integer line counts — passing those straight to
+        scrollBy scrolls only a few pixels per tick and looks like the wheel
+        isn't working. Convert lines/pages to pixels first.
       */}
       <div
         className="relative flex-1 overflow-hidden"
         onWheel={(e) => {
           try {
             const win = iframeRef.current?.contentWindow;
-            if (win) {
-              win.scrollBy(e.deltaX, e.deltaY);
+            if (!win) return;
+            let dx = e.deltaX;
+            let dy = e.deltaY;
+            if (e.deltaMode === 1) {
+              const lineHeight = 16;
+              dx *= lineHeight;
+              dy *= lineHeight;
+            } else if (e.deltaMode === 2) {
+              dx *= win.innerWidth;
+              dy *= win.innerHeight;
             }
+            win.scrollBy(dx, dy);
           } catch {
             // Cross-origin iframe access may fail in some sandbox configs
           }

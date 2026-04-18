@@ -44,14 +44,12 @@ export class JJProvider implements VCSProvider {
 
   async listWorkspaces(wsRoot: string): Promise<WorkspaceEntry[]> {
     const output = await this.runJJ(["workspace", "list"], this.repoPath);
-    // jj workspace list output format: "name: <change-id> <description>"
+    // jj workspace list output format: `name: <change-id> <description>`.
+    // Names containing spaces or other special characters are wrapped in double
+    // quotes, e.g. `"workspace with space": <change-id> ...`.
     const names = output
       .split("\n")
-      .map((line) => {
-        const colonIdx = line.indexOf(":");
-        if (colonIdx === -1) return "";
-        return line.slice(0, colonIdx).trim();
-      })
+      .map((line) => parseWorkspaceName(line))
       .filter((name) => name.length > 0);
 
     return names.map((name) => ({
@@ -158,3 +156,30 @@ export class JJProvider implements VCSProvider {
   }
 }
 
+/**
+ * Extract a workspace name from a single line of `jj workspace list` output.
+ * jj wraps names containing whitespace or other special characters in double
+ * quotes and backslash-escapes embedded quotes/backslashes.
+ */
+function parseWorkspaceName(line: string): string {
+  const trimmed = line.trimStart();
+  if (trimmed.startsWith('"')) {
+    let i = 1;
+    let name = "";
+    while (i < trimmed.length) {
+      const ch = trimmed[i];
+      if (ch === "\\" && i + 1 < trimmed.length) {
+        name += trimmed[i + 1];
+        i += 2;
+        continue;
+      }
+      if (ch === '"') return name;
+      name += ch;
+      i++;
+    }
+    return "";
+  }
+  const colonIdx = trimmed.indexOf(":");
+  if (colonIdx === -1) return "";
+  return trimmed.slice(0, colonIdx).trim();
+}

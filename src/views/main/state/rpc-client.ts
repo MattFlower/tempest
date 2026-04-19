@@ -517,6 +517,15 @@ export const api = {
     scriptPath?: string;
     paramValues?: Record<string, string>;
   }) => rpcRequest.runCustomScript(params),
+  resolveScriptLaunch: (params: {
+    repoPath: string;
+    workspacePath: string;
+    workspaceName: string;
+    script?: string;
+    scriptPath?: string;
+    paramValues?: Record<string, string>;
+  }): Promise<{ command: string[]; cwd: string; env: Record<string, string> }> =>
+    rpcRequest.resolveScriptLaunch(params),
   getPackageScripts: (workspacePath: string) =>
     rpcRequest.getPackageScripts({ workspacePath }),
   browseFile: (startingFolder?: string) =>

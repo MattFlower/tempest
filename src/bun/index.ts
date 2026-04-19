@@ -588,6 +588,13 @@ const rpc: any = (BrowserView.defineRPC as any)({
       runCustomScript: async (_params: any) => {
         return await workspaceManager.runCustomScript(_params);
       },
+      resolveScriptLaunch: async (_params: any) => {
+        const resolved = await workspaceManager.resolveScriptLaunch(_params);
+        if (!resolved) {
+          throw new Error("No script or scriptPath provided");
+        }
+        return resolved;
+      },
       getPackageScripts: async (_params: any) => {
         return await workspaceManager.getPackageScripts(_params.workspacePath);
       },

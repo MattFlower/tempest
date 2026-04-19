@@ -10,6 +10,11 @@ interface Props {
   workspacePath: string;
   workspaceName: string;
   onDismiss: () => void;
+  /** When provided, the dialog collects parameters and hands them off via
+   *  this callback instead of executing the script itself. The caller is
+   *  then responsible for launching (e.g. in the Run pane). The dialog
+   *  auto-dismisses after the callback fires. */
+  onParamsSubmit?: (values: Record<string, string>) => void;
 }
 
 export function ScriptRunDialog({
@@ -18,6 +23,7 @@ export function ScriptRunDialog({
   workspacePath,
   workspaceName,
   onDismiss,
+  onParamsSubmit,
 }: Props) {
   useOverlay();
 
@@ -57,9 +63,15 @@ export function ScriptRunDialog({
     };
   }, []);
 
-  // Auto-start if no params needed
+  // Auto-start if no params needed. In params-only mode (onParamsSubmit set),
+  // the parent handles launching — we just hand back the (empty) values and
+  // dismiss without ever entering the running phase.
   useEffect(() => {
-    if (!hasParams) {
+    if (hasParams) return;
+    if (onParamsSubmit) {
+      onParamsSubmit({});
+      onDismiss();
+    } else {
       startRun({});
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -99,6 +111,11 @@ export function ScriptRunDialog({
   };
 
   const handleSubmitParams = () => {
+    if (onParamsSubmit) {
+      onParamsSubmit(paramValues);
+      onDismiss();
+      return;
+    }
     startRun(paramValues);
   };
 

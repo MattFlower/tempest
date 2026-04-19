@@ -535,6 +535,45 @@ export class WorkspaceManager {
   onScriptOutput?: (runId: string, data: string) => void;
   onScriptExit?: (runId: string, exitCode: number) => void;
 
+  /** Build the (command, cwd, env) for a custom-script invocation without
+   *  spawning. Shared between runCustomScript (pipes/modal path) and the
+   *  Run pane's PTY launch path. Returns null if neither `script` nor
+   *  `scriptPath` is provided. */
+  async resolveScriptLaunch(params: {
+    repoPath: string;
+    workspacePath: string;
+    workspaceName: string;
+    script?: string;
+    scriptPath?: string;
+    paramValues?: Record<string, string>;
+  }): Promise<{ command: string[]; cwd: string; env: Record<string, string> } | null> {
+    const { repoPath, workspacePath, workspaceName, script, scriptPath, paramValues } = params;
+
+    const remoteRepos = await this.getRemoteRepos(repoPath);
+    const env: Record<string, string> = {
+      ...process.env as Record<string, string>,
+      PATH: getResolvedPATH(),
+      REMOTE_REPOS: remoteRepos.join(" "),
+      WORKSPACE_NAME: workspaceName,
+    };
+    if (paramValues) {
+      for (const [key, value] of Object.entries(paramValues)) {
+        env[key] = value;
+      }
+    }
+
+    let command: string[];
+    if (scriptPath) {
+      command = ["/bin/zsh", "-l", scriptPath];
+    } else if (script) {
+      command = ["/bin/zsh", "-l", "-c", script];
+    } else {
+      return null;
+    }
+
+    return { command, cwd: workspacePath, env };
+  }
+
   async runCustomScript(params: {
     repoPath: string;
     workspacePath: string;
@@ -543,46 +582,24 @@ export class WorkspaceManager {
     scriptPath?: string;
     paramValues?: Record<string, string>;
   }): Promise<{ runId: string }> {
-    const { repoPath, workspacePath, workspaceName, script, scriptPath, paramValues } = params;
     const runId = crypto.randomUUID();
 
-    // Build env vars
-    const remoteRepos = await this.getRemoteRepos(repoPath);
-    const env: Record<string, string> = {
-      ...process.env as Record<string, string>,
-      PATH: getResolvedPATH(),
-      REMOTE_REPOS: remoteRepos.join(" "),
-      WORKSPACE_NAME: workspaceName,
-    };
-
-    // Add user-defined parameter values as env vars
-    if (paramValues) {
-      for (const [key, value] of Object.entries(paramValues)) {
-        env[key] = value;
-      }
-    }
-
-    // Determine what to execute
-    let command: string[];
-    if (scriptPath) {
-      command = ["/bin/zsh", "-l", scriptPath];
-    } else if (script) {
-      command = ["/bin/zsh", "-l", "-c", script];
-    } else {
-      // Fire error immediately and return
+    const resolved = await this.resolveScriptLaunch(params);
+    if (!resolved) {
       setTimeout(() => {
         this.onScriptOutput?.(runId, "No script or scriptPath provided\n");
         this.onScriptExit?.(runId, 1);
       }, 0);
       return { runId };
     }
+    const { command, cwd, env } = resolved;
 
     // Spawn async — stream output, don't block the RPC response
     const self = this;
     (async () => {
       try {
         const proc = Bun.spawn(command, {
-          cwd: workspacePath,
+          cwd,
           stdout: "pipe",
           stderr: "pipe",
           env,

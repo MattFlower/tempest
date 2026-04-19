@@ -389,6 +389,8 @@ export interface ScriptParameter {
   displayName: string;  // human-readable label (e.g. "Branch Name")
 }
 
+export type ScriptRunMode = "modal" | "bottomPane";
+
 export interface CustomScript {
   id: string;
   name: string;
@@ -396,6 +398,7 @@ export interface CustomScript {
   scriptPath?: string;  // path to linked script file on disk
   parameters?: ScriptParameter[];
   showOutput?: boolean;
+  runMode?: ScriptRunMode; // defaults to "modal"
 }
 
 export interface RepoSettings {
@@ -404,6 +407,7 @@ export interface RepoSettings {
   customScripts?: CustomScript[];
   disablePackageScripts?: boolean;
   hiddenPackageScripts?: string[];
+  packageScriptRunMode?: Record<string, ScriptRunMode>;
 }
 
 // --- Assigned PRs ---

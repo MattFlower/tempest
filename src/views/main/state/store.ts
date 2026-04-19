@@ -9,6 +9,10 @@ import { create } from "zustand";
 import type { SourceRepo, TempestWorkspace, WorkspaceSidebarInfo, AppConfig } from "../models/workspace";
 import { type ActivityState, ViewMode, type DirEntry, type SidebarView, type VCSStatusResult } from "../../../shared/ipc-types";
 import type { PaneNode } from "../models/pane-node";
+import type { RunTab } from "../models/run-tab";
+
+export const DEFAULT_RUN_PANE_HEIGHT = 280;
+export const MIN_RUN_PANE_HEIGHT = 120;
 
 export interface CreateClaudeSettingsRequest {
   path: string;
@@ -48,6 +52,16 @@ export interface TempestStore {
   // --- Developer tools (eruda) — rendered as a bottom pane ---
   devtoolsVisible: boolean;
   setDevtoolsVisible: (visible: boolean) => void;
+
+  // --- Run pane (per workspace) ---
+  runPaneVisible: Record<string, boolean>;
+  runPaneHeight: Record<string, number>;
+  runPaneTabs: Record<string, RunTab[]>;
+  runPaneActiveTabId: Record<string, string | null>;
+  setRunPaneVisible: (workspacePath: string, visible: boolean) => void;
+  setRunPaneHeight: (workspacePath: string, height: number) => void;
+  setRunPaneTabs: (workspacePath: string, tabs: RunTab[]) => void;
+  setRunPaneActiveTabId: (workspacePath: string, tabId: string | null) => void;
 
   // --- UI state ---
   sidebarWidth: number;
@@ -167,6 +181,21 @@ export const useStore = create<TempestStore>((set) => ({
 
   devtoolsVisible: false,
   setDevtoolsVisible: (visible) => set({ devtoolsVisible: visible }),
+
+  runPaneVisible: {},
+  runPaneHeight: {},
+  runPaneTabs: {},
+  runPaneActiveTabId: {},
+  setRunPaneVisible: (workspacePath, visible) =>
+    set((s) => ({ runPaneVisible: { ...s.runPaneVisible, [workspacePath]: visible } })),
+  setRunPaneHeight: (workspacePath, height) => {
+    const clamped = Math.max(MIN_RUN_PANE_HEIGHT, Math.min(height, window.innerHeight * 0.7));
+    set((s) => ({ runPaneHeight: { ...s.runPaneHeight, [workspacePath]: clamped } }));
+  },
+  setRunPaneTabs: (workspacePath, tabs) =>
+    set((s) => ({ runPaneTabs: { ...s.runPaneTabs, [workspacePath]: tabs } })),
+  setRunPaneActiveTabId: (workspacePath, tabId) =>
+    set((s) => ({ runPaneActiveTabId: { ...s.runPaneActiveTabId, [workspacePath]: tabId } })),
 
   sidebarWidth: 240,
   sidebarVisible: true,
@@ -403,6 +432,22 @@ export const useStore = create<TempestStore>((set) => ({
       if (s.workspaceViewMode[oldPath]) {
         const { [oldPath]: mode, ...rest } = s.workspaceViewMode;
         result.workspaceViewMode = { ...rest, [newPath]: mode! };
+      }
+      if (s.runPaneVisible[oldPath] !== undefined) {
+        const { [oldPath]: v, ...rest } = s.runPaneVisible;
+        result.runPaneVisible = { ...rest, [newPath]: v! };
+      }
+      if (s.runPaneHeight[oldPath] !== undefined) {
+        const { [oldPath]: h, ...rest } = s.runPaneHeight;
+        result.runPaneHeight = { ...rest, [newPath]: h! };
+      }
+      if (s.runPaneTabs[oldPath]) {
+        const { [oldPath]: t, ...rest } = s.runPaneTabs;
+        result.runPaneTabs = { ...rest, [newPath]: t! };
+      }
+      if (s.runPaneActiveTabId[oldPath] !== undefined) {
+        const { [oldPath]: id, ...rest } = s.runPaneActiveTabId;
+        result.runPaneActiveTabId = { ...rest, [newPath]: id! };
       }
 
       return result;

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import type { CustomScript, ScriptParameter } from "../../../../shared/ipc-types";
+import type { CustomScript, ScriptParameter, ScriptRunMode } from "../../../../shared/ipc-types";
 import { api } from "../../state/rpc-client";
 import { onScriptRun } from "../../state/rpc-client";
 import { useOverlay } from "../../state/useOverlay";
@@ -12,9 +12,11 @@ interface Props {
   disablePackageScripts: boolean;
   packageScripts: Array<{ name: string; command: string }>;
   hiddenPackageScripts: string[];
+  packageScriptRunMode: Record<string, ScriptRunMode>;
   onChanged: (scripts: CustomScript[]) => void;
   onDisablePackageScriptsChanged: (disabled: boolean) => void;
   onHiddenPackageScriptsChanged: (hidden: string[]) => void;
+  onPackageScriptRunModeChanged: (modes: Record<string, ScriptRunMode>) => void;
   onDismiss: () => void;
 }
 
@@ -26,9 +28,11 @@ export function ScriptDialog({
   disablePackageScripts,
   packageScripts,
   hiddenPackageScripts,
+  packageScriptRunMode,
   onChanged,
   onDisablePackageScriptsChanged,
   onHiddenPackageScriptsChanged,
+  onPackageScriptRunModeChanged,
   onDismiss,
 }: Props) {
   useOverlay();
@@ -42,6 +46,7 @@ export function ScriptDialog({
   const [scriptPath, setScriptPath] = useState("");
   const [parameters, setParameters] = useState<ScriptParameter[]>([]);
   const [showOutput, setShowOutput] = useState(false);
+  const [runMode, setRunMode] = useState<ScriptRunMode>("modal");
   const [saving, setSaving] = useState(false);
 
   // Test run state
@@ -71,6 +76,15 @@ export function ScriptDialog({
     onChanged(updated);
   };
 
+  const persistPackageRunModes = async (modes: Record<string, ScriptRunMode>) => {
+    const settings = await api.getRepoSettings(repoPath);
+    await api.saveRepoSettings(repoPath, {
+      ...settings,
+      packageScriptRunMode: modes,
+    });
+    onPackageScriptRunModeChanged(modes);
+  };
+
   const persistHiddenScripts = async (hidden: string[]) => {
     const settings = await api.getRepoSettings(repoPath);
     await api.saveRepoSettings(repoPath, {
@@ -91,6 +105,7 @@ export function ScriptDialog({
     setMode("inline");
     setParameters([]);
     setShowOutput(false);
+    setRunMode("modal");
     setTestOutput("");
     setTestExitCode(null);
     setEditing(false);
@@ -105,6 +120,7 @@ export function ScriptDialog({
     setMode(cs.scriptPath ? "file" : "inline");
     setParameters(cs.parameters ?? []);
     setShowOutput(cs.showOutput ?? false);
+    setRunMode(cs.runMode ?? "modal");
     setTestOutput("");
     setTestExitCode(null);
     setEditing(true);
@@ -119,6 +135,7 @@ export function ScriptDialog({
       scriptPath: mode === "file" ? scriptPath : undefined,
       parameters: parameters.length > 0 ? parameters : undefined,
       showOutput,
+      runMode: runMode === "modal" ? undefined : runMode,
     };
 
     if (editingId) {
@@ -268,10 +285,12 @@ export function ScriptDialog({
             >
               {packageScripts.map((ps) => {
                 const isVisible = !hiddenPackageScripts.includes(ps.name);
+                const mode = packageScriptRunMode[ps.name] ?? "modal";
+                const inPane = mode === "bottomPane";
                 return (
-                  <label
+                  <div
                     key={ps.name}
-                    className="flex items-center gap-2 px-3 py-1 cursor-pointer hover:bg-[var(--ctp-surface1)] transition-colors"
+                    className="flex items-center gap-2 px-3 py-1 hover:bg-[var(--ctp-surface1)] transition-colors"
                   >
                     <input
                       type="checkbox"
@@ -282,7 +301,8 @@ export function ScriptDialog({
                           : hiddenPackageScripts.filter((n) => n !== ps.name);
                         persistHiddenScripts(updated);
                       }}
-                      className="accent-[var(--ctp-blue)] shrink-0"
+                      className="accent-[var(--ctp-blue)] shrink-0 cursor-pointer"
+                      title={isVisible ? "Hide from menu" : "Show in menu"}
                     />
                     <span className="text-xs font-semibold truncate" style={{ color: "var(--ctp-text)" }}>
                       {ps.name}
@@ -290,7 +310,28 @@ export function ScriptDialog({
                     <span className="text-[11px] font-mono truncate ml-auto" style={{ color: "var(--ctp-overlay0)" }}>
                       {ps.command}
                     </span>
-                  </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = { ...packageScriptRunMode };
+                        if (inPane) delete next[ps.name];
+                        else next[ps.name] = "bottomPane";
+                        persistPackageRunModes(next);
+                      }}
+                      className="text-[10px] px-1.5 py-0.5 rounded shrink-0 transition-colors"
+                      style={{
+                        backgroundColor: inPane ? "var(--ctp-green)" : "var(--ctp-surface1)",
+                        color: inPane ? "var(--ctp-base)" : "var(--ctp-subtext0)",
+                      }}
+                      title={
+                        inPane
+                          ? "Runs in the bottom Run pane. Click to switch to modal."
+                          : "Runs in a modal dialog. Click to switch to the Run pane."
+                      }
+                    >
+                      {inPane ? "Pane" : "Modal"}
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -523,6 +564,37 @@ export function ScriptDialog({
                 Show output when running
               </span>
             </label>
+
+            {/* Run mode selector */}
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] font-semibold" style={{ color: "var(--ctp-subtext0)" }}>
+                Run in
+              </span>
+              <div className="flex items-center gap-3 text-xs" style={{ color: "var(--ctp-text)" }}>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="runMode"
+                    value="modal"
+                    checked={runMode === "modal"}
+                    onChange={() => setRunMode("modal")}
+                    className="accent-[var(--ctp-blue)]"
+                  />
+                  <span>Modal dialog</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="runMode"
+                    value="bottomPane"
+                    checked={runMode === "bottomPane"}
+                    onChange={() => setRunMode("bottomPane")}
+                    className="accent-[var(--ctp-blue)]"
+                  />
+                  <span>Run pane (for long-running scripts)</span>
+                </label>
+              </div>
+            </div>
 
             {/* Test Run */}
             <div className="flex items-center gap-2">

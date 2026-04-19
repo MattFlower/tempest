@@ -13,6 +13,8 @@ import { UncommittedChangesDialog } from "../pr/UncommittedChangesDialog";
 import { ScriptDialog } from "./ScriptDialog";
 import { ScriptRunDialog } from "./ScriptRunDialog";
 import { editorIcons } from "./editor-icons";
+import type { ScriptRunMode } from "../../../../shared/ipc-types";
+import { spawnRunTab } from "../../state/run-pane-actions";
 
 interface WorkspaceToolbarProps {
   workspacePath: string;
@@ -69,9 +71,16 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
   const [showScriptDialog, setShowScriptDialog] = useState(false);
   const [customScripts, setCustomScripts] = useState<CustomScript[]>([]);
   const [runningScript, setRunningScript] = useState<CustomScript | null>(null);
+  /** When set, the next ScriptRunDialog opens in params-only mode and hands
+   *  its collected values to this callback instead of spawning the script
+   *  itself. Used to route to the Run pane after prompting for parameters. */
+  const [runningScriptHandoff, setRunningScriptHandoff] = useState<
+    ((values: Record<string, string>) => void) | null
+  >(null);
   const [packageScripts, setPackageScripts] = useState<Array<{ name: string; command: string }>>([]);
   const [disablePackageScripts, setDisablePackageScripts] = useState(false);
   const [hiddenPackageScripts, setHiddenPackageScripts] = useState<string[]>([]);
+  const [packageScriptRunMode, setPackageScriptRunMode] = useState<Record<string, ScriptRunMode>>({});
   const [installedEditors, setInstalledEditors] = useState<Array<{ id: string; name: string; category: "editor" | "terminal" | "file-manager" }>>([]);
 
   // Find workspace object to get name and status
@@ -93,10 +102,16 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
   // Load custom scripts and settings for this repo
   useEffect(() => {
     if (!workspace?.repoPath) return;
-    api.getRepoSettings(workspace.repoPath).then((settings: { customScripts?: CustomScript[]; disablePackageScripts?: boolean }) => {
+    api.getRepoSettings(workspace.repoPath).then((settings: {
+      customScripts?: CustomScript[];
+      disablePackageScripts?: boolean;
+      hiddenPackageScripts?: string[];
+      packageScriptRunMode?: Record<string, ScriptRunMode>;
+    }) => {
       setCustomScripts(settings.customScripts ?? []);
       setDisablePackageScripts(settings.disablePackageScripts ?? false);
       setHiddenPackageScripts(settings.hiddenPackageScripts ?? []);
+      setPackageScriptRunMode(settings.packageScriptRunMode ?? {});
     });
   }, [workspace?.repoPath]);
 
@@ -147,18 +162,69 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
     }
   }, [workspacePath, workspace?.repoPath]);
 
+  const spawnInRunPane = useCallback(
+    async (
+      source: { kind: "custom"; scriptId: string; paramValues?: Record<string, string> } | { kind: "package"; scriptName: string },
+      label: string,
+      script: string | undefined,
+      scriptPath: string | undefined,
+      paramValues: Record<string, string> | undefined,
+    ) => {
+      if (!workspace) return;
+      try {
+        const resolved = await api.resolveScriptLaunch({
+          repoPath: workspace.repoPath,
+          workspacePath,
+          workspaceName: workspace.name,
+          script,
+          scriptPath,
+          paramValues,
+        });
+        spawnRunTab(workspacePath, source, label, resolved.command, resolved.cwd, resolved.env);
+      } catch (err) {
+        console.error("Failed to launch script in Run pane:", err);
+      }
+    },
+    [workspace, workspacePath],
+  );
+
   const handleRunScript = useCallback(
     async (cs: CustomScript) => {
       if (!workspace) return;
       const hasParams = (cs.parameters?.length ?? 0) > 0;
+      const useRunPane = cs.runMode === "bottomPane";
 
-      // If the script has parameters or showOutput, open the run dialog
+      if (useRunPane) {
+        if (hasParams) {
+          // Collect params via the existing dialog in params-only mode, then
+          // hand them to the Run pane.
+          setRunningScript(cs);
+          setRunningScriptHandoff(() => (values: Record<string, string>) => {
+            spawnInRunPane(
+              { kind: "custom", scriptId: cs.id, paramValues: values },
+              cs.name,
+              cs.script || undefined,
+              cs.scriptPath || undefined,
+              values,
+            );
+          });
+        } else {
+          spawnInRunPane(
+            { kind: "custom", scriptId: cs.id },
+            cs.name,
+            cs.script || undefined,
+            cs.scriptPath || undefined,
+            undefined,
+          );
+        }
+        return;
+      }
+
+      // Modal path (existing behavior)
       if (hasParams || cs.showOutput) {
         setRunningScript(cs);
         return;
       }
-
-      // Otherwise fire-and-forget
       await api.runCustomScript({
         repoPath: workspace.repoPath,
         workspacePath: workspacePath,
@@ -167,12 +233,23 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
         scriptPath: cs.scriptPath || undefined,
       });
     },
-    [workspace, workspacePath],
+    [workspace, workspacePath, spawnInRunPane],
   );
 
   const handleRunPackageScript = useCallback(
     (ps: { name: string; command: string }) => {
       if (!workspace) return;
+      const mode = packageScriptRunMode[ps.name] ?? "modal";
+      if (mode === "bottomPane") {
+        spawnInRunPane(
+          { kind: "package", scriptName: ps.name },
+          ps.name,
+          ps.command,
+          undefined,
+          undefined,
+        );
+        return;
+      }
       setRunningScript({
         id: `pkg-${ps.name}`,
         name: ps.name,
@@ -180,8 +257,9 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
         showOutput: true,
       });
     },
-    [workspace],
+    [workspace, packageScriptRunMode, spawnInRunPane],
   );
+
 
   // Derive effective status (activity overrides workspace.status)
   let effectiveStatus = workspace?.status ?? WorkspaceStatus.Idle;
@@ -509,11 +587,13 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
           disablePackageScripts={disablePackageScripts}
           packageScripts={packageScripts}
           hiddenPackageScripts={hiddenPackageScripts}
+          packageScriptRunMode={packageScriptRunMode}
           onChanged={setCustomScripts}
           onDisablePackageScriptsChanged={(disabled) => {
             setDisablePackageScripts(disabled);
           }}
           onHiddenPackageScriptsChanged={setHiddenPackageScripts}
+          onPackageScriptRunModeChanged={setPackageScriptRunMode}
           onDismiss={() => setShowScriptDialog(false)}
         />
       )}
@@ -524,7 +604,11 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
           repoPath={workspace.repoPath}
           workspacePath={workspacePath}
           workspaceName={workspace.name}
-          onDismiss={() => setRunningScript(null)}
+          onDismiss={() => {
+            setRunningScript(null);
+            setRunningScriptHandoff(null);
+          }}
+          onParamsSubmit={runningScriptHandoff ?? undefined}
         />
       )}
 

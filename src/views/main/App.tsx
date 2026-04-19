@@ -10,6 +10,7 @@ import { ProgressView } from "./components/progress/ProgressView";
 import { OnboardingDialog } from "./components/onboarding/OnboardingDialog";
 import { SettingsDialog } from "./components/settings/SettingsDialog";
 import { UsageFooter } from "./components/usage/UsageFooter";
+import { RunPane } from "./components/runpane/RunPane";
 import { api } from "./state/rpc-client";
 import { fromNodeState } from "./models/pane-node";
 import type { ActivityState, AppConfig } from "../../shared/ipc-types";
@@ -244,34 +245,43 @@ export function App() {
           )}
 
           {/* Workspace Detail — all visited workspaces rendered simultaneously,
-              hidden with opacity pattern to preserve terminal state. */}
+              hidden with opacity pattern to preserve terminal state.
+              Column is split vertically: workspace views fill the top area,
+              the Run pane docks under them (spanning only the main content
+              width, not the sidebar). */}
           <div className="flex-1 min-w-0 flex flex-col relative">
-            {/* Workspace views — stacked, only selected is visible.
-                Includes selected workspace (even if no tree yet) plus all
-                previously visited workspaces (to keep their terminals alive). */}
-            {allWorkspacePaths.map((wsPath) => (
-              <div
-                key={wsPath}
-                className={`absolute inset-0 ${
-                  wsPath === selectedWorkspacePath
-                    ? "opacity-100"
-                    : "opacity-0 pointer-events-none"
-                }`}
-              >
-                <WorkspaceDetail workspacePath={wsPath} />
-              </div>
-            ))}
+            <div className="flex-1 min-h-0 relative">
+              {/* Workspace views — stacked, only selected is visible.
+                  Includes selected workspace (even if no tree yet) plus all
+                  previously visited workspaces (to keep their terminals alive). */}
+              {allWorkspacePaths.map((wsPath) => (
+                <div
+                  key={wsPath}
+                  className={`absolute inset-0 ${
+                    wsPath === selectedWorkspacePath
+                      ? "opacity-100"
+                      : "opacity-0 pointer-events-none"
+                  }`}
+                >
+                  <WorkspaceDetail workspacePath={wsPath} />
+                </div>
+              ))}
 
-            {/* Empty state — shown when no workspace selected */}
-            {!selectedWorkspacePath && (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--ctp-overlay0)]">
-                <svg className="w-10 h-10" viewBox="0 0 24 24" fill="currentColor" opacity={0.3}>
-                  <path d="M4 17.27V4h16v13.27l-2-1.15-2 1.15-2-1.15-2 1.15-2-1.15-2 1.15-2-1.15-2 1.15ZM2 2v18l4-2.3 2 1.15 2-1.15 2 1.15 2-1.15 2 1.15 2-1.15L22 20V2H2Z" />
-                </svg>
-                <span className="text-sm">No Workspace Selected</span>
-                <span className="text-xs">Select a workspace from the sidebar or create a new one.</span>
-              </div>
-            )}
+              {/* Empty state — shown when no workspace selected */}
+              {!selectedWorkspacePath && (
+                <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--ctp-overlay0)]">
+                  <svg className="w-10 h-10" viewBox="0 0 24 24" fill="currentColor" opacity={0.3}>
+                    <path d="M4 17.27V4h16v13.27l-2-1.15-2 1.15-2-1.15-2 1.15-2-1.15-2 1.15-2-1.15-2 1.15ZM2 2v18l4-2.3 2 1.15 2-1.15 2 1.15 2-1.15 2 1.15 2-1.15L22 20V2H2Z" />
+                  </svg>
+                  <span className="text-sm">No Workspace Selected</span>
+                  <span className="text-xs">Select a workspace from the sidebar or create a new one.</span>
+                </div>
+              )}
+            </div>
+
+            {/* Run pane — stays mounted even when hidden so the PTYs running
+                inside it aren't killed on collapse. */}
+            {selectedWorkspacePath && <RunPane workspacePath={selectedWorkspacePath} />}
           </div>
         </div>
 

@@ -227,6 +227,24 @@ export interface BunRequests {
     };
     response: { runId: string };
   };
+  /** Resolve the command, cwd, and env for a script without spawning. Used
+   *  by the Run pane to hand the launch off to the shared PTY
+   *  infrastructure instead of the pipe-based runCustomScript path. */
+  resolveScriptLaunch: {
+    params: {
+      repoPath: string;
+      workspacePath: string;
+      workspaceName: string;
+      script?: string;
+      scriptPath?: string;
+      paramValues?: Record<string, string>;
+    };
+    response: {
+      command: string[];
+      cwd: string;
+      env: Record<string, string>;
+    };
+  };
   getPackageScripts: {
     params: { workspacePath: string };
     response: { scripts: Array<{ name: string; command: string }> };

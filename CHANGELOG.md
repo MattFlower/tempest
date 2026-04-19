@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Find-in-page in the Markdown viewer. ⌘F opens an inline find bar; matches are highlighted in the rendered document with the current hit centered in view. Enter / Shift+Enter cycle through results, Escape closes. The search re-runs automatically after the file is reloaded on disk. Cmd+F works whether focus is on the pane chrome or inside the rendered iframe.
 - Keybindings editor in Settings. All existing shortcuts now flow through a central command registry and global dispatcher, and every binding is reassignable, resettable, or can be unbound. Supports chord sequences (e.g. ⌘K ⌘S) and warns before overriding an already-bound keystroke.
 - Run pane — a dockable bottom pane for long-running custom / package scripts. Each script can now be configured to run in the Run pane (PTY-backed, like a terminal) instead of the blocking modal dialog. Multiple scripts run as tabs in the pane with per-tab Restart and Stop controls. A new toggle icon at the bottom of the left activity bar shows / hides the pane; its visibility and height are persisted per workspace. Configure per-script run mode in Manage Scripts: the package scripts list now has a Modal/Pane toggle per entry, and custom scripts get a "Run in" radio selector in their editor.
 

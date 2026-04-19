@@ -11,13 +11,15 @@ import { addTab } from "../../state/actions";
 import { api, onMarkdownFileChanged } from "../../state/rpc-client";
 import { useStore } from "../../state/store";
 import { askClaudeAboutSelection } from "../../state/actions";
+import { MarkdownFindBar } from "./MarkdownFindBar";
 
 interface MarkdownViewerProps {
   filePath?: string;
   paneId?: string;
+  isFocused?: boolean;
 }
 
-export function MarkdownViewer({ filePath, paneId }: MarkdownViewerProps) {
+export function MarkdownViewer({ filePath, paneId, isFocused }: MarkdownViewerProps) {
   const [content, setContent] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +40,30 @@ export function MarkdownViewer({ filePath, paneId }: MarkdownViewerProps) {
     sourceLine: number | null;
   } | null>(null);
 
+  // Find-in-page state. The actual match walking happens inside the iframe
+  // (see markdown-html-builder.ts); we only hold the UI state and drive it
+  // via postMessage.
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [findTotal, setFindTotal] = useState(0);
+  const [findIndex, setFindIndex] = useState(-1);
+
+  const postToIframe = useCallback((msg: Record<string, unknown>) => {
+    try {
+      iframeRef.current?.contentWindow?.postMessage(msg, "*");
+    } catch {
+      // Cross-origin post failures are non-fatal.
+    }
+  }, []);
+
+  const closeFind = useCallback(() => {
+    setFindOpen(false);
+    setFindQuery("");
+    setFindTotal(0);
+    setFindIndex(-1);
+    postToIframe({ type: "find-clear" });
+  }, [postToIframe]);
+
   /** Save the current scroll position from the iframe */
   const saveScrollPosition = useCallback(() => {
     try {
@@ -50,7 +76,8 @@ export function MarkdownViewer({ filePath, paneId }: MarkdownViewerProps) {
     }
   }, []);
 
-  /** Restore saved scroll position in the iframe after it reloads */
+  /** Restore saved scroll position in the iframe after it reloads, and
+   *  re-apply any active find query (the new document has no marks yet). */
   const handleIframeLoad = useCallback(() => {
     const scrollY = savedScrollRef.current;
     if (scrollY > 0) {
@@ -63,7 +90,17 @@ export function MarkdownViewer({ filePath, paneId }: MarkdownViewerProps) {
         }
       }, 100);
     }
-  }, []);
+    if (findOpen && findQuery) {
+      try {
+        iframeRef.current?.contentWindow?.postMessage(
+          { type: "find-search", query: findQuery },
+          "*",
+        );
+      } catch {
+        // Cross-origin post failures are non-fatal.
+      }
+    }
+  }, [findOpen, findQuery]);
 
   // Load the file content with a timeout to avoid hanging forever
   const loadFile = useCallback(async () => {
@@ -119,25 +156,59 @@ export function MarkdownViewer({ filePath, paneId }: MarkdownViewerProps) {
     };
   }, [filePath, loadFile]);
 
-  // Listen for annotation (text selection) messages from the iframe
+  // Listen for messages from the iframe: text-selection annotations, find
+  // keybinding relays (sandboxed iframe key events don't bubble to us), and
+  // find-result updates after each search/navigation command.
   useEffect(() => {
     const handler = (event: MessageEvent) => {
-      if (event.data?.type === "annotation" && typeof event.data.text === "string") {
+      const data = event.data;
+      if (!data || typeof data !== "object") return;
+
+      if (data.type === "annotation" && typeof data.text === "string") {
         setAnnotation({
-          text: event.data.text,
-          x: event.data.x,
-          y: event.data.y,
-          width: event.data.width,
-          height: event.data.height,
-          sourceLine: event.data.sourceLine ?? null,
+          text: data.text,
+          x: data.x,
+          y: data.y,
+          width: data.width,
+          height: data.height,
+          sourceLine: data.sourceLine ?? null,
         });
-      } else if (event.data?.type === "annotation-clear") {
+      } else if (data.type === "annotation-clear") {
         setAnnotation(null);
+      } else if (data.type === "find-open") {
+        if (isFocused !== false) setFindOpen(true);
+      } else if (data.type === "find-escape") {
+        if (findOpen) closeFind();
+      } else if (data.type === "find-result") {
+        setFindTotal(typeof data.total === "number" ? data.total : 0);
+        setFindIndex(typeof data.index === "number" ? data.index : -1);
       }
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, []);
+  }, [isFocused, findOpen, closeFind]);
+
+  // Cmd+F on the host window opens the find bar when this viewer is focused.
+  // Iframe-originated Cmd+F comes through the message handler above.
+  useEffect(() => {
+    if (isFocused === false) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "f" || e.key === "F")) {
+        e.preventDefault();
+        setFindOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isFocused]);
+
+  // Re-run the active search whenever the query changes. Re-application after
+  // a file reload is handled in handleIframeLoad, since the new document's
+  // script needs to be parsed before it can receive messages.
+  useEffect(() => {
+    if (!findOpen) return;
+    postToIframe({ type: "find-search", query: findQuery });
+  }, [findOpen, findQuery, postToIframe]);
 
   const handleAskClaude = useCallback(() => {
     if (annotation && filePath) {
@@ -326,6 +397,17 @@ export function MarkdownViewer({ filePath, paneId }: MarkdownViewerProps) {
           title={`Markdown: ${fileName}`}
           onLoad={handleIframeLoad}
         />
+        {findOpen && (
+          <MarkdownFindBar
+            query={findQuery}
+            total={findTotal}
+            index={findIndex}
+            onQueryChange={setFindQuery}
+            onNext={() => postToIframe({ type: "find-next" })}
+            onPrevious={() => postToIframe({ type: "find-prev" })}
+            onClose={closeFind}
+          />
+        )}
         {annotation && (
           <button
             className="absolute z-50 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium shadow-lg transition-opacity hover:opacity-90"

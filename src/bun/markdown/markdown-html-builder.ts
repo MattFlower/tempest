@@ -274,6 +274,19 @@ strong { font-weight: 650; color: var(--heading-1); }
 
 /* ── First heading special case ── */
 body > h1:first-child { margin-top: 0.2em; }
+
+/* ── Find-in-page highlights ── */
+mark.__fim-match {
+  background: color-mix(in srgb, var(--accent-2) 55%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+mark.__fim-match.__fim-current {
+  background: var(--accent-2);
+  color: #1a1a1a;
+  box-shadow: 0 0 0 1px var(--accent-1);
+}
 </style>
 </head>
 <body>
@@ -308,6 +321,133 @@ document.addEventListener('mouseup', function() {
     window.parent.postMessage({ type: 'annotation-clear' }, '*');
   }
 });
+</script>
+<script>
+(function() {
+  // Find-in-page: walks visible text nodes, wraps matches in <mark>, tracks a
+  // current index. Controlled from the parent window via postMessage.
+  var matches = [];
+  var currentIndex = -1;
+
+  function clearMatches() {
+    for (var i = 0; i < matches.length; i++) {
+      var m = matches[i];
+      var parent = m.parentNode;
+      if (!parent) continue;
+      while (m.firstChild) parent.insertBefore(m.firstChild, m);
+      parent.removeChild(m);
+      parent.normalize();
+    }
+    matches = [];
+    currentIndex = -1;
+  }
+
+  function findMatches(query, caseSensitive) {
+    clearMatches();
+    if (!query) return;
+    var flags = caseSensitive ? 'g' : 'gi';
+    var escaped = query.replace(/[.*+?^\${}()|[\]\\]/g, '\\$&');
+    var re = new RegExp(escaped, flags);
+
+    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+      acceptNode: function(node) {
+        if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+        var p = node.parentNode;
+        while (p && p !== document.body) {
+          var tag = p.nodeName;
+          if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT') {
+            return NodeFilter.FILTER_REJECT;
+          }
+          p = p.parentNode;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+
+    var textNodes = [];
+    var n;
+    while ((n = walker.nextNode())) textNodes.push(n);
+
+    for (var i = 0; i < textNodes.length; i++) {
+      var node = textNodes[i];
+      var text = node.nodeValue;
+      re.lastIndex = 0;
+      var hits = [];
+      var match;
+      while ((match = re.exec(text)) !== null) {
+        hits.push({ start: match.index, end: match.index + match[0].length });
+        if (match[0].length === 0) re.lastIndex++;
+      }
+      if (hits.length === 0) continue;
+
+      var parent = node.parentNode;
+      var frag = document.createDocumentFragment();
+      var cursor = 0;
+      for (var j = 0; j < hits.length; j++) {
+        var h = hits[j];
+        if (h.start > cursor) frag.appendChild(document.createTextNode(text.slice(cursor, h.start)));
+        var mark = document.createElement('mark');
+        mark.className = '__fim-match';
+        mark.textContent = text.slice(h.start, h.end);
+        frag.appendChild(mark);
+        matches.push(mark);
+        cursor = h.end;
+      }
+      if (cursor < text.length) frag.appendChild(document.createTextNode(text.slice(cursor)));
+      parent.replaceChild(frag, node);
+    }
+  }
+
+  function setCurrent(index) {
+    if (matches.length === 0) { currentIndex = -1; return; }
+    var prev = matches[currentIndex];
+    if (prev) prev.classList.remove('__fim-current');
+    currentIndex = ((index % matches.length) + matches.length) % matches.length;
+    var el = matches[currentIndex];
+    el.classList.add('__fim-current');
+    // scrollIntoView with block:'center' keeps the match in a comfortable spot
+    // even when searching backwards from the bottom of the page.
+    el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
+  }
+
+  function report() {
+    window.parent.postMessage({
+      type: 'find-result',
+      total: matches.length,
+      index: currentIndex
+    }, '*');
+  }
+
+  window.addEventListener('message', function(ev) {
+    var data = ev.data;
+    if (!data || typeof data !== 'object') return;
+    if (data.type === 'find-search') {
+      findMatches(String(data.query || ''), !!data.caseSensitive);
+      if (matches.length > 0) setCurrent(0);
+      report();
+    } else if (data.type === 'find-next') {
+      if (matches.length > 0) setCurrent(currentIndex + 1);
+      report();
+    } else if (data.type === 'find-prev') {
+      if (matches.length > 0) setCurrent(currentIndex - 1);
+      report();
+    } else if (data.type === 'find-clear') {
+      clearMatches();
+      report();
+    }
+  });
+
+  // Forward Cmd/Ctrl+F from inside the iframe up to the parent, since
+  // keyboard events in a sandboxed iframe don't bubble to the host window.
+  document.addEventListener('keydown', function(e) {
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'F')) {
+      e.preventDefault();
+      window.parent.postMessage({ type: 'find-open' }, '*');
+    } else if (e.key === 'Escape') {
+      window.parent.postMessage({ type: 'find-escape' }, '*');
+    }
+  });
+})();
 </script>
 </body>
 </html>`;

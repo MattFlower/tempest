@@ -71,7 +71,7 @@ function TabContent({ tab, paneId, isFocused, isVisible, workspacePath }: { tab:
     case PaneTabKind.HistoryViewer:
       return <HistoryViewer />;
     case PaneTabKind.MarkdownViewer:
-      return <MarkdownViewer filePath={tab.markdownFilePath} paneId={paneId} />;
+      return <MarkdownViewer filePath={tab.markdownFilePath} paneId={paneId} isFocused={isFocused} />;
     case PaneTabKind.PRDashboard:
       return <PRDashboard />;
     case PaneTabKind.Editor:

@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Files sidebar workspace indicators now match the Workspaces sidebar. The workspace branch icon is colored by trunk alignment (green/yellow/red/gray), and a Claude activity dot appears next to the workspace name (green while working, red for needs input, dim gray when idle). The focused workspace is indicated by a green expand/collapse chevron instead of a trailing green dot. Changed files are shown with a blue label, replacing the workspace-level yellow roll-up dot. In JJ (Jujutsu) workspaces, "changed files" means files in the current `@` change (i.e. the `jj status` list) rather than Git-style uncommitted edits.
+
 ### Removed
 
 ## [0.15.0] - 2026-04-18

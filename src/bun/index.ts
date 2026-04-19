@@ -5,6 +5,7 @@
 // ============================================================
 
 import { mkdirSync, readFileSync, watch, type FSWatcher } from "node:fs";
+import { VCSType } from "../shared/ipc-types";
 import { readdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { homedir, networkInterfaces } from "node:os";
@@ -1041,6 +1042,23 @@ const rpc: any = (BrowserView.defineRPC as any)({
 
       // --- VCS Commit View ---
       getVCSStatus: async (params: any) => {
+        // For JJ, "changed" means files in the current @ change (what
+        // `jj status` reports). JJ tracks every edit as part of the working-
+        // copy change, so Git-style uncommitted-vs-committed doesn't apply.
+        const ws = workspaceManager.findWorkspaceByPath(params.workspacePath);
+        if (ws && workspaceManager.getVCSType(ws.repoPath) === VCSType.JJ) {
+          const changedFiles = await jjGetChangedFiles(params.workspacePath, "@");
+          return {
+            branch: "",
+            ahead: 0,
+            behind: 0,
+            files: changedFiles.map((f) => ({
+              path: f.path,
+              changeType: f.changeType,
+              staged: false,
+            })),
+          };
+        }
         return await getVCSStatus(params.workspacePath);
       },
       vcsStageFiles: async (params: any) => {

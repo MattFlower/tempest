@@ -1,4 +1,10 @@
 import type { ReactNode } from "react";
+import { BranchHealthStatus } from "../../../../shared/ipc-types";
+import {
+  BRANCH_HEALTH_NEUTRAL,
+  branchHealthColor,
+  branchHealthTooltip,
+} from "./workspaceIndicators";
 
 /** Custom MIME type for file rows dragged out of the tree. The payload is a
  *  JSON object of shape { workspacePath: string, filePath: string } so
@@ -39,9 +45,12 @@ export interface TreeNode {
   /** One-letter VCS change indicator — M/A/D/R/U (modified/added/deleted/
    *  renamed-or-copied/untracked). Omitted when the file is unchanged. */
   vcsBadge?: "M" | "A" | "D" | "R" | "U";
-  /** True for workspace-level nodes when any file inside has changes
-   *  (roll-up indicator). */
-  hasVcsChanges?: boolean;
+  /** Trunk alignment for a workspace row — drives the branch icon color. */
+  branchHealth?: BranchHealthStatus;
+  /** Dot color for Claude activity on a workspace row. */
+  claudeDotColor?: string;
+  /** When true, the Claude activity dot is rendered dimmed (idle state). */
+  claudeDotIdle?: boolean;
 }
 
 interface Props {
@@ -58,13 +67,13 @@ interface Props {
   onDragEnd?: () => void;
 }
 
-function Chevron({ hidden, expanded }: { hidden: boolean; expanded: boolean }) {
+function Chevron({ hidden, expanded, color }: { hidden: boolean; expanded: boolean; color?: string }) {
   return (
     <span
       aria-hidden
       className="flex-shrink-0 w-3 flex items-center justify-center"
       style={{
-        color: "var(--ctp-overlay0)",
+        color: color ?? "var(--ctp-overlay0)",
         visibility: hidden ? "hidden" : "visible",
       }}
     >
@@ -95,14 +104,18 @@ function NodeIcon({ node }: { node: TreeNode }) {
           </svg>
         </span>
       );
-    case "workspace":
+    case "workspace": {
+      const iconColor = node.branchHealth ? branchHealthColor[node.branchHealth] : BRANCH_HEALTH_NEUTRAL;
+      const tooltip = node.branchHealth ? branchHealthTooltip[node.branchHealth] : "";
       return (
-        <span className={base} style={{ color: "var(--ctp-teal)" }}>
+        <span className={base} style={{ color: iconColor }}>
           <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+            <title>{tooltip}</title>
             <path d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.49 2.49 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25zM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5zM3.5 3.25a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zm8 0a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0z" />
           </svg>
         </span>
       );
+    }
     case "dir":
       return (
         <span className={base} style={{ color: "var(--ctp-yellow)" }}>
@@ -226,9 +239,18 @@ export function FileTreeNode({
           style={{ backgroundColor: "var(--ctp-blue)" }}
         />
       )}
-      <Chevron hidden={!node.expandable} expanded={node.isExpanded} />
+      <Chevron
+        hidden={!node.expandable}
+        expanded={node.isExpanded}
+        color={node.kind === "workspace" && node.isFocusedWorkspace ? "var(--ctp-green)" : undefined}
+      />
       <NodeIcon node={node} />
-      <span className="truncate">{node.label}</span>
+      <span
+        className="truncate"
+        style={node.kind === "file" && node.vcsBadge ? { color: "var(--ctp-blue)" } : undefined}
+      >
+        {node.label}
+      </span>
       {trailing}
       {node.vcsBadge && (
         <span
@@ -239,19 +261,11 @@ export function FileTreeNode({
           {node.vcsBadge}
         </span>
       )}
-      {node.hasVcsChanges && !node.vcsBadge && (
-        <span
-          aria-label="Has changes"
-          aria-hidden
-          className="ml-1 flex-shrink-0 w-1.5 h-1.5 rounded-full"
-          style={{ backgroundColor: "var(--ctp-yellow)" }}
-        />
-      )}
-      {node.isFocusedWorkspace && (
+      {node.kind === "workspace" && node.claudeDotColor && (
         <span
           aria-hidden
           className="ml-1 flex-shrink-0 w-1.5 h-1.5 rounded-full"
-          style={{ backgroundColor: "var(--ctp-green)" }}
+          style={{ backgroundColor: node.claudeDotColor, opacity: node.claudeDotIdle ? 0.3 : 1 }}
         />
       )}
     </div>

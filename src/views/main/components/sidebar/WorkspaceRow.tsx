@@ -1,8 +1,15 @@
 import { useState } from "react";
 import type { TempestWorkspace, WorkspaceSidebarInfo, DiffStats } from "../../../../shared/ipc-types";
-import { WorkspaceStatus, ActivityState, BranchHealthStatus } from "../../../../shared/ipc-types";
+import { WorkspaceStatus } from "../../../../shared/ipc-types";
 import { useStore } from "../../state/store";
 import { OverlayWrapper } from "../../state/useOverlay";
+import {
+  BRANCH_HEALTH_NEUTRAL,
+  branchHealthColor,
+  branchHealthTooltip,
+  effectiveWorkspaceStatus,
+  statusDotColor,
+} from "./workspaceIndicators";
 
 interface Props {
   workspace: TempestWorkspace;
@@ -14,26 +21,6 @@ interface Props {
   onRename: () => void;
   onRefreshDiffStats: () => void;
 }
-
-const statusDotColor: Record<string, string> = {
-  [WorkspaceStatus.Working]: "var(--ctp-green)",
-  [WorkspaceStatus.NeedsInput]: "var(--ctp-red)",
-  [WorkspaceStatus.Exited]: "var(--ctp-yellow)",
-  [WorkspaceStatus.Error]: "var(--ctp-red)",
-  [WorkspaceStatus.Idle]: "var(--ctp-overlay0)",
-};
-
-const branchHealthColor: Record<string, string> = {
-  [BranchHealthStatus.Ok]: "var(--ctp-green)",
-  [BranchHealthStatus.NeedsRebase]: "var(--ctp-yellow)",
-  [BranchHealthStatus.HasConflicts]: "var(--ctp-red)",
-};
-
-const branchHealthTooltip: Record<string, string> = {
-  [BranchHealthStatus.Ok]: "Up to date with trunk",
-  [BranchHealthStatus.NeedsRebase]: "Branch needs rebase onto trunk",
-  [BranchHealthStatus.HasConflicts]: "Branch has conflicts",
-};
 
 function statusLabel(workspace: TempestWorkspace): string {
   switch (workspace.status) {
@@ -69,11 +56,7 @@ export function WorkspaceRow({ workspace, sidebarInfo, isSelected, onSelect, onA
 
   // Hook-driven activity state overrides the workspace status for display
   const activity = useStore((s) => s.workspaceActivity[workspace.path]);
-
-  let effectiveStatus = workspace.status;
-  if (activity === ActivityState.Working) effectiveStatus = WorkspaceStatus.Working;
-  else if (activity === ActivityState.NeedsInput) effectiveStatus = WorkspaceStatus.NeedsInput;
-  else if (activity === ActivityState.Idle) effectiveStatus = WorkspaceStatus.Idle;
+  const effectiveStatus = effectiveWorkspaceStatus(workspace.status, activity);
 
   const dotColor = statusDotColor[effectiveStatus] ?? "var(--ctp-overlay0)";
   const isIdle = effectiveStatus === WorkspaceStatus.Idle;
@@ -132,7 +115,7 @@ export function WorkspaceRow({ workspace, sidebarInfo, isSelected, onSelect, onA
       <div className="flex items-center gap-1.5 min-w-0">
         <svg
           className="w-3.5 h-3.5 flex-shrink-0"
-          style={{ color: sidebarInfo?.branchHealth ? branchHealthColor[sidebarInfo.branchHealth] : "var(--ctp-overlay1)" }}
+          style={{ color: sidebarInfo?.branchHealth ? branchHealthColor[sidebarInfo.branchHealth] : BRANCH_HEALTH_NEUTRAL }}
           viewBox="0 0 16 16"
           fill="none"
           stroke="currentColor"

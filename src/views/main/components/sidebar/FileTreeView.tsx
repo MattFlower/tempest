@@ -11,6 +11,8 @@ import { allPanes, findPane } from "../../models/pane-node";
 import { OverlayWrapper } from "../../state/useOverlay";
 import { fuzzyMatch } from "../palette/fuzzy-match";
 import { FileTreeNode, FILE_TREE_DRAG_MIME, type FileTreeDragData, type TreeNode } from "./FileTreeNode";
+import { effectiveWorkspaceStatus, statusDotColor } from "./workspaceIndicators";
+import { WorkspaceStatus } from "../../../../shared/ipc-types";
 
 function fileExtKey(name: string): string | undefined {
   const dot = name.lastIndexOf(".");
@@ -40,6 +42,8 @@ export function FileTreeView() {
   const setShowHidden = useStore((s) => s.setFileTreeShowHidden);
   const vcsStatusMap = useStore((s) => s.fileTreeVcsStatus);
   const setFileTreeVcsStatus = useStore((s) => s.setFileTreeVcsStatus);
+  const sidebarInfoMap = useStore((s) => s.sidebarInfo);
+  const workspaceActivity = useStore((s) => s.workspaceActivity);
 
   // Local (ephemeral) filter input — not persisted. Empty string = no filter.
   const [filterQuery, setFilterQuery] = useState("");
@@ -231,15 +235,6 @@ export function FileTreeView() {
     return result;
   }, [vcsStatusMap]);
 
-  // Per-workspace "has any changes" flag for workspace-row roll-up dots.
-  const workspaceHasChanges = useMemo<Record<string, true>>(() => {
-    const result: Record<string, true> = {};
-    for (const [wsPath, status] of Object.entries(vcsStatusMap)) {
-      if (status?.files && status.files.length > 0) result[wsPath] = true;
-    }
-    return result;
-  }, [vcsStatusMap]);
-
   // Currently focused file path — derived from the focused workspace's
   // focused pane's selected tab. Used to highlight the matching row in the tree.
   const activeFilePath = useMemo<string | null>(() => {
@@ -281,6 +276,7 @@ export function FileTreeView() {
       const workspaces = [...(workspacesByRepo[repo.id] ?? [])].sort(wsSort);
       for (const ws of workspaces) {
         const wsExpanded = !!expandedWorkspaces[ws.path];
+        const effectiveStatus = effectiveWorkspaceStatus(ws.status, workspaceActivity[ws.path]);
         out.push({
           id: `workspace:${ws.path}`,
           kind: "workspace",
@@ -291,7 +287,9 @@ export function FileTreeView() {
           workspacePath: ws.path,
           repoId: repo.id,
           isFocusedWorkspace: ws.path === selectedWorkspacePath,
-          hasVcsChanges: !!workspaceHasChanges[ws.path],
+          branchHealth: sidebarInfoMap[ws.path]?.branchHealth,
+          claudeDotColor: statusDotColor[effectiveStatus] ?? "var(--ctp-overlay0)",
+          claudeDotIdle: effectiveStatus === WorkspaceStatus.Idle,
         });
 
         if (!wsExpanded) continue;
@@ -395,7 +393,8 @@ export function FileTreeView() {
     selectedWorkspacePath,
     activeFilePath,
     vcsBadgeByPath,
-    workspaceHasChanges,
+    sidebarInfoMap,
+    workspaceActivity,
   ]);
 
   // Apply the filter box: keep only rows whose label fuzzy-matches the query,

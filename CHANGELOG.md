@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+### Fixed
+
+### Changed
+
+### Removed
+
+## [0.15.0] - 2026-04-18
+
 ### Changed
 
 - Toggle Developer Tools (⌘⌥I) now docks eruda as a 50vh bottom pane instead of a floating overlay.

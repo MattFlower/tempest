@@ -56,7 +56,7 @@ export interface TempestStore {
   commandPaletteVisible: boolean;
   commandPaletteInitialMode: "commands" | "files";
   settingsDialogVisible: boolean;
-  settingsDialogInitialTab: "general" | "remote" | "tools" | "appearance";
+  settingsDialogInitialTab: "general" | "remote" | "tools" | "appearance" | "keybindings";
   cloneRepoDialogVisible: boolean;
   createClaudeSettingsRequest: CreateClaudeSettingsRequest | null;
   httpServerRunning: boolean;
@@ -128,7 +128,7 @@ export interface TempestStore {
   toggleCommandPalette: () => void;
   openCommandPaletteFiles: () => void;
   toggleSettingsDialog: () => void;
-  openSettingsTab: (tab: "general" | "remote" | "tools" | "appearance") => void;
+  openSettingsTab: (tab: "general" | "remote" | "tools" | "appearance" | "keybindings") => void;
   showCloneRepoDialog: () => void;
   hideCloneRepoDialog: () => void;
   showCreateClaudeSettingsDialog: (req: CreateClaudeSettingsRequest) => void;

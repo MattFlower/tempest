@@ -28,6 +28,22 @@ function isMcpToolConfig(value: unknown): value is McpToolConfig {
   return typeof value.showWebpage === "boolean";
 }
 
+function normalizeKeybindings(value: unknown): Record<string, string | null> | undefined {
+  if (!isRecord(value)) return undefined;
+  const out: Record<string, string | null> = {};
+  for (const [id, stroke] of Object.entries(value)) {
+    if (typeof id !== "string" || id.length === 0) continue;
+    if (stroke === null) {
+      out[id] = null;
+    } else if (typeof stroke === "string" && stroke.trim().length > 0) {
+      // Lightweight shape check — authoritative parsing lives in the UI's keystroke module.
+      // Reject anything that isn't space-separated chords of printable chars.
+      if (/^[a-z0-9+\-\[\]\\=`',./;? ]+$/i.test(stroke)) out[id] = stroke;
+    }
+  }
+  return out;
+}
+
 export function normalizeConfig(raw: unknown): AppConfig {
   const defaults = defaultConfig();
   if (!isRecord(raw)) return defaults;
@@ -77,6 +93,9 @@ export function normalizeConfig(raw: unknown): AppConfig {
   if (isMcpToolConfig(raw.mcpTools)) {
     normalized.mcpTools = raw.mcpTools;
   }
+
+  const kb = normalizeKeybindings(raw.keybindings);
+  if (kb) normalized.keybindings = kb;
 
   return normalized;
 }

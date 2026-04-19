@@ -15,6 +15,8 @@ import { fromNodeState } from "./models/pane-node";
 import type { ActivityState, AppConfig } from "../../shared/ipc-types";
 import { applyTheme } from "./state/theme";
 import { mountDevTools } from "./state/devtools";
+import { installKeybindingDispatcher, subscribePendingChord } from "./keybindings/dispatcher";
+import { formatKeystroke } from "./keybindings/keystroke";
 
 const MIN_SIDEBAR_WIDTH = 180;
 const MAX_SIDEBAR_WIDTH = 400;
@@ -136,17 +138,12 @@ export function App() {
     };
   }, []);
 
-  // Cmd+5 toggles Progress view
+  // Install the global keybinding dispatcher once. Bindings come from the
+  // command registry (src/views/main/commands/registry.ts) overlaid with
+  // user overrides from config.keybindings — the dispatcher hot-reloads when
+  // those overrides change.
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.metaKey && !e.shiftKey && !e.altKey && e.key === "5") {
-        e.preventDefault();
-        const store = useStore.getState();
-        store.setProgressViewActive(!store.progressViewActive);
-      }
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
+    installKeybindingDispatcher();
   }, []);
 
   const [isDragging, setIsDragging] = useState(false);
@@ -292,6 +289,9 @@ export function App() {
       {/* Usage footer — token counts and costs */}
       <UsageFooter />
 
+      {/* Chord-in-progress indicator (e.g. "⌘K…" while waiting for a chord's second key) */}
+      <ChordIndicator />
+
       {/* Command Palette overlay */}
       <CommandPalette />
 
@@ -300,6 +300,25 @@ export function App() {
 
       {/* Create Claude settings dialog */}
       <CreateClaudeSettingsDialog />
+    </div>
+  );
+}
+
+function ChordIndicator() {
+  const [pending, setPending] = useState<string | null>(null);
+  useEffect(() => subscribePendingChord(setPending), []);
+  if (!pending) return null;
+  return (
+    <div
+      className="fixed bottom-6 right-6 z-50 rounded-md px-3 py-1.5 text-xs font-mono shadow-lg pointer-events-none"
+      style={{
+        backgroundColor: "var(--ctp-surface1)",
+        color: "var(--ctp-text)",
+        border: "1px solid var(--ctp-surface2)",
+        letterSpacing: "0.15em",
+      }}
+    >
+      {formatKeystroke(pending)}<span style={{ opacity: 0.5 }}> …</span>
     </div>
   );
 }

@@ -10,8 +10,22 @@ import { api } from "../../state/rpc-client";
 import { useStore } from "../../state/store";
 import { useOverlay } from "../../state/useOverlay";
 import { applyTheme } from "../../state/theme";
+import { KeybindingsTab } from "./KeybindingsTab";
 
-type Tab = "general" | "remote" | "tools" | "appearance" | "pi";
+type Tab = "general" | "remote" | "tools" | "appearance" | "pi" | "keybindings";
+
+function isSameKeybindings(
+  a: Record<string, string | null> | undefined,
+  b: Record<string, string | null>,
+): boolean {
+  const aKeys = Object.keys(a ?? {});
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const k of bKeys) {
+    if (!a || a[k] !== b[k]) return false;
+  }
+  return true;
+}
 
 export function SettingsDialog() {
   useOverlay();
@@ -31,6 +45,10 @@ export function SettingsDialog() {
 
   // MCP Tools tab state
   const [showWebpage, setShowWebpage] = useState(true);
+
+  // Keybindings tab state — map of commandId → override (string or null for unbound).
+  // Missing entries fall back to the command's default keybinding.
+  const [keybindings, setKeybindings] = useState<Record<string, string | null>>({});
 
   // Remote tab state
   const [httpEnabled, setHttpEnabled] = useState(false);
@@ -56,6 +74,7 @@ export function SettingsDialog() {
       setHttpAllowTerminalConnect(cfg.httpAllowTerminalConnect ?? false);
       setHttpAllowTerminalWrite(cfg.httpAllowTerminalWrite ?? false);
       setShowWebpage(cfg.mcpTools?.showWebpage !== false);
+      setKeybindings(cfg.keybindings ?? {});
       if (cfg.httpServer) {
         setHttpEnabled(cfg.httpServer.enabled);
         setHttpPort(cfg.httpServer.port);
@@ -96,6 +115,7 @@ export function SettingsDialog() {
         hostname: httpHostname,
         token: httpToken,
       },
+      keybindings,
     };
 
     await api.saveConfig(updated);
@@ -176,7 +196,8 @@ export function SettingsDialog() {
       (config.httpServer?.enabled ?? false) !== httpEnabled ||
       (config.httpServer?.port ?? 7778) !== httpPort ||
       (config.httpServer?.hostname ?? "127.0.0.1") !== httpHostname ||
-      (config.httpServer?.token ?? "") !== httpToken
+      (config.httpServer?.token ?? "") !== httpToken ||
+      !isSameKeybindings(config.keybindings, keybindings)
     : false;
 
   const handleGenerateToken = () => {
@@ -263,6 +284,11 @@ export function SettingsDialog() {
             active={activeTab === "pi"}
             onClick={() => setActiveTab("pi")}
           />
+          <TabButton
+            label="Keybindings"
+            active={activeTab === "keybindings"}
+            onClick={() => setActiveTab("keybindings")}
+          />
         </div>
 
         {!config ? (
@@ -292,6 +318,12 @@ export function SettingsDialog() {
               />
             )}
             {activeTab === "pi" && <PiEnvVarsTab />}
+            {activeTab === "keybindings" && (
+              <KeybindingsTab
+                keybindings={keybindings}
+                setKeybindings={setKeybindings}
+              />
+            )}
             {activeTab === "remote" && (
               <RemoteTab
                 enabled={httpEnabled}

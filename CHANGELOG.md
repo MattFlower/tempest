@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Keybindings editor in Settings. All existing shortcuts now flow through a central command registry and global dispatcher, and every binding is reassignable, resettable, or can be unbound. Supports chord sequences (e.g. ⌘K ⌘S) and warns before overriding an already-bound keystroke.
+
 ### Fixed
 
 ### Changed

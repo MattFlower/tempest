@@ -1,37 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { PaneTabKind, EditorType, ViewMode } from "../../../../shared/ipc-types";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { PaneTabKind, EditorType } from "../../../../shared/ipc-types";
 import { createTab } from "../../models/pane-node";
 import { useStore } from "../../state/store";
 import { OverlayWrapper } from "../../state/useOverlay";
 import { api } from "../../state/rpc-client";
-import { toggleDevTools } from "../../state/devtools";
 import { fuzzyMatch } from "./fuzzy-match";
-import {
-  addTab,
-  closeTab,
-  splitPane,
-  focusNextPane,
-  focusPreviousPane,
-  toggleMaximize,
-  resetRatios,
-} from "../../state/actions";
-import { findPane } from "../../models/pane-node";
-
-type PaletteMode = "commands" | "files";
-
-interface PaletteCommand {
-  id: string;
-  label: string;
-  shortcutHint?: string;
-  canOpenAsPane: boolean;
-  /** If true, executing this command keeps the palette open. */
-  staysOpen?: boolean;
-  action: () => void;
-}
-
-function isPathQuery(query: string): boolean {
-  return /^(\/|~\/|~$|\.\/?|\.\.\/)/.test(query);
-}
+import { addTab, splitPane } from "../../state/actions";
+import { COMMANDS, effectiveKeystrokeFor, type Command } from "../../commands/registry";
+import { formatKeystroke } from "../../keybindings/keystroke";
 
 function isMonacoDefault(): boolean {
   return useStore.getState().config?.editor === "monaco";
@@ -57,138 +33,39 @@ function addTabToFocusedPane(kind: PaneTabKind, label: string, overrides?: Recor
   addTab(focusedPaneId, tab);
 }
 
-function useCommands(): PaletteCommand[] {
-  const toggleSidebar = useStore((s) => s.toggleSidebar);
-  const setViewMode = useStore((s) => s.setViewMode);
-  const selectedWorkspacePath = useStore((s) => s.selectedWorkspacePath);
+type PaletteMode = "commands" | "files";
 
-  const setMode = (mode: ViewMode) => {
-    if (selectedWorkspacePath) setViewMode(selectedWorkspacePath, mode);
+interface PaletteCommand {
+  id: string;
+  label: string;
+  shortcutHint?: string;
+  canOpenAsPane: boolean;
+  /** If true, executing this command keeps the palette open. */
+  staysOpen?: boolean;
+  action: () => void | Promise<void>;
+}
+
+function isPathQuery(query: string): boolean {
+  return /^(\/|~\/|~$|\.\/?|\.\.\/)/.test(query);
+}
+
+function toPaletteCommand(cmd: Command, keybindings: Record<string, string | null> | undefined): PaletteCommand {
+  const stroke = effectiveKeystrokeFor(cmd.id, keybindings);
+  return {
+    id: cmd.id,
+    label: cmd.label,
+    shortcutHint: stroke ? formatKeystroke(stroke) : undefined,
+    canOpenAsPane: cmd.canOpenAsPane ?? false,
+    action: cmd.run,
   };
+}
 
-  const closeSelectedTab = () => {
-    const state = useStore.getState();
-    const { focusedPaneId, paneTrees, selectedWorkspacePath: wsPath } = state;
-    if (!focusedPaneId || !wsPath) return;
-    const tree = paneTrees[wsPath];
-    if (!tree) return;
-    const pane = findPane(tree, focusedPaneId);
-    if (pane?.selectedTabId) closeTab(focusedPaneId, pane.selectedTabId);
-  };
-
-  return [
-    // Tab commands
-    { id: "new-claude", label: "Claude", shortcutHint: "⌘T", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.Claude, "Claude") },
-    { id: "new-pi", label: "Pi", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.Pi, "Pi") },
-    { id: "new-shell", label: "New Shell Tab", shortcutHint: "⌘⏎", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.Shell, "Shell") },
-    { id: "new-browser", label: "Browser", shortcutHint: "⌘⇧B", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.Browser, "Browser") },
-    { id: "history", label: "Chat History", shortcutHint: "⌘⇧H", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.HistoryViewer, "History") },
-    { id: "pr-dashboard", label: "PR Review Dashboard", canOpenAsPane: true, action: () => addTabToFocusedPane(PaneTabKind.PRDashboard, "PR Reviews") },
-
-    // Tab/pane actions
-    { id: "close-tab", label: "Close Tab", shortcutHint: "⌘W", canOpenAsPane: false, action: closeSelectedTab },
-    { id: "split-pane", label: "Split Pane", shortcutHint: "⌘D", canOpenAsPane: false, action: () => splitPane("right") },
-    { id: "focus-next", label: "Focus Next Pane", shortcutHint: "⌘]", canOpenAsPane: false, action: focusNextPane },
-    { id: "focus-prev", label: "Focus Previous Pane", shortcutHint: "⌘[", canOpenAsPane: false, action: focusPreviousPane },
-    { id: "focus-left", label: "Focus Pane Left", shortcutHint: "⌘⌥←", canOpenAsPane: false, action: focusPreviousPane },
-    { id: "focus-right", label: "Focus Pane Right", shortcutHint: "⌘⌥→", canOpenAsPane: false, action: focusNextPane },
-    { id: "toggle-maximize", label: "Toggle Maximize Pane", shortcutHint: "⌘⇧⏎", canOpenAsPane: false, action: toggleMaximize },
-    { id: "reset-ratios", label: "Reset Pane Sizes", shortcutHint: "⌘⇧=", canOpenAsPane: false, action: resetRatios },
-
-    // View modes
-    { id: "terminal-view", label: "Terminal View", shortcutHint: "⌘1", canOpenAsPane: false, action: () => setMode(ViewMode.Terminal) },
-    { id: "vcs-view", label: "VCS View", shortcutHint: "⌘2", canOpenAsPane: false, action: () => setMode(ViewMode.VCS) },
-    { id: "dashboard-view", label: "Dashboard View", shortcutHint: "⌘3", canOpenAsPane: false, action: () => setMode(ViewMode.Dashboard) },
-
-    // Repos
-    { id: "add-repo", label: "Add Repository", canOpenAsPane: false, action: async () => {
-      const result = await api.browseDirectory("~/");
-      if (!result.path) return;
-      await api.addRepo(result.path);
-      const repos = await api.getRepos();
-      useStore.getState().setRepos(repos);
-      for (const repo of repos) {
-        const ws = await api.getWorkspaces(repo.id);
-        useStore.getState().setWorkspaces(repo.id, ws);
-      }
-    }},
-
-    { id: "clone-repo", label: "Add Remote Repository", canOpenAsPane: false, action: () => {
-      useStore.getState().showCloneRepoDialog();
-    }},
-
-    // Claude plans
-    { id: "open-plan", label: "Open Current Plan", canOpenAsPane: true, action: async () => {
-      const state = useStore.getState();
-      const { focusedPaneId, paneTrees, selectedWorkspacePath: wsPath } = state;
-      if (!focusedPaneId || !wsPath) return;
-      const tree = paneTrees[wsPath];
-      if (!tree) return;
-
-      // Find the focused pane's selected tab — must be a Claude tab with a sessionId
-      const pane = findPane(tree, focusedPaneId);
-      if (!pane) return;
-      const tab = pane.tabs.find((t) => t.id === pane.selectedTabId);
-      if (!tab || tab.kind !== PaneTabKind.Claude || !tab.sessionId) return;
-
-      const result = await api.getSessionPlanPath(tab.sessionId, wsPath);
-      if (!result.planPath) return;
-
-      const name = result.planPath.split("/").pop() ?? "Plan";
-      addTabToFocusedPane(PaneTabKind.MarkdownViewer, name, { markdownFilePath: result.planPath });
-    }},
-
-    // GitHub
-    { id: "open-repo-in-browser", label: "Open Repo in Browser", canOpenAsPane: true, action: async () => {
-      if (!selectedWorkspacePath) return;
-      const result = await api.getRepoGitHubUrl(selectedWorkspacePath);
-      if ("error" in result) return;
-      addTabToFocusedPane(PaneTabKind.Browser, "GitHub", { browserURL: result.url });
-    }},
-
-    { id: "view-pr-in-browser", label: "View PR in Browser", canOpenAsPane: true, action: async () => {
-      if (!selectedWorkspacePath) return;
-
-      // Fast path: use cached PR URL if available
-      const cached = await api.getOpenPRState(selectedWorkspacePath);
-      if (cached?.prURL) {
-        addTabToFocusedPane(PaneTabKind.Browser, "PR", { browserURL: cached.prURL });
-        return;
-      }
-
-      // Slow path: discover via gh CLI and cache
-      const result = await api.lookupPRUrl(selectedWorkspacePath);
-      if ("error" in result) return;
-      addTabToFocusedPane(PaneTabKind.Browser, "PR", { browserURL: result.url });
-      api.setOpenPRState(selectedWorkspacePath, { prURL: result.url });
-    }},
-
-    // Claude settings
-    { id: "open-user-claude-settings", label: "Open User Claude Settings", canOpenAsPane: true, action: async () => {
-      const result = await api.browsePath("~/.claude/settings.json", selectedWorkspacePath ?? "/");
-      addTabToFocusedPane(PaneTabKind.Editor, "settings.json", { editorFilePath: result.resolvedPath });
-    }},
-    { id: "open-workspace-claude-settings", label: "Open Workspace Claude Settings", canOpenAsPane: true, action: async () => {
-      if (!selectedWorkspacePath) return;
-      const settingsPath = `${selectedWorkspacePath}/.claude/settings.json`;
-      const result = await api.browsePath(settingsPath, selectedWorkspacePath);
-      if (result.kind === "file") {
-        addTabToFocusedPane(PaneTabKind.Editor, "settings.json", { editorFilePath: settingsPath });
-        return;
-      }
-      useStore.getState().showCreateClaudeSettingsDialog({
-        path: settingsPath,
-        onConfirm: async () => {
-          await api.writeFileForEditor(settingsPath, "{}\n");
-          addTabToFocusedPane(PaneTabKind.Editor, "settings.json", { editorFilePath: settingsPath });
-        },
-      });
-    }},
-
-    // App
-    { id: "toggle-sidebar", label: "Toggle Sidebar", shortcutHint: "⌘\\", canOpenAsPane: false, action: toggleSidebar },
-    { id: "toggle-devtools", label: "Toggle Developer Tools", shortcutHint: "⌘⌥I", canOpenAsPane: false, action: () => toggleDevTools() },
-  ];
+function useRegistryCommands(): PaletteCommand[] {
+  const keybindings = useStore((s) => s.config?.keybindings);
+  return useMemo(
+    () => COMMANDS.map((cmd) => toPaletteCommand(cmd, keybindings)),
+    [keybindings],
+  );
 }
 
 export function CommandPalette() {
@@ -216,7 +93,7 @@ export function CommandPalette() {
   // Tracks editor type override from "Open with Neovim/Monaco" commands
   const pendingEditorTypeRef = useRef<EditorType | null>(null);
 
-  const baseCommands = useCommands();
+  const baseCommands = useRegistryCommands();
 
   // "Open with" commands — these stay open and switch to files mode
   const openWithCommands: PaletteCommand[] = [
@@ -454,28 +331,8 @@ export function CommandPalette() {
     [itemCount, executeSelected, executeInPane, dismiss]
   );
 
-  // Global keyboard shortcut to open palette
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.metaKey && e.shiftKey && e.key === "p") {
-        e.preventDefault();
-        toggleCommandPalette();
-      } else if (e.metaKey && !e.shiftKey && e.key === "p") {
-        e.preventDefault();
-        openCommandPaletteFiles();
-      }
-      if (e.metaKey && e.key === "\\") {
-        e.preventDefault();
-        useStore.getState().toggleSidebar();
-      }
-      if (e.metaKey && e.altKey && e.key === "i") {
-        e.preventDefault();
-        toggleDevTools();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [toggleCommandPalette, openCommandPaletteFiles]);
+  // palette.toggle / palette.files / toggle-sidebar / toggle-devtools live in
+  // the global keybinding dispatcher now — see src/views/main/keybindings/dispatcher.ts.
 
   if (!visible) return null;
 
@@ -636,7 +493,10 @@ function CommandRow({
         <span className="text-[11px] text-[var(--ctp-overlay0)]">⇄</span>
       )}
       {command.shortcutHint && (
-        <span className="text-[11px] text-[var(--ctp-overlay0)] bg-[var(--ctp-surface0)] px-1.5 py-0.5 rounded">
+        <span
+          className="text-[11px] text-[var(--ctp-overlay0)] bg-[var(--ctp-surface0)] px-1.5 py-0.5 rounded"
+          style={{ letterSpacing: "0.15em" }}
+        >
           {command.shortcutHint}
         </span>
       )}

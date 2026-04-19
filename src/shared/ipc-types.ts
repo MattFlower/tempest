@@ -148,6 +148,9 @@ export interface AppConfig {
   httpAllowTerminalConnect?: boolean; // Master switch: allow Tempest Remote to attach to running terminals at all. Defaults to false.
   httpAllowTerminalWrite?: boolean; // When connect is enabled, also let remote viewers send keystrokes/resize. Defaults to false (view-only).
   mcpTools?: McpToolConfig;
+  // Keybinding overrides: command id → normalized keystroke (e.g. "cmd+shift+p" or "cmd+k cmd+s").
+  // `null` means "explicitly unbound" (suppress the default). A missing id uses its command's default binding.
+  keybindings?: Record<string, string | null>;
 }
 
 // --- Hook Events ---

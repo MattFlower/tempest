@@ -8,7 +8,6 @@ import { WorkspaceToolbar } from "./WorkspaceToolbar";
 import { PRDashboard } from "../pr/PRDashboard";
 import { VCSView } from "../vcs/VCSView";
 import { initTerminalDispatch } from "../../state/terminal-dispatch";
-import { addTab, splitPane, focusNextPane, focusPreviousPane, toggleMaximize, closeTab } from "../../state/actions";
 
 // Normalize: if root is a leaf, wrap it in a single-child split.
 // This prevents React from tearing down & recreating the component
@@ -32,7 +31,6 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
   const viewMode = useStore(
     (s) => s.workspaceViewMode[workspacePath] ?? ViewMode.Terminal,
   );
-  const setViewMode = useStore((s) => s.setViewMode);
 
   // Tracks whether the user has ever entered VCS mode during this component's lifetime.
   // Used to lazy-mount VCSView on first visit and keep it mounted thereafter so its
@@ -54,68 +52,8 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
     if (viewMode === ViewMode.VCS) setHasEnteredVCS(true);
   }, [viewMode]);
 
-  // Keyboard shortcuts for pane operations and view mode switching
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      // Only handle if this workspace is selected
-      if (useStore.getState().selectedWorkspacePath !== workspacePath) return;
-
-      if (e.metaKey && e.key === "d") {
-        e.preventDefault();
-        splitPane("right");
-      }
-      if (e.metaKey && e.key === "]") {
-        e.preventDefault();
-        focusNextPane();
-      }
-      if (e.metaKey && e.key === "[") {
-        e.preventDefault();
-        focusPreviousPane();
-      }
-      if (e.metaKey && e.shiftKey && e.key === "Enter") {
-        e.preventDefault();
-        toggleMaximize();
-      }
-      if (e.metaKey && e.key === "w") {
-        e.preventDefault();
-        const state = useStore.getState();
-        const { focusedPaneId } = state;
-        const tree = state.paneTrees[workspacePath];
-        if (focusedPaneId && tree) {
-          const pane = findPane(tree, focusedPaneId);
-          if (pane?.selectedTabId) {
-            closeTab(focusedPaneId, pane.selectedTabId);
-          }
-        }
-      }
-      if (e.metaKey && e.key === "t") {
-        e.preventDefault();
-        const { focusedPaneId } = useStore.getState();
-        if (focusedPaneId) {
-          const tab = createTab(PaneTabKind.Claude, "Claude", {
-            terminalId: crypto.randomUUID(),
-          });
-          addTab(focusedPaneId, tab);
-        }
-      }
-      // View mode shortcuts: Cmd+1 = Terminal, Cmd+2 = VCS, Cmd+3 = Dashboard
-      if (e.metaKey && !e.shiftKey && !e.altKey) {
-        const modeForKey: Record<string, ViewMode> = {
-          "1": ViewMode.Terminal,
-          "2": ViewMode.VCS,
-          "3": ViewMode.Dashboard,
-        };
-        const mode = modeForKey[e.key];
-        if (mode) {
-          e.preventDefault();
-          useStore.getState().setProgressViewActive(false);
-          setViewMode(workspacePath, mode);
-        }
-      }
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [workspacePath, setViewMode]);
+  // Keyboard shortcuts live in the global dispatcher — see
+  // src/views/main/keybindings/dispatcher.ts and src/views/main/commands/registry.ts.
 
   // Create a default pane tree if workspace has no tree yet
   useEffect(() => {

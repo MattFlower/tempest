@@ -16,6 +16,7 @@ import { MacKeychain, isValidEnvVarName } from "./keychain";
 import { BookmarkManager } from "./browser/bookmark-manager";
 import { WorkspaceManager } from "./workspace-manager";
 import { SessionStateManager } from "./session-state-manager";
+import { ScrollbackStore } from "./scrollback-store";
 import { HookEventListener } from "./hooks/hook-event-listener";
 import { HookSettingsBuilder } from "./hooks/hook-settings-builder";
 import { SessionActivityTracker } from "./hooks/session-activity-tracker";
@@ -127,7 +128,11 @@ const aiContextProvider = new AIContextProvider(historyStore);
 const prMonitor = new PRMonitor();
 
 // --- Terminal scrollback cache (webview sends periodic updates) ---
+// In-memory only. Persistence lives in ScrollbackStore (one file per terminal).
+// The cache is here so remote terminal clients can attach without a disk read.
 const scrollbackCache = new Map<string, { scrollback: string; cwd?: string }>();
+const scrollbackStore = new ScrollbackStore();
+let scrollbackGcTimer: ReturnType<typeof setInterval> | null = null;
 
 // --- Remote terminal hub: fans out PTY output to Tempest Remote WS clients ---
 const remoteHub = new RemoteTerminalHub();
@@ -298,27 +303,69 @@ function enrichTreeWithSessionIds(node: any, workspacePath: string): void {
 }
 
 /**
- * Walk a PaneNodeState tree and populate scrollbackContent and shellCwd
- * on terminal tabs using the scrollback cache (populated by the webview).
- * Mutates the tree in place (it's a transient object about to be saved).
+ * Walk a PaneNodeState tree and populate shellCwd on terminal tabs using
+ * the scrollback cache (populated by the webview). Scrollback itself is
+ * persisted per-terminal by ScrollbackStore, not inlined in the tree.
  */
-function enrichTreeWithScrollback(node: any): void {
+function enrichTreeWithShellCwds(node: any): void {
   if (!node) return;
   if (node.type === "leaf" && node.pane?.tabs) {
     for (const tab of node.pane.tabs) {
       if (tab.kind !== "shell" && tab.kind !== "claude") continue;
       if (!tab.terminalId) continue;
       const cached = scrollbackCache.get(tab.terminalId);
-      if (cached) {
-        tab.scrollbackContent = cached.scrollback;
-        if (cached.cwd) tab.shellCwd = cached.cwd;
-      }
+      if (cached?.cwd) tab.shellCwd = cached.cwd;
     }
   } else if (node.type === "split" && node.children) {
     for (const child of node.children) {
-      enrichTreeWithScrollback(child);
+      enrichTreeWithShellCwds(child);
     }
   }
+}
+
+/**
+ * Inject persisted scrollback into a state object before returning it to
+ * the webview. The on-disk session-state.json never contains scrollback;
+ * the webview still expects `scrollbackContent` on each tab for restore.
+ */
+async function enrichStateForWebview(state: any): Promise<any> {
+  if (!state?.workspaces) return state;
+
+  const ids = new Set<string>();
+  const walk = (node: any): void => {
+    if (!node) return;
+    if (node.type === "leaf" && node.pane?.tabs) {
+      for (const tab of node.pane.tabs) {
+        if (tab.terminalId) ids.add(tab.terminalId);
+      }
+    } else if (node.type === "split" && node.children) {
+      for (const child of node.children) walk(child);
+    }
+  };
+  for (const ws of Object.values<any>(state.workspaces)) walk(ws.paneTree);
+
+  if (ids.size === 0) return state;
+  const records = await scrollbackStore.readMany(ids);
+  if (records.size === 0) return state;
+
+  const inject = (node: any): void => {
+    if (!node) return;
+    if (node.type === "leaf" && node.pane?.tabs) {
+      for (const tab of node.pane.tabs) {
+        if (!tab.terminalId) continue;
+        const rec = records.get(tab.terminalId);
+        if (rec) {
+          tab.scrollbackContent = rec.scrollback;
+          if (rec.cwd && !tab.shellCwd) tab.shellCwd = rec.cwd;
+        }
+      }
+    } else if (node.type === "split" && node.children) {
+      for (const child of node.children) inject(child);
+    }
+  };
+  for (const ws of Object.values<any>(state.workspaces)) inject(ws.paneTree);
+
+  return state;
 }
 
 // Persistent watcher on ~/.claude/sessions/ — resolves session IDs for all
@@ -636,7 +683,8 @@ const rpc: any = (BrowserView.defineRPC as any)({
 
       // --- Session State (Stream D) ---
       loadSessionState: async () => {
-        return await sessionStateManager.load();
+        const state = await sessionStateManager.load();
+        return await enrichStateForWebview(state);
       },
       savePaneState: (_params: any) => {
         enrichTreeWithSessionIds(_params.paneTree, _params.workspacePath);
@@ -1230,7 +1278,7 @@ const rpc: any = (BrowserView.defineRPC as any)({
       // --- Pane state sync (Stream B + D) ---
       paneTreeChanged: (_msg: any) => {
         enrichTreeWithSessionIds(_msg.tree, _msg.workspacePath);
-        enrichTreeWithScrollback(_msg.tree);
+        enrichTreeWithShellCwds(_msg.tree);
         sessionStateManager.savePaneState(_msg.workspacePath, _msg.tree);
         sessionStateManager.setSelectedWorkspacePath(_msg.workspacePath);
 
@@ -1246,14 +1294,22 @@ const rpc: any = (BrowserView.defineRPC as any)({
         const { entries } = msg as {
           entries: Array<{ terminalId: string; scrollback: string; cwd?: string }>;
         };
+        const cwds = new Map<string, string>();
         for (const entry of entries) {
           scrollbackCache.set(entry.terminalId, {
             scrollback: entry.scrollback,
             cwd: entry.cwd,
           });
+          void scrollbackStore
+            .write(entry.terminalId, { scrollback: entry.scrollback, cwd: entry.cwd })
+            .catch((err) =>
+              console.log(
+                `[main] ScrollbackStore.write failed for ${entry.terminalId}: ${err}`,
+              ),
+            );
+          if (entry.cwd) cwds.set(entry.terminalId, entry.cwd);
         }
-        // Enrich stored state so next flush includes latest scrollback
-        sessionStateManager.enrichTerminalData(scrollbackCache);
+        if (cwds.size > 0) sessionStateManager.updateShellCwds(cwds);
       },
 
       // --- Window controls ---
@@ -1454,6 +1510,52 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
 
   try {
     await sessionStateManager.load();
+
+    // Migrate pre-split state: old session-state.json had scrollbackContent
+    // inlined on terminal tabs. Move any such entries into ScrollbackStore
+    // files and strip them from the in-memory tree. The next flush writes
+    // out the slimmed session-state.json.
+    const legacy = sessionStateManager.extractInlineScrollback();
+    if (legacy.size > 0) {
+      console.log(
+        `[main] Migrating ${legacy.size} inline scrollback entries to ScrollbackStore`,
+      );
+      await Promise.all(
+        Array.from(legacy, ([id, rec]) =>
+          scrollbackStore
+            .write(id, rec)
+            .catch((err) =>
+              console.warn(`[main] Migration write failed for ${id}: ${err}`),
+            ),
+        ),
+      );
+      await sessionStateManager.flush();
+    }
+
+    // Initial GC now that state is fully loaded, then every 60s thereafter.
+    const liveIds = sessionStateManager.collectLiveTerminalIds();
+    const { deleted } = await scrollbackStore.gc(liveIds);
+    if (deleted > 0) {
+      console.log(`[main] ScrollbackStore GC removed ${deleted} orphaned file(s)`);
+    }
+
+    // Warm the in-memory cache so remote clients attaching before the
+    // webview's first scrollback update still get persisted scrollback.
+    const warmup = await scrollbackStore.readMany(liveIds);
+    for (const [id, rec] of warmup) {
+      if (!scrollbackCache.has(id)) scrollbackCache.set(id, rec);
+    }
+
+    scrollbackGcTimer = setInterval(() => {
+      const ids = sessionStateManager.collectLiveTerminalIds();
+      // Also prune in-memory cache of terminals no longer in any tree.
+      for (const cachedId of scrollbackCache.keys()) {
+        if (!ids.has(cachedId)) scrollbackCache.delete(cachedId);
+      }
+      void scrollbackStore
+        .gc(ids)
+        .catch((err) => console.log(`[main] ScrollbackStore GC failed: ${err}`));
+    }, 60_000);
   } catch (err) {
     console.error("[main] SessionStateManager preload failed:", err);
   }
@@ -1570,16 +1672,37 @@ async function shutdown() {
     try {
       const result = await (win.webview.rpc as any).request.getTerminalScrollback();
       if (result?.entries) {
+        const cwds = new Map<string, string>();
+        const writes: Array<Promise<void>> = [];
         for (const entry of result.entries) {
           scrollbackCache.set(entry.terminalId, {
             scrollback: entry.scrollback,
             cwd: entry.cwd,
           });
+          writes.push(
+            scrollbackStore
+              .write(entry.terminalId, {
+                scrollback: entry.scrollback,
+                cwd: entry.cwd,
+              })
+              .catch((err) =>
+                console.warn(
+                  `[main] ScrollbackStore.write (shutdown) failed for ${entry.terminalId}: ${err}`,
+                ),
+              ),
+          );
+          if (entry.cwd) cwds.set(entry.terminalId, entry.cwd);
         }
-        sessionStateManager.enrichTerminalData(scrollbackCache);
+        await Promise.all(writes);
+        if (cwds.size > 0) sessionStateManager.updateShellCwds(cwds);
       }
     } catch (e) {
       console.warn("[main] Failed to collect scrollback at shutdown:", e);
+    }
+
+    if (scrollbackGcTimer) {
+      clearInterval(scrollbackGcTimer);
+      scrollbackGcTimer = null;
     }
 
     ptyManager.killAll();

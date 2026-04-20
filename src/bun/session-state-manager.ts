@@ -160,22 +160,21 @@ export class SessionStateManager {
     return walk(ws.paneTree);
   }
 
-  /** Update scrollback/cwd on terminal tabs in all stored pane trees. */
-  enrichTerminalData(
-    cache: Map<string, { scrollback: string; cwd?: string }>,
-  ): void {
-    if (!this.state || cache.size === 0) return;
+  /**
+   * Update shellCwd on terminal tabs in all stored pane trees using a
+   * terminalId -> cwd map. Scrollback is no longer persisted here; it lives
+   * in ScrollbackStore (`scrollback/<terminalId>.json`).
+   */
+  updateShellCwds(cwds: Map<string, string>): void {
+    if (!this.state || cwds.size === 0) return;
 
     const enrichNode = (node: any): void => {
       if (!node) return;
       if (node.type === "leaf" && node.pane?.tabs) {
         for (const tab of node.pane.tabs) {
           if (!tab.terminalId) continue;
-          const cached = cache.get(tab.terminalId);
-          if (cached) {
-            tab.scrollbackContent = cached.scrollback;
-            if (cached.cwd) tab.shellCwd = cached.cwd;
-          }
+          const cwd = cwds.get(tab.terminalId);
+          if (cwd) tab.shellCwd = cwd;
         }
       } else if (node.type === "split" && node.children) {
         for (const child of node.children) enrichNode(child);
@@ -186,6 +185,65 @@ export class SessionStateManager {
       enrichNode(ws.paneTree);
     }
     this.dirty = true;
+  }
+
+  /**
+   * Walk every pane tree and extract inline scrollbackContent entries as a
+   * map keyed by terminalId. Used once at load to migrate pre-split state
+   * into ScrollbackStore. Mutates state to strip the inline fields and
+   * marks it dirty.
+   */
+  extractInlineScrollback(): Map<string, { scrollback: string; cwd?: string }> {
+    const out = new Map<string, { scrollback: string; cwd?: string }>();
+    if (!this.state) return out;
+
+    let found = false;
+    const walk = (node: any): void => {
+      if (!node) return;
+      if (node.type === "leaf" && node.pane?.tabs) {
+        for (const tab of node.pane.tabs) {
+          if (tab.terminalId && typeof tab.scrollbackContent === "string") {
+            out.set(tab.terminalId, {
+              scrollback: tab.scrollbackContent,
+              cwd: tab.shellCwd,
+            });
+            delete tab.scrollbackContent;
+            found = true;
+          }
+        }
+      } else if (node.type === "split" && node.children) {
+        for (const child of node.children) walk(child);
+      }
+    };
+
+    for (const ws of Object.values(this.state.workspaces)) {
+      walk(ws.paneTree);
+    }
+
+    if (found) this.dirty = true;
+    return out;
+  }
+
+  /** Collect all terminalIds currently referenced in any workspace's pane tree. */
+  collectLiveTerminalIds(): Set<string> {
+    const out = new Set<string>();
+    if (!this.state) return out;
+
+    const walk = (node: any): void => {
+      if (!node) return;
+      if (node.type === "leaf" && node.pane?.tabs) {
+        for (const tab of node.pane.tabs) {
+          if (tab.terminalId) out.add(tab.terminalId);
+        }
+      } else if (node.type === "split" && node.children) {
+        for (const child of node.children) walk(child);
+      }
+    };
+
+    for (const ws of Object.values(this.state.workspaces)) {
+      walk(ws.paneTree);
+    }
+    return out;
   }
 
   migrateWorkspacePath(oldPath: string, newPath: string): void {

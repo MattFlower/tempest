@@ -327,7 +327,7 @@ export interface BunRequests {
   };
   watchDirectoryTree: {
     params: { workspacePath: string };
-    response: void;
+    response: { ok: boolean; errorKind?: "not_found" | "other" };
   };
   unwatchDirectoryTree: {
     params: { workspacePath: string };

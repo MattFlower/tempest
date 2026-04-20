@@ -720,7 +720,7 @@ const rpc: any = (BrowserView.defineRPC as any)({
       },
       watchDirectoryTree: (params: any) => {
         const { workspacePath } = params as { workspacePath: string };
-        watchDirectoryTree(workspacePath, (wsPath, changedDirPath, kind) => {
+        return watchDirectoryTree(workspacePath, (wsPath, changedDirPath, kind) => {
           try {
             win.webview.rpc.send.directoryChanged({
               workspacePath: wsPath,

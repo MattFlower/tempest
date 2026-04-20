@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Monaco editor: `:w` in vim mode now saves the file. Previously only `:wq` triggered a save (`:w` was never registered as an ex-command and silently did nothing).
-
+- File-tree watcher no longer logs a noisy `ENOENT` stack trace when a previously expanded workspace directory has been removed (e.g. via `jj workspace forget`). The path is now silently pruned from the persisted expanded-workspaces set on the next attempt to attach a watcher.
 ### Changed
 
 - Terminal scrollback is now stored in per-terminal files under `~/.config/tempest/scrollback/<terminalId>.json` (dir `0700`, files `0600`) instead of being inlined inside `session-state.json`. This shrinks `session-state.json`, keeps scrollback corruption from taking down the pane tree, avoids rewriting the whole session state on every 30s scrollback autosave, and narrows the file-permission blast radius of scrollback contents. A background GC sweep (run at startup and every 60s) removes scrollback files for terminals that are no longer in any workspace's pane tree. Existing `session-state.json` files with inline `scrollbackContent` are migrated to the new layout on first load.

@@ -202,14 +202,22 @@ interface WorkspaceWatcher {
 const watchers = new Map<string, WorkspaceWatcher>();
 const DEBOUNCE_MS = 100;
 
+export interface WatchDirectoryTreeResult {
+  ok: boolean;
+  errorKind?: "not_found" | "other";
+}
+
 /** Start (or no-op if already running) a recursive fs.watch for a workspace.
  *  On macOS recursive mode works natively; on other platforms the events are
- *  shallow and subtree changes will be missed. Tempest is macOS-only today. */
+ *  shallow and subtree changes will be missed. Tempest is macOS-only today.
+ *
+ *  Returns `{ ok: false, errorKind: "not_found" }` when the workspace path no
+ *  longer exists on disk so the caller can prune it from its expanded set. */
 export function watchDirectoryTree(
   workspacePath: string,
   onChanged: DirectoryChangedCallback,
-): void {
-  if (watchers.has(workspacePath)) return;
+): WatchDirectoryTreeResult {
+  if (watchers.has(workspacePath)) return { ok: true };
 
   try {
     const watcher = watch(
@@ -272,11 +280,19 @@ export function watchDirectoryTree(
     });
 
     watchers.set(workspacePath, { watcher, pendingDirs: new Map() });
-  } catch (err) {
+    return { ok: true };
+  } catch (err: any) {
+    if (err?.code === "ENOENT") {
+      // The workspace directory no longer exists — likely a forgotten jj
+      // workspace still present in the persisted expanded-set. The caller
+      // is expected to prune; nothing to log loudly.
+      return { ok: false, errorKind: "not_found" };
+    }
     console.error(
       `[file-tree-watcher] Failed to watch ${workspacePath}:`,
       err,
     );
+    return { ok: false, errorKind: "other" };
   }
 }
 

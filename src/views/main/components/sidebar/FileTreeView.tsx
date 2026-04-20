@@ -82,7 +82,11 @@ export function FileTreeView() {
 
     const wsPaths = Object.keys(expandedWorkspaces);
     for (const wsPath of wsPaths) {
-      api.watchDirectoryTree(wsPath).catch(() => {});
+      api.watchDirectoryTree(wsPath).then((res: { ok: boolean; errorKind?: "not_found" | "other" } | undefined) => {
+        if (res?.errorKind === "not_found") {
+          setFileTreeExpanded("workspace", wsPath, false);
+        }
+      }).catch(() => {});
     }
 
     // Every expanded dir cached entry may be stale if we were unmounted
@@ -110,7 +114,11 @@ export function FileTreeView() {
     if (!isFilesActive) return;
     const wsPaths = Object.keys(expandedWorkspaces);
     for (const wsPath of wsPaths) {
-      api.watchDirectoryTree(wsPath).catch(() => {});
+      api.watchDirectoryTree(wsPath).then((res: { ok: boolean; errorKind?: "not_found" | "other" } | undefined) => {
+        if (res?.errorKind === "not_found") {
+          setFileTreeExpanded("workspace", wsPath, false);
+        }
+      }).catch(() => {});
     }
     return () => {
       // When the set of expanded workspaces shrinks, unwatch the removed

@@ -147,9 +147,12 @@ export function MonacoEditorPane({
       if (disposed || !initVimModeFn) return;
       vimModeRef.current = initVimModeFn(ed, bar);
 
-      // Register :q, :wq, and their ! variants
+      // Register :w, :q, :wq
       if (vimApi) {
         const { Vim } = vimApi;
+        Vim.defineEx("write", "w", () => {
+          handleSaveRef.current();
+        });
         Vim.defineEx("quit", "q", () => {
           onCloseRef.current?.();
         });

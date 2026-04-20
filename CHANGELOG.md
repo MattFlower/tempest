@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Revert changes from the Files sidebar. Right-click a modified / added / deleted / renamed / untracked file row to get a "Revert Changes" option that rolls the file back to its last committed state. A confirmation dialog guards the action. Works in both Git (via `git checkout HEAD` / unstage / delete-untracked) and JJ (via `jj restore --from @- --to @`) workspaces.
+
 ### Fixed
 
 ### Changed

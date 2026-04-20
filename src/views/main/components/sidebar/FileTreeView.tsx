@@ -12,7 +12,7 @@ import { OverlayWrapper } from "../../state/useOverlay";
 import { fuzzyMatch } from "../palette/fuzzy-match";
 import { FileTreeNode, FILE_TREE_DRAG_MIME, type FileTreeDragData, type TreeNode } from "./FileTreeNode";
 import { effectiveWorkspaceStatus, statusDotColor } from "./workspaceIndicators";
-import { WorkspaceStatus } from "../../../../shared/ipc-types";
+import { VCSType, WorkspaceStatus } from "../../../../shared/ipc-types";
 
 function fileExtKey(name: string): string | undefined {
   const dot = name.lastIndexOf(".");
@@ -54,6 +54,12 @@ export function FileTreeView() {
     y: number;
     node: TreeNode;
   } | null>(null);
+
+  // Revert-flow state. `revertConfirm` opens the confirmation dialog;
+  // `revertToast` briefly surfaces success/error after the operation.
+  const [revertConfirm, setRevertConfirm] = useState<{ node: TreeNode; vcsType: VCSType } | null>(null);
+  const [revertBusy, setRevertBusy] = useState(false);
+  const [revertToast, setRevertToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const isFilesActive = sidebarVisible && activeSidebarView === "files";
   const setFileTreeLoading = useStore((s) => s.setFileTreeLoading);
@@ -445,6 +451,71 @@ export function FileTreeView() {
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
+  // Find the VCS type (Git vs JJ) for the repo that owns a given workspace
+  // path. Returns null if the workspace isn't in any known repo — in that case
+  // we don't know how to revert, so the menu item is suppressed.
+  const vcsTypeForWorkspace = useCallback(
+    (wsPath: string): VCSType | null => {
+      for (const repo of repos) {
+        const workspaces = workspacesByRepo[repo.id] ?? [];
+        if (workspaces.some((w) => w.path === wsPath)) return repo.vcsType;
+      }
+      return null;
+    },
+    [repos, workspacesByRepo],
+  );
+
+  // Revert the file back to its last-committed state. For Git this is
+  // `git checkout HEAD` (plus unstage/delete-untracked semantics handled by
+  // vcsRevertFiles on the backend). For JJ, the working-copy change is @, so
+  // "last change" means restoring the file from @- into @.
+  const performRevert = useCallback(async (node: TreeNode, vcsType: VCSType) => {
+    if (!node.workspacePath || !node.fullPath) return;
+    const wsPath = node.workspacePath;
+    const relPath = node.fullPath.startsWith(wsPath + "/")
+      ? node.fullPath.slice(wsPath.length + 1)
+      : node.fullPath;
+
+    setRevertBusy(true);
+    try {
+      if (vcsType === VCSType.JJ) {
+        const res: any = await api.jjRestore(wsPath, "@", "@-", relPath);
+        if (!res?.success) {
+          setRevertToast({ message: res?.error ?? "Revert failed", type: "error" });
+          return;
+        }
+      } else {
+        const res: any = await api.vcsRevertFiles(wsPath, [relPath]);
+        if (!res?.success) {
+          setRevertToast({ message: res?.error ?? "Revert failed", type: "error" });
+          return;
+        }
+      }
+
+      // Refresh VCS status so the badge clears, and invalidate the containing
+      // directory so an untracked-and-deleted file disappears from the tree.
+      try {
+        const status = await api.getVCSStatus(wsPath);
+        if (status) setFileTreeVcsStatus(wsPath, status);
+      } catch { /* badge refresh is best-effort */ }
+      const slash = node.fullPath.lastIndexOf("/");
+      if (slash > 0) invalidateFileTreeDir(node.fullPath.slice(0, slash));
+
+      setRevertToast({ message: `Reverted ${relPath}`, type: "success" });
+    } catch (err: any) {
+      setRevertToast({ message: err?.message ?? "Revert failed", type: "error" });
+    } finally {
+      setRevertBusy(false);
+    }
+  }, [setFileTreeVcsStatus, invalidateFileTreeDir]);
+
+  // Auto-dismiss the revert toast after a short delay.
+  useEffect(() => {
+    if (!revertToast) return;
+    const id = setTimeout(() => setRevertToast(null), 2500);
+    return () => clearTimeout(id);
+  }, [revertToast]);
+
   const handleDragStart = useCallback((node: TreeNode, event: React.DragEvent) => {
     if (node.kind !== "file" || !node.fullPath || !node.workspacePath) return;
     const payload: FileTreeDragData = {
@@ -697,8 +768,77 @@ export function FileTreeView() {
           x={contextMenu.x}
           y={contextMenu.y}
           node={contextMenu.node}
+          vcsType={
+            contextMenu.node.workspacePath
+              ? vcsTypeForWorkspace(contextMenu.node.workspacePath)
+              : null
+          }
+          onRevertRequest={(node, vcsType) => {
+            setRevertConfirm({ node, vcsType });
+            setContextMenu(null);
+          }}
           onClose={closeContextMenu}
         />
+      )}
+
+      {revertConfirm && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center">
+          <div
+            className="absolute inset-0"
+            style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
+            onClick={() => !revertBusy && setRevertConfirm(null)}
+          />
+          <div
+            className="relative rounded-lg shadow-xl p-4 max-w-sm"
+            style={{
+              backgroundColor: "var(--ctp-surface0)",
+              border: "1px solid var(--ctp-surface1)",
+            }}
+          >
+            <p className="text-sm mb-1" style={{ color: "var(--ctp-text)" }}>
+              Revert changes?
+            </p>
+            <p className="text-xs mb-4" style={{ color: "var(--ctp-subtext0)" }}>
+              Revert <strong>{revertConfirm.node.label}</strong> to the last committed
+              state? This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                disabled={revertBusy}
+                className="px-3 py-1 text-xs rounded disabled:opacity-50"
+                style={{ background: "var(--ctp-surface1)", color: "var(--ctp-text)" }}
+                onClick={() => setRevertConfirm(null)}
+              >
+                Cancel
+              </button>
+              <button
+                disabled={revertBusy}
+                className="px-3 py-1 text-xs rounded font-semibold disabled:opacity-50"
+                style={{ background: "var(--ctp-red)", color: "var(--ctp-base)" }}
+                onClick={async () => {
+                  const target = revertConfirm;
+                  await performRevert(target.node, target.vcsType);
+                  setRevertConfirm(null);
+                }}
+              >
+                {revertBusy ? "Reverting…" : "Revert"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {revertToast && (
+        <div
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-xs font-medium shadow-lg z-[210]"
+          style={{
+            backgroundColor:
+              revertToast.type === "success" ? "var(--ctp-green)" : "var(--ctp-red)",
+            color: "var(--ctp-base)",
+          }}
+        >
+          {revertToast.message}
+        </div>
       )}
     </div>
   );
@@ -710,15 +850,20 @@ interface ContextMenuProps {
   x: number;
   y: number;
   node: TreeNode;
+  vcsType: VCSType | null;
+  onRevertRequest: (node: TreeNode, vcsType: VCSType) => void;
   onClose: () => void;
 }
 
-function FileTreeContextMenu({ x, y, node, onClose }: ContextMenuProps) {
+function FileTreeContextMenu({ x, y, node, vcsType, onRevertRequest, onClose }: ContextMenuProps) {
   const isFile = node.kind === "file";
   const isDir = node.kind === "dir";
   const isWorkspace = node.kind === "workspace";
   const path = node.fullPath;
   const workspacePath = node.workspacePath;
+  // Revert is offered for files that the VCS reports as changed relative to
+  // the last commit. We don't offer revert on directories or workspace rows.
+  const canRevert = isFile && !!node.vcsBadge && !!vcsType && !!workspacePath;
 
   // Workspace-rooted relative path for "Copy Relative Path". Falls back to
   // the basename if workspacePath isn't available (e.g. a dir outside a
@@ -780,17 +925,32 @@ function FileTreeContextMenu({ x, y, node, onClose }: ContextMenuProps) {
             )}
           </>
         )}
+        {canRevert && (
+          <>
+            <Divider />
+            <MenuItem
+              label="Revert Changes"
+              destructive
+              onClick={() => run(() => onRevertRequest(node, vcsType!))}
+            />
+          </>
+        )}
       </div>
     </OverlayWrapper>
   );
 }
 
-function MenuItem({ label, onClick }: { label: string; onClick: () => void }) {
+function MenuItem({
+  label,
+  onClick,
+  destructive,
+}: { label: string; onClick: () => void; destructive?: boolean }) {
   return (
     <button
       role="menuitem"
       onClick={onClick}
-      className="w-full text-left px-3 py-1.5 text-[12px] text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)]"
+      className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-[var(--ctp-surface1)]"
+      style={{ color: destructive ? "var(--ctp-red)" : "var(--ctp-text)" }}
     >
       {label}
     </button>

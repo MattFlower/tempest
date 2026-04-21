@@ -127,7 +127,9 @@ export interface NetworkInterface {
 }
 
 export interface McpToolConfig {
-  showWebpage: boolean;
+  showWebpage?: boolean;
+  showMermaidDiagram?: boolean;
+  showMarkdown?: boolean;
 }
 
 export interface AppConfig {

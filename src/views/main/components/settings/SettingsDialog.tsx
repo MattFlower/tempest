@@ -45,6 +45,8 @@ export function SettingsDialog() {
 
   // MCP Tools tab state
   const [showWebpage, setShowWebpage] = useState(true);
+  const [showMermaidDiagram, setShowMermaidDiagram] = useState(true);
+  const [showMarkdown, setShowMarkdown] = useState(true);
 
   // Keybindings tab state — map of commandId → override (string or null for unbound).
   // Missing entries fall back to the command's default keybinding.
@@ -74,6 +76,8 @@ export function SettingsDialog() {
       setHttpAllowTerminalConnect(cfg.httpAllowTerminalConnect ?? false);
       setHttpAllowTerminalWrite(cfg.httpAllowTerminalWrite ?? false);
       setShowWebpage(cfg.mcpTools?.showWebpage !== false);
+      setShowMermaidDiagram(cfg.mcpTools?.showMermaidDiagram !== false);
+      setShowMarkdown(cfg.mcpTools?.showMarkdown !== false);
       setKeybindings(cfg.keybindings ?? {});
       if (cfg.httpServer) {
         setHttpEnabled(cfg.httpServer.enabled);
@@ -108,7 +112,7 @@ export function SettingsDialog() {
       httpDefaultPlanMode: httpPlanMode,
       httpAllowTerminalConnect,
       httpAllowTerminalWrite,
-      mcpTools: { showWebpage },
+      mcpTools: { showWebpage, showMermaidDiagram, showMarkdown },
       httpServer: {
         enabled: httpEnabled,
         port: httpPort,
@@ -193,6 +197,8 @@ export function SettingsDialog() {
       (config.httpAllowTerminalConnect ?? false) !== httpAllowTerminalConnect ||
       (config.httpAllowTerminalWrite ?? false) !== httpAllowTerminalWrite ||
       (config.mcpTools?.showWebpage !== false) !== showWebpage ||
+      (config.mcpTools?.showMermaidDiagram !== false) !== showMermaidDiagram ||
+      (config.mcpTools?.showMarkdown !== false) !== showMarkdown ||
       (config.httpServer?.enabled ?? false) !== httpEnabled ||
       (config.httpServer?.port ?? 7778) !== httpPort ||
       (config.httpServer?.hostname ?? "127.0.0.1") !== httpHostname ||
@@ -315,6 +321,10 @@ export function SettingsDialog() {
               <McpToolsTab
                 showWebpage={showWebpage}
                 setShowWebpage={setShowWebpage}
+                showMermaidDiagram={showMermaidDiagram}
+                setShowMermaidDiagram={setShowMermaidDiagram}
+                showMarkdown={showMarkdown}
+                setShowMarkdown={setShowMarkdown}
               />
             )}
             {activeTab === "pi" && <PiEnvVarsTab />}
@@ -1160,9 +1170,17 @@ function PiEnvVarsTab() {
 function McpToolsTab({
   showWebpage,
   setShowWebpage,
+  showMermaidDiagram,
+  setShowMermaidDiagram,
+  showMarkdown,
+  setShowMarkdown,
 }: {
   showWebpage: boolean;
   setShowWebpage: (v: boolean) => void;
+  showMermaidDiagram: boolean;
+  setShowMermaidDiagram: (v: boolean) => void;
+  showMarkdown: boolean;
+  setShowMarkdown: (v: boolean) => void;
 }) {
   return (
     <>
@@ -1184,6 +1202,36 @@ function McpToolsTab({
           </p>
         </div>
         <ToggleSwitch value={showWebpage} onChange={setShowWebpage} />
+      </div>
+
+      <div className="flex items-center justify-between gap-3 py-1">
+        <div className="flex flex-col gap-0.5">
+          <label
+            className="text-[11px] font-semibold"
+            style={{ color: "var(--ctp-subtext0)" }}
+          >
+            Show Mermaid Diagram
+          </label>
+          <p className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
+            Allow Claude to render Mermaid diagrams (flowcharts, sequence diagrams, state machines) in a browser pane.
+          </p>
+        </div>
+        <ToggleSwitch value={showMermaidDiagram} onChange={setShowMermaidDiagram} />
+      </div>
+
+      <div className="flex items-center justify-between gap-3 py-1">
+        <div className="flex flex-col gap-0.5">
+          <label
+            className="text-[11px] font-semibold"
+            style={{ color: "var(--ctp-subtext0)" }}
+          >
+            Show Markdown
+          </label>
+          <p className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
+            Allow Claude to render Markdown (design notes, summaries, code walkthroughs) in a browser pane.
+          </p>
+        </div>
+        <ToggleSwitch value={showMarkdown} onChange={setShowMarkdown} />
       </div>
     </>
   );

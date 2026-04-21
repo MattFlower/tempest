@@ -110,7 +110,18 @@ function getBookmarkManager(repoPath: string): BookmarkManager {
 const workspaceManager = new WorkspaceManager();
 const sessionStateManager = new SessionStateManager();
 const hookListener = new HookEventListener(HookSettingsBuilder.socketPath);
-const mcpServer = new McpHttpServer();
+const mcpServer = new McpHttpServer({
+  // Consult workspaceManager at request time so settings toggles take effect
+  // immediately (next tools/list call) without restarting the MCP server.
+  isToolEnabled: (name) => {
+    const tools = workspaceManager.getConfig().mcpTools;
+    if (!tools) return true; // undefined config = all-on default
+    if (name === "show_webpage") return tools.showWebpage !== false;
+    if (name === "show_mermaid_diagram") return tools.showMermaidDiagram !== false;
+    if (name === "show_markdown") return tools.showMarkdown !== false;
+    return true;
+  },
+});
 HookSettingsBuilder.cleanupStaleSettingsFiles().catch((err) =>
   console.error("[main] Settings cleanup failed:", err),
 );
@@ -1635,6 +1646,12 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
       const workspacePath = resolveWorkspacePath(workspaceKey);
       try {
         win.webview.rpc.send.showMermaidDiagram({ title, filePath, workspacePath, diagramId });
+      } catch { /* webview not ready */ }
+    };
+    mcpServer.onShowMarkdown = (workspaceKey, title, filePath, markdownId) => {
+      const workspacePath = resolveWorkspacePath(workspaceKey);
+      try {
+        win.webview.rpc.send.showMarkdown({ title, filePath, workspacePath, markdownId });
       } catch { /* webview not ready */ }
     };
     mcpServer.start();

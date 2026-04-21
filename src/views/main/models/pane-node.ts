@@ -32,6 +32,8 @@ export interface PaneTab {
   mermaidDiagramId?: string;
   /** Transient: lets the show_webpage MCP handler find an existing pane to reload. */
   webpageId?: string;
+  /** Transient: lets the show_markdown MCP handler find an existing pane to reload. */
+  markdownId?: string;
 }
 
 export interface Pane {

@@ -25,7 +25,11 @@ function isHttpServerConfig(value: unknown): value is HttpServerConfig {
 
 function isMcpToolConfig(value: unknown): value is McpToolConfig {
   if (!isRecord(value)) return false;
-  return typeof value.showWebpage === "boolean";
+  // All fields are optional; any present field must be a boolean.
+  const keys = ["showWebpage", "showMermaidDiagram", "showMarkdown"] as const;
+  return keys.every(
+    (k) => value[k] === undefined || typeof value[k] === "boolean",
+  );
 }
 
 function normalizeKeybindings(value: unknown): Record<string, string | null> | undefined {

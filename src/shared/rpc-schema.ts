@@ -88,7 +88,7 @@ export interface BunRequests {
       sessionId?: string;
       withHooks: boolean;
       withChannel?: boolean;
-      withWebpage?: boolean;
+      withMcp?: boolean;
       mcpPort?: number;
       workspaceName?: string;
       planMode?: boolean;
@@ -751,5 +751,11 @@ export interface WebviewMessages {
     filePath: string;
     workspacePath: string;
     diagramId: string;
+  };
+  showMarkdown: {
+    title: string;
+    filePath: string;
+    workspacePath: string;
+    markdownId: string;
   };
 }

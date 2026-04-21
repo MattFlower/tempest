@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - New `show_mermaid_diagram` MCP tool lets Claude render Mermaid diagrams (flowcharts, sequence diagrams, state machines, ER diagrams, etc.) in a browser pane next to the conversation. The tool returns a `diagram_id`; passing it back on a later call updates the same pane in place instead of spawning a new one, so iterating on a diagram doesn't accumulate near-duplicate tabs. If the user closed the pane between calls, an update silently reopens a new pane bound to the same id. Diagrams are stored under `~/.config/tempest/mermaid-diagrams/<workspaceKey>/<diagram_id>.html`.
+- New `show_markdown` MCP tool renders Markdown (summaries, design notes, RFC-style docs, tables, code walkthroughs) as styled HTML in a browser pane. Fenced ` ```mermaid ` blocks render as diagrams. Same update semantics as the other `show_*` tools — returns a `markdown_id`, pass it back to update in place. Files are stored under `~/.config/tempest/markdown-previews/<workspaceKey>/<markdown_id>.html`.
+- Settings → MCP Tools now has independent toggles for all three MCP tools (`show_webpage`, `show_mermaid_diagram`, `show_markdown`). Previously the "Show Webpage" switch was the only one and it actually turned the whole MCP server off; now each tool is gated independently at the server's `tools/list` / `tools/call` layer. If all three are disabled, Claude no longer receives `--mcp-config` at all. Toggles take effect for the next Claude session.
 
 ### Changed
 

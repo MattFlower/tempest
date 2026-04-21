@@ -9,6 +9,7 @@ import { McpHttpServer } from "./mcp-http-server";
 const TMP_DIR = mkdtempSync(join(tmpdir(), "tempest-mcp-test-"));
 const TMP_MERMAID_DIR = join(TMP_DIR, "mermaid-diagrams");
 const TMP_WEBPAGE_DIR = join(TMP_DIR, "webpage-previews");
+const TMP_MARKDOWN_DIR = join(TMP_DIR, "markdown-previews");
 
 describe("McpHttpServer", () => {
   let server: McpHttpServer;
@@ -19,6 +20,7 @@ describe("McpHttpServer", () => {
     server = new McpHttpServer({
       webpagePreviewsDir: TMP_WEBPAGE_DIR,
       mermaidDiagramsDir: TMP_MERMAID_DIR,
+      markdownPreviewsDir: TMP_MARKDOWN_DIR,
     });
     server.start();
     baseUrl = `http://127.0.0.1:${server.getPort()}`;
@@ -245,7 +247,7 @@ describe("McpHttpServer", () => {
     expect(capture!.filePath.startsWith(join(TMP_WEBPAGE_DIR, "test-ws") + "/")).toBe(true);
   });
 
-  it("lists both show_webpage and show_mermaid_diagram tools", async () => {
+  it("lists all three show_* tools", async () => {
     const response = await post("/mcp/default", {
       jsonrpc: "2.0",
       id: 1,
@@ -255,7 +257,7 @@ describe("McpHttpServer", () => {
     expect(response.status).toBe(200);
     const parsed = (await response.json()) as any;
     const names = parsed.result.tools.map((t: any) => t.name).sort();
-    expect(names).toEqual(["show_mermaid_diagram", "show_webpage"]);
+    expect(names).toEqual(["show_markdown", "show_mermaid_diagram", "show_webpage"]);
   });
 
   it("show_mermaid_diagram creates a file and invokes the callback with a UUID", async () => {
@@ -357,5 +359,191 @@ describe("McpHttpServer", () => {
     expect(capture!.diagramId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     // File must live inside the workspace dir, not escape it.
     expect(capture!.filePath.startsWith(join(TMP_MERMAID_DIR, "test-ws") + "/")).toBe(true);
+  });
+
+  it("show_markdown creates a file, renders to HTML, and invokes the callback with a UUID", async () => {
+    let capture: { workspaceKey: string; title: string; filePath: string; markdownId: string } | null = null;
+    server.onShowMarkdown = (workspaceKey, title, filePath, markdownId) => {
+      capture = { workspaceKey, title, filePath, markdownId };
+    };
+
+    const response = await post("/mcp/test-ws", {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "show_markdown",
+        arguments: { markdown: "# Hello\n\nSome **bold** text.", title: "Notes" },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    const parsed = (await response.json()) as any;
+    expect(parsed.result.isError).toBeFalsy();
+    const text = parsed.result.content[0].text as string;
+
+    expect(capture).not.toBeNull();
+    expect(capture!.workspaceKey).toBe("test-ws");
+    expect(capture!.title).toBe("Notes");
+    expect(capture!.markdownId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(text).toContain(capture!.markdownId);
+    expect(capture!.filePath).toBe(join(TMP_MARKDOWN_DIR, "test-ws", `${capture!.markdownId}.html`));
+
+    expect(existsSync(capture!.filePath)).toBe(true);
+    const html = readFileSync(capture!.filePath, "utf-8");
+    // buildMarkdownHTML produced real rendered output, not raw markdown.
+    expect(html).toContain("<h1"); // rendered heading
+    expect(html).toContain("<strong>bold</strong>"); // rendered emphasis
+    expect(html).not.toContain("# Hello\n"); // raw markdown NOT present
+  });
+
+  it("show_markdown overwrites the same file on update and uses the caller's markdown_id", async () => {
+    let capture: { filePath: string; markdownId: string } | null = null;
+    server.onShowMarkdown = (_ws, _title, filePath, markdownId) => {
+      capture = { filePath, markdownId };
+    };
+
+    await post("/mcp/test-ws", {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "show_markdown",
+        arguments: { markdown: "# v1", title: "Notes" },
+      },
+    });
+    const firstCapture = capture!;
+
+    await post("/mcp/test-ws", {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "show_markdown",
+        arguments: {
+          markdown: "# v2 updated",
+          title: "Notes v2",
+          markdown_id: firstCapture.markdownId,
+        },
+      },
+    });
+    const secondCapture = capture!;
+
+    expect(secondCapture.markdownId).toBe(firstCapture.markdownId);
+    expect(secondCapture.filePath).toBe(firstCapture.filePath);
+    expect(readFileSync(secondCapture.filePath, "utf-8")).toContain("v2 updated");
+  });
+
+  it("show_markdown rejects a path-traversal markdown_id and mints a fresh UUID", async () => {
+    let capture: { filePath: string; markdownId: string } | null = null;
+    server.onShowMarkdown = (_ws, _title, filePath, markdownId) => {
+      capture = { filePath, markdownId };
+    };
+
+    const response = await post("/mcp/test-ws", {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "show_markdown",
+        arguments: {
+          markdown: "hi",
+          title: "Notes",
+          markdown_id: "../../../etc/passwd",
+        },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(capture!.markdownId).not.toBe("../../../etc/passwd");
+    expect(capture!.markdownId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(capture!.filePath.startsWith(join(TMP_MARKDOWN_DIR, "test-ws") + "/")).toBe(true);
+  });
+
+  describe("isToolEnabled filtering", () => {
+    // Use a dedicated server per test so the predicate under test is
+    // isolated from the default beforeEach server.
+    let gated: McpHttpServer;
+    let gatedUrl: string;
+    let gatedToken: string;
+    let enabledSet: Set<string>;
+
+    beforeEach(() => {
+      enabledSet = new Set(["show_webpage", "show_mermaid_diagram", "show_markdown"]);
+      gated = new McpHttpServer({
+        webpagePreviewsDir: TMP_WEBPAGE_DIR,
+        mermaidDiagramsDir: TMP_MERMAID_DIR,
+        markdownPreviewsDir: TMP_MARKDOWN_DIR,
+        isToolEnabled: (name) => enabledSet.has(name),
+      });
+      gated.start();
+      gatedUrl = `http://127.0.0.1:${gated.getPort()}`;
+      gatedToken = gated.getToken();
+    });
+
+    afterEach(() => {
+      gated.stop();
+    });
+
+    async function gatedPost(body: unknown): Promise<Response> {
+      return fetch(`${gatedUrl}/mcp/default`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${gatedToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+    }
+
+    it("tools/list omits tools for which isToolEnabled returns false", async () => {
+      enabledSet = new Set(["show_webpage"]); // mermaid + markdown disabled
+
+      const response = await gatedPost({ jsonrpc: "2.0", id: 1, method: "tools/list" });
+      const parsed = (await response.json()) as any;
+      const names = parsed.result.tools.map((t: any) => t.name);
+      expect(names).toEqual(["show_webpage"]);
+    });
+
+    it("tools/list returns an empty list when all tools are disabled", async () => {
+      enabledSet = new Set(); // all disabled
+
+      const response = await gatedPost({ jsonrpc: "2.0", id: 1, method: "tools/list" });
+      const parsed = (await response.json()) as any;
+      expect(parsed.result.tools).toEqual([]);
+    });
+
+    it("tools/call refuses a disabled tool with isError and a clear message", async () => {
+      enabledSet = new Set(["show_webpage"]); // mermaid disabled
+
+      const response = await gatedPost({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "show_mermaid_diagram",
+          arguments: { diagram: "graph LR; A-->B", title: "Flow" },
+        },
+      });
+      const parsed = (await response.json()) as any;
+      expect(parsed.result.isError).toBe(true);
+      expect(parsed.result.content[0].text).toContain("disabled in Tempest settings");
+    });
+
+    it("tools/call still works for an enabled tool when siblings are disabled", async () => {
+      enabledSet = new Set(["show_markdown"]);
+
+      const response = await gatedPost({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "show_markdown",
+          arguments: { markdown: "# ok", title: "Notes" },
+        },
+      });
+      const parsed = (await response.json()) as any;
+      expect(parsed.result.isError).toBeFalsy();
+    });
   });
 });

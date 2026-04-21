@@ -7,8 +7,9 @@
 import { mkdir } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
-import { WEBPAGE_PREVIEWS_DIR, MERMAID_DIAGRAMS_DIR } from "../config/paths";
+import { WEBPAGE_PREVIEWS_DIR, MERMAID_DIAGRAMS_DIR, MARKDOWN_PREVIEWS_DIR } from "../config/paths";
 import { buildMermaidHTML } from "./mermaid-html-builder";
+import { buildMarkdownHTML } from "../markdown/markdown-html-builder";
 
 const INSTRUCTIONS = `You are running inside Tempest, a developer tool with a pane-based UI. The user can see browser panes alongside their terminal.
 
@@ -16,11 +17,14 @@ When discussing UI designs, frontend layouts, visual architecture, or anything t
 
 For flowcharts, sequence diagrams, state machines, ER diagrams, Gantt charts, or any other Mermaid-supported visualization, use show_mermaid_diagram instead of hand-rolling HTML. Iteration works the same way: pass the returned diagram_id back as diagram_id to update in place.
 
+For long-form written content — summaries, design docs, RFC-style explanations, tables, code walkthroughs — use show_markdown to render formatted text. Tempest styles it, syntax-highlights code blocks, and renders any embedded Mermaid. Iteration works the same way: pass the returned markdown_id back to update in place.
+
 You can call these tools multiple times to iterate on a design based on user feedback.
 
 Technical notes:
 - show_webpage: use a complete HTML document with inline CSS (no external stylesheets). SVGs, canvas, and standard JS all work. Omit page_id to create; pass the returned id to update.
-- show_mermaid_diagram: pass Mermaid source only — Tempest renders it. Omit diagram_id to create; pass the returned id to update.`;
+- show_mermaid_diagram: pass Mermaid source only — Tempest renders it. Omit diagram_id to create; pass the returned id to update.
+- show_markdown: pass markdown source only — Tempest renders it to styled HTML. Fenced \`\`\`mermaid blocks render as diagrams. Omit markdown_id to create; pass the returned id to update.`;
 
 const SERVER_INFO = { name: "tempest-webpage", version: "0.0.1" };
 
@@ -72,8 +76,32 @@ const SHOW_MERMAID_DIAGRAM_TOOL = {
   },
 };
 
+const SHOW_MARKDOWN_TOOL = {
+  name: "show_markdown",
+  description:
+    "Render Markdown in a browser pane next to the conversation. Use for design notes, summaries, RFC-style explanations, tables, code walkthroughs, or anything better read as formatted text than as a chat bubble. Fenced ```mermaid blocks render as diagrams. The response returns a markdown_id — pass it back as the markdown_id argument on a later call to update the same document in place instead of opening a new pane.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      markdown: {
+        type: "string",
+        description: "Markdown source. GitHub-flavored. Fenced code blocks get syntax highlighting; ```mermaid blocks render as diagrams.",
+      },
+      title: {
+        type: "string",
+        description: "Title for the browser tab (e.g. 'Design Notes', 'Migration Plan').",
+      },
+      markdown_id: {
+        type: "string",
+        description: "Optional. Omit on the first call; pass the markdown_id returned by a previous call to update that document instead of creating a new one.",
+      },
+    },
+    required: ["markdown", "title"],
+  },
+};
+
 // Matches RFC 4122-style UUIDs (any version). Other shapes are rejected to
-// prevent path traversal via diagram_id / page_id (e.g. "../evil").
+// prevent path traversal via diagram_id / page_id / markdown_id.
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 class JsonRpcError extends Error {
@@ -84,11 +112,22 @@ class JsonRpcError extends Error {
   }
 }
 
+export type McpToolName = "show_webpage" | "show_mermaid_diagram" | "show_markdown";
+
 export interface McpHttpServerOptions {
   /** Override the directory where show_webpage writes HTML previews. Defaults to WEBPAGE_PREVIEWS_DIR. */
   webpagePreviewsDir?: string;
   /** Override the directory where show_mermaid_diagram writes HTML. Defaults to MERMAID_DIAGRAMS_DIR. */
   mermaidDiagramsDir?: string;
+  /** Override the directory where show_markdown writes HTML. Defaults to MARKDOWN_PREVIEWS_DIR. */
+  markdownPreviewsDir?: string;
+  /**
+   * Called at tools/list and tools/call time to decide whether a tool is
+   * available to the client. Defaults to always-enabled. The callback is
+   * invoked per request, so changes to the underlying config (e.g. user
+   * toggled a setting) take effect immediately without restarting the server.
+   */
+  isToolEnabled?: (name: McpToolName) => boolean;
 }
 
 export class McpHttpServer {
@@ -97,10 +136,14 @@ export class McpHttpServer {
   private token: string = "";
   private readonly webpagePreviewsDir: string;
   private readonly mermaidDiagramsDir: string;
+  private readonly markdownPreviewsDir: string;
+  private readonly isToolEnabled: (name: McpToolName) => boolean;
 
   constructor(options: McpHttpServerOptions = {}) {
     this.webpagePreviewsDir = options.webpagePreviewsDir ?? WEBPAGE_PREVIEWS_DIR;
     this.mermaidDiagramsDir = options.mermaidDiagramsDir ?? MERMAID_DIAGRAMS_DIR;
+    this.markdownPreviewsDir = options.markdownPreviewsDir ?? MARKDOWN_PREVIEWS_DIR;
+    this.isToolEnabled = options.isToolEnabled ?? (() => true);
   }
 
   /** Called when a show_webpage tool is invoked (create or update). */
@@ -111,6 +154,11 @@ export class McpHttpServer {
   /** Called when a show_mermaid_diagram tool is invoked (create or update). */
   onShowMermaidDiagram:
     | ((workspaceKey: string, title: string, filePath: string, diagramId: string) => void)
+    | null = null;
+
+  /** Called when a show_markdown tool is invoked (create or update). */
+  onShowMarkdown:
+    | ((workspaceKey: string, title: string, filePath: string, markdownId: string) => void)
     | null = null;
 
   getPort(): number {
@@ -280,16 +328,48 @@ export class McpHttpServer {
           instructions: INSTRUCTIONS,
         };
 
-      case "tools/list":
-        return { tools: [SHOW_WEBPAGE_TOOL, SHOW_MERMAID_DIAGRAM_TOOL] };
+      case "tools/list": {
+        // Filter by the caller's enabled-tools predicate so settings toggles
+        // take effect at the next tools/list call (Claude Code issues one per
+        // new session; in-flight sessions keep their cached list).
+        const all: Array<[McpToolName, unknown]> = [
+          ["show_webpage", SHOW_WEBPAGE_TOOL],
+          ["show_mermaid_diagram", SHOW_MERMAID_DIAGRAM_TOOL],
+          ["show_markdown", SHOW_MARKDOWN_TOOL],
+        ];
+        return { tools: all.filter(([name]) => this.isToolEnabled(name)).map(([, t]) => t) };
+      }
 
       case "tools/call": {
         const toolName = (params as { name?: string }).name;
+        // If a tool was disabled mid-session (Claude has it cached in its
+        // tool list), refuse cleanly so the model gets feedback instead of
+        // running a side-effect the user just turned off.
+        if (
+          toolName === "show_webpage"
+          || toolName === "show_mermaid_diagram"
+          || toolName === "show_markdown"
+        ) {
+          if (!this.isToolEnabled(toolName)) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Tool ${toolName} is disabled in Tempest settings.`,
+                },
+              ],
+              isError: true,
+            };
+          }
+        }
         if (toolName === "show_webpage") {
           return this.handleShowWebpage(params, workspaceKey);
         }
         if (toolName === "show_mermaid_diagram") {
           return this.handleShowMermaidDiagram(params, workspaceKey);
+        }
+        if (toolName === "show_markdown") {
+          return this.handleShowMarkdown(params, workspaceKey);
         }
         return { content: [{ type: "text", text: `Unknown tool: ${toolName}` }], isError: true };
       }
@@ -384,6 +464,50 @@ export class McpHttpServer {
     } catch (err) {
       return {
         content: [{ type: "text", text: `Failed to show mermaid diagram: ${err}` }],
+        isError: true,
+      };
+    }
+  }
+
+  private async handleShowMarkdown(
+    params: Record<string, unknown>,
+    workspaceKey: string,
+  ): Promise<unknown> {
+    const args = (params as { arguments?: Record<string, unknown> }).arguments as {
+      markdown: string;
+      title: string;
+      markdown_id?: string;
+    };
+
+    // Same UUID-validated id → filename strategy as the sibling tools: a
+    // caller-supplied markdown_id must match UUID shape, otherwise we mint
+    // a fresh one so the filename stays a trusted, bounded token.
+    const markdownId =
+      typeof args.markdown_id === "string" && UUID_REGEX.test(args.markdown_id)
+        ? args.markdown_id
+        : crypto.randomUUID();
+
+    try {
+      const previewDir = join(this.markdownPreviewsDir, workspaceKey);
+      await mkdir(previewDir, { recursive: true });
+
+      const filePath = join(previewDir, `${markdownId}.html`);
+      const html = buildMarkdownHTML(args.markdown);
+      await Bun.write(filePath, html);
+
+      this.onShowMarkdown?.(workspaceKey, args.title, filePath, markdownId);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Markdown displayed. markdown_id: ${markdownId} — pass this back as markdown_id on a later call to update the same document instead of opening a new pane.`,
+          },
+        ],
+      };
+    } catch (err) {
+      return {
+        content: [{ type: "text", text: `Failed to show markdown: ${err}` }],
         isError: true,
       };
     }

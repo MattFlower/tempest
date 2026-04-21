@@ -38,3 +38,6 @@ export const WEBPAGE_PREVIEWS_DIR = join(TEMPEST_DIR, "webpage-previews");
 
 // Mermaid diagrams (show_mermaid_diagram MCP tool)
 export const MERMAID_DIAGRAMS_DIR = join(TEMPEST_DIR, "mermaid-diagrams");
+
+// Markdown previews (show_markdown MCP tool)
+export const MARKDOWN_PREVIEWS_DIR = join(TEMPEST_DIR, "markdown-previews");

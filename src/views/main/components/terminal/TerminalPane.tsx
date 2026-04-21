@@ -128,13 +128,21 @@ export function TerminalPane({
         try {
           const workspacePath = cwdRef.current;
           const workspaceName = workspacePath.split("/").pop() ?? "default";
-          const webpageEnabled = useStore.getState().config?.mcpTools?.showWebpage !== false;
+          // Each tool defaults to enabled when the config field is undefined,
+          // so an older config file (pre-markdown/mermaid toggles) keeps
+          // working unchanged. --mcp-config is only passed to claude when at
+          // least one tool is enabled; otherwise there's nothing to serve.
+          const mcpTools = useStore.getState().config?.mcpTools;
+          const mcpEnabled =
+            mcpTools?.showWebpage !== false
+            || mcpTools?.showMermaidDiagram !== false
+            || mcpTools?.showMarkdown !== false;
           const result = await api.buildClaudeCommand({
             workspacePath,
             resume: resumeRef.current || !!sessionIdRef.current,
             sessionId: sessionIdRef.current,
             withHooks: true,
-            withWebpage: webpageEnabled,
+            withMcp: mcpEnabled,
             workspaceName,
             planMode: pendingPlanMode ?? undefined,
           });

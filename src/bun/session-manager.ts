@@ -32,7 +32,7 @@ export class SessionManager {
     sessionId?: string;
     withHooks: boolean;
     withChannel?: boolean;
-    withWebpage?: boolean;
+    withMcp?: boolean;
     mcpPort?: number;
     mcpToken?: string;
     workspaceName?: string;
@@ -73,7 +73,7 @@ export class SessionManager {
       parts.push("--settings", settingsPath);
     }
 
-    if (params.withWebpage && params.mcpPort && params.mcpToken) {
+    if (params.withMcp && params.mcpPort && params.mcpToken) {
       const workspaceKey = createHash("sha256")
         .update(params.workspacePath)
         .digest("hex")

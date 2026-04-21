@@ -279,9 +279,21 @@ export function App() {
               )}
             </div>
 
-            {/* Run pane — stays mounted even when hidden so the PTYs running
-                inside it aren't killed on collapse. */}
-            {selectedWorkspacePath && <RunPane workspacePath={selectedWorkspacePath} />}
+            {/* Run panes — one per visited workspace, stacked in the column
+                flex. Non-selected workspaces collapse to height 0 so their
+                RunPane (and the xterm instances inside) stay mounted and keep
+                receiving script output across workspace switches. */}
+            {allWorkspacePaths.map((wsPath) => (
+              <div
+                key={wsPath}
+                style={{
+                  height: wsPath === selectedWorkspacePath ? "auto" : 0,
+                  overflow: "hidden",
+                }}
+              >
+                <RunPane workspacePath={wsPath} />
+              </div>
+            ))}
           </div>
         </div>
 

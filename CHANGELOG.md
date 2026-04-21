@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Run pane scripts no longer lose their output when switching workspaces. Previously the Run pane was only mounted for the selected workspace, so leaving and returning tore down the xterm instances inside it (and killed their PTYs). All visited workspaces now keep their Run panes mounted, collapsed to zero height when hidden, so script stdout/stderr keeps streaming in the background and is intact on return.
+
 ### Removed
 
 ## [0.16.1] - 2026-04-19

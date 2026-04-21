@@ -741,4 +741,10 @@ export interface WebviewMessages {
   scriptExit: { runId: string; exitCode: number };
   selectWorkspace: { workspacePath: string };
   showWebpage: { title: string; filePath: string; workspacePath: string };
+  showMermaidDiagram: {
+    title: string;
+    filePath: string;
+    workspacePath: string;
+    diagramId: string;
+  };
 }

@@ -28,6 +28,8 @@ export interface PaneTab {
   progressValue?: number; // 0-100
   shellCwd?: string; // Current working directory (tracked via OSC 7)
   scrollbackContent?: string; // Transient: saved scrollback for restore on startup
+  /** Transient: lets the show_mermaid_diagram MCP handler find an existing pane to reload. */
+  mermaidDiagramId?: string;
 }
 
 export interface Pane {

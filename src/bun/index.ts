@@ -1614,7 +1614,7 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
 
   // Start MCP HTTP server for the show_webpage tool
   try {
-    mcpServer.onShowWebpage = (workspaceKey, title, filePath) => {
+    const resolveWorkspacePath = (workspaceKey: string): string => {
       const all = workspaceManager.getAllWorkspaces();
       const ws = all.find(
         (w) =>
@@ -1622,9 +1622,19 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
           || w.name === workspaceKey
           || w.path.endsWith(`/${workspaceKey}`),
       );
-      const workspacePath = ws?.path ?? workspaceKey;
+      return ws?.path ?? workspaceKey;
+    };
+
+    mcpServer.onShowWebpage = (workspaceKey, title, filePath) => {
+      const workspacePath = resolveWorkspacePath(workspaceKey);
       try {
         win.webview.rpc.send.showWebpage({ title, filePath, workspacePath });
+      } catch { /* webview not ready */ }
+    };
+    mcpServer.onShowMermaidDiagram = (workspaceKey, title, filePath, diagramId) => {
+      const workspacePath = resolveWorkspacePath(workspaceKey);
+      try {
+        win.webview.rpc.send.showMermaidDiagram({ title, filePath, workspacePath, diagramId });
       } catch { /* webview not ready */ }
     };
     mcpServer.start();

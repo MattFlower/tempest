@@ -7,18 +7,20 @@
 import { mkdir } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
-import { WEBPAGE_PREVIEWS_DIR } from "../config/paths";
+import { WEBPAGE_PREVIEWS_DIR, MERMAID_DIAGRAMS_DIR } from "../config/paths";
+import { buildMermaidHTML } from "./mermaid-html-builder";
 
 const INSTRUCTIONS = `You are running inside Tempest, a developer tool with a pane-based UI. The user can see browser panes alongside their terminal.
 
 When discussing UI designs, frontend layouts, visual architecture, or anything that would be clearer as a visual than as text — proactively use show_webpage to render an HTML preview for the user. This is especially valuable during planning: instead of describing a proposed UI in words, show it.
 
-You can call this tool multiple times to iterate on a design based on user feedback.
+For flowcharts, sequence diagrams, state machines, ER diagrams, Gantt charts, or any other Mermaid-supported visualization, use show_mermaid_diagram instead of hand-rolling HTML. To iterate on a diagram, pass the diagram_id returned by the first call back in as diagram_id on subsequent calls — the same pane reloads with the new content rather than a new pane being spawned.
+
+You can call these tools multiple times to iterate on a design based on user feedback.
 
 Technical notes:
-- The HTML renders in a browser pane next to the conversation
-- Use a complete HTML document with inline CSS (no external stylesheets)
-- SVGs, canvas, and standard JS all work`;
+- show_webpage: use a complete HTML document with inline CSS (no external stylesheets). SVGs, canvas, and standard JS all work.
+- show_mermaid_diagram: pass Mermaid source only — Tempest renders it. Omit diagram_id to create; pass the returned id to update.`;
 
 const SERVER_INFO = { name: "tempest-webpage", version: "0.0.1" };
 
@@ -42,6 +44,34 @@ const SHOW_WEBPAGE_TOOL = {
   },
 };
 
+const SHOW_MERMAID_DIAGRAM_TOOL = {
+  name: "show_mermaid_diagram",
+  description:
+    "Render a Mermaid diagram in a browser pane next to the conversation. Use for flowcharts, sequence diagrams, state diagrams, ER diagrams, Gantt charts, etc. The response returns a diagram_id — pass it back as the diagram_id argument on a later call to update the same diagram in place instead of opening a new pane.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      diagram: {
+        type: "string",
+        description: "Mermaid source code (e.g. 'graph LR; A-->B'). Do not wrap in ```mermaid fences.",
+      },
+      title: {
+        type: "string",
+        description: "Title for the browser tab (e.g. 'Auth Flow', 'State Machine').",
+      },
+      diagram_id: {
+        type: "string",
+        description: "Optional. Omit on the first call; pass the diagram_id returned by a previous call to update that diagram instead of creating a new one.",
+      },
+    },
+    required: ["diagram", "title"],
+  },
+};
+
+// Matches RFC 4122-style UUIDs (any version). Other shapes are rejected to
+// prevent path traversal via diagram_id (e.g. "../evil").
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 class JsonRpcError extends Error {
   readonly code: number;
   constructor(code: number, message: string) {
@@ -50,13 +80,32 @@ class JsonRpcError extends Error {
   }
 }
 
+export interface McpHttpServerOptions {
+  /** Override the directory where show_webpage writes HTML previews. Defaults to WEBPAGE_PREVIEWS_DIR. */
+  webpagePreviewsDir?: string;
+  /** Override the directory where show_mermaid_diagram writes HTML. Defaults to MERMAID_DIAGRAMS_DIR. */
+  mermaidDiagramsDir?: string;
+}
+
 export class McpHttpServer {
   private server: ReturnType<typeof Bun.serve> | null = null;
   private port: number = 0;
   private token: string = "";
+  private readonly webpagePreviewsDir: string;
+  private readonly mermaidDiagramsDir: string;
+
+  constructor(options: McpHttpServerOptions = {}) {
+    this.webpagePreviewsDir = options.webpagePreviewsDir ?? WEBPAGE_PREVIEWS_DIR;
+    this.mermaidDiagramsDir = options.mermaidDiagramsDir ?? MERMAID_DIAGRAMS_DIR;
+  }
 
   /** Called when a show_webpage tool is invoked. */
   onShowWebpage: ((workspaceKey: string, title: string, filePath: string) => void) | null = null;
+
+  /** Called when a show_mermaid_diagram tool is invoked (create or update). */
+  onShowMermaidDiagram:
+    | ((workspaceKey: string, title: string, filePath: string, diagramId: string) => void)
+    | null = null;
 
   getPort(): number {
     return this.port;
@@ -226,12 +275,15 @@ export class McpHttpServer {
         };
 
       case "tools/list":
-        return { tools: [SHOW_WEBPAGE_TOOL] };
+        return { tools: [SHOW_WEBPAGE_TOOL, SHOW_MERMAID_DIAGRAM_TOOL] };
 
       case "tools/call": {
         const toolName = (params as { name?: string }).name;
         if (toolName === "show_webpage") {
           return this.handleShowWebpage(params, workspaceKey);
+        }
+        if (toolName === "show_mermaid_diagram") {
+          return this.handleShowMermaidDiagram(params, workspaceKey);
         }
         return { content: [{ type: "text", text: `Unknown tool: ${toolName}` }], isError: true };
       }
@@ -254,7 +306,7 @@ export class McpHttpServer {
     };
 
     try {
-      const previewDir = join(WEBPAGE_PREVIEWS_DIR, workspaceKey);
+      const previewDir = join(this.webpagePreviewsDir, workspaceKey);
       await mkdir(previewDir, { recursive: true });
 
       const fileId = crypto.randomUUID();
@@ -269,6 +321,50 @@ export class McpHttpServer {
     } catch (err) {
       return {
         content: [{ type: "text", text: `Failed to show webpage: ${err}` }],
+        isError: true,
+      };
+    }
+  }
+
+  private async handleShowMermaidDiagram(
+    params: Record<string, unknown>,
+    workspaceKey: string,
+  ): Promise<unknown> {
+    const args = (params as { arguments?: Record<string, unknown> }).arguments as {
+      diagram: string;
+      title: string;
+      diagram_id?: string;
+    };
+
+    // Only accept a caller-supplied diagram_id if it matches UUID shape.
+    // Anything else (missing, wrong shape, path-traversal attempt) → mint a
+    // fresh UUID. This keeps the filename a trusted, bounded token.
+    const diagramId =
+      typeof args.diagram_id === "string" && UUID_REGEX.test(args.diagram_id)
+        ? args.diagram_id
+        : crypto.randomUUID();
+
+    try {
+      const diagramDir = join(this.mermaidDiagramsDir, workspaceKey);
+      await mkdir(diagramDir, { recursive: true });
+
+      const filePath = join(diagramDir, `${diagramId}.html`);
+      const html = buildMermaidHTML(args.diagram, args.title);
+      await Bun.write(filePath, html);
+
+      this.onShowMermaidDiagram?.(workspaceKey, args.title, filePath, diagramId);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Diagram displayed. diagram_id: ${diagramId} — pass this back as diagram_id on a later call to update the same diagram instead of opening a new pane.`,
+          },
+        ],
+      };
+    } catch (err) {
+      return {
+        content: [{ type: "text", text: `Failed to show mermaid diagram: ${err}` }],
         isError: true,
       };
     }

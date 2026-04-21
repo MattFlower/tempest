@@ -202,107 +202,116 @@ export function App() {
         />
       )}
 
-      {/* View mode selector bar — spans full width above sidebar/workspace split */}
-      <ViewModeBar workspacePath={selectedWorkspacePath} />
+      {/* Top bar — sidebar toggle on the left, HTTP server indicator on the right.
+          Workspace mode controls (Progress / Dashboard / VCS) live in the left
+          ActivityBar; see components/sidebar/ActivityBar.tsx. */}
+      <ViewModeBar />
 
       {/* Accent line below view mode bar */}
       <div className="h-px flex-shrink-0" style={{ backgroundColor: "var(--ctp-surface0)" }} />
 
       {/* Main content area — starts below accent line.
-          Workspace stack is always mounted so terminals survive Progress view
-          toggles; Progress view overlays on top when active. */}
-      <div className="flex flex-1 min-h-0 relative">
-        <div
-          className={`absolute inset-0 flex ${
-            progressViewActive ? "opacity-0 pointer-events-none" : "opacity-100"
-          }`}
-        >
-          {/* Activity bar — always visible, even when sidebar is hidden */}
-          <ActivityBar />
+          The ActivityBar sits at the left edge and stays visible/clickable in
+          every mode (including Progress) so the user can always switch views.
+          The sidebar + workspace stack is hidden (opacity + pointer-events) when
+          Progress is active, and the ProgressView overlays that region. */}
+      <div className="flex flex-1 min-h-0">
+        {/* Activity bar — always visible, even during Progress view or when the
+            wider sidebar panel is collapsed. */}
+        <ActivityBar />
 
-          {/* Sidebar */}
-          {sidebarVisible && (
-            <>
-              <div
-                className="flex-shrink-0"
-                style={{ width: sidebarWidth }}
-              >
-                <Sidebar />
+        <div className="flex-1 min-w-0 relative">
+          <div
+            className={`absolute inset-0 flex ${
+              progressViewActive ? "opacity-0 pointer-events-none" : "opacity-100"
+            }`}
+          >
+            {/* Sidebar */}
+            {sidebarVisible && (
+              <>
+                <div
+                  className="flex-shrink-0"
+                  style={{ width: sidebarWidth }}
+                >
+                  <Sidebar />
+                </div>
+
+                {/* Draggable divider */}
+                <div
+                  className="w-px flex-shrink-0 cursor-col-resize"
+                  style={{
+                    backgroundColor: isDragging ? "var(--ctp-surface2)" : "var(--ctp-surface0)",
+                    opacity: isDragging ? 1 : 0.5,
+                    padding: "0 2px",
+                    margin: "0 -2px",
+                  }}
+                  onMouseDown={onDividerMouseDown}
+                />
+              </>
+            )}
+
+            {/* Workspace Detail — all visited workspaces rendered simultaneously,
+                hidden with opacity pattern to preserve terminal state.
+                Column is split vertically: workspace views fill the top area,
+                the Run pane docks under them (spanning only the main content
+                width, not the sidebar). */}
+            <div className="flex-1 min-w-0 flex flex-col relative">
+              <div className="flex-1 min-h-0 relative">
+                {/* Workspace views — stacked, only selected is visible.
+                    Includes selected workspace (even if no tree yet) plus all
+                    previously visited workspaces (to keep their terminals alive). */}
+                {allWorkspacePaths.map((wsPath) => (
+                  <div
+                    key={wsPath}
+                    className={`absolute inset-0 ${
+                      wsPath === selectedWorkspacePath
+                        ? "opacity-100"
+                        : "opacity-0 pointer-events-none"
+                    }`}
+                  >
+                    <WorkspaceDetail workspacePath={wsPath} />
+                  </div>
+                ))}
+
+                {/* Empty state — shown when no workspace selected */}
+                {!selectedWorkspacePath && (
+                  <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--ctp-overlay0)]">
+                    <svg className="w-10 h-10" viewBox="0 0 24 24" fill="currentColor" opacity={0.3}>
+                      <path d="M4 17.27V4h16v13.27l-2-1.15-2 1.15-2-1.15-2 1.15-2-1.15-2 1.15-2-1.15-2 1.15ZM2 2v18l4-2.3 2 1.15 2-1.15 2 1.15 2-1.15 2 1.15 2-1.15L22 20V2H2Z" />
+                    </svg>
+                    <span className="text-sm">No Workspace Selected</span>
+                    <span className="text-xs">Select a workspace from the sidebar or create a new one.</span>
+                  </div>
+                )}
               </div>
 
-              {/* Draggable divider */}
-              <div
-                className="w-px flex-shrink-0 cursor-col-resize"
-                style={{
-                  backgroundColor: isDragging ? "var(--ctp-surface2)" : "var(--ctp-surface0)",
-                  opacity: isDragging ? 1 : 0.5,
-                  padding: "0 2px",
-                  margin: "0 -2px",
-                }}
-                onMouseDown={onDividerMouseDown}
-              />
-            </>
-          )}
-
-          {/* Workspace Detail — all visited workspaces rendered simultaneously,
-              hidden with opacity pattern to preserve terminal state.
-              Column is split vertically: workspace views fill the top area,
-              the Run pane docks under them (spanning only the main content
-              width, not the sidebar). */}
-          <div className="flex-1 min-w-0 flex flex-col relative">
-            <div className="flex-1 min-h-0 relative">
-              {/* Workspace views — stacked, only selected is visible.
-                  Includes selected workspace (even if no tree yet) plus all
-                  previously visited workspaces (to keep their terminals alive). */}
+              {/* Run panes — one per visited workspace, stacked in the column
+                  flex. Non-selected workspaces collapse to height 0 so their
+                  RunPane (and the xterm instances inside) stay mounted and keep
+                  receiving script output across workspace switches. */}
               {allWorkspacePaths.map((wsPath) => (
                 <div
                   key={wsPath}
-                  className={`absolute inset-0 ${
-                    wsPath === selectedWorkspacePath
-                      ? "opacity-100"
-                      : "opacity-0 pointer-events-none"
-                  }`}
+                  style={{
+                    height: wsPath === selectedWorkspacePath ? "auto" : 0,
+                    overflow: "hidden",
+                  }}
                 >
-                  <WorkspaceDetail workspacePath={wsPath} />
+                  <RunPane workspacePath={wsPath} />
                 </div>
               ))}
-
-              {/* Empty state — shown when no workspace selected */}
-              {!selectedWorkspacePath && (
-                <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--ctp-overlay0)]">
-                  <svg className="w-10 h-10" viewBox="0 0 24 24" fill="currentColor" opacity={0.3}>
-                    <path d="M4 17.27V4h16v13.27l-2-1.15-2 1.15-2-1.15-2 1.15-2-1.15-2 1.15-2-1.15-2 1.15ZM2 2v18l4-2.3 2 1.15 2-1.15 2 1.15 2-1.15 2 1.15 2-1.15L22 20V2H2Z" />
-                  </svg>
-                  <span className="text-sm">No Workspace Selected</span>
-                  <span className="text-xs">Select a workspace from the sidebar or create a new one.</span>
-                </div>
-              )}
             </div>
-
-            {/* Run panes — one per visited workspace, stacked in the column
-                flex. Non-selected workspaces collapse to height 0 so their
-                RunPane (and the xterm instances inside) stay mounted and keep
-                receiving script output across workspace switches. */}
-            {allWorkspacePaths.map((wsPath) => (
-              <div
-                key={wsPath}
-                style={{
-                  height: wsPath === selectedWorkspacePath ? "auto" : 0,
-                  overflow: "hidden",
-                }}
-              >
-                <RunPane workspacePath={wsPath} />
-              </div>
-            ))}
           </div>
+
+          {/* Progress view overlay — mounted only while active. Overlays the
+              sidebar + workspace region but leaves the ActivityBar (to its
+              left) untouched, so the user can switch views from here. */}
+          {progressViewActive && (
+            <div className="absolute inset-0 flex">
+              <ProgressView />
+            </div>
+          )}
         </div>
-
-        {/* Progress view overlay — mounted only while active */}
-        {progressViewActive && (
-          <div className="absolute inset-0 flex">
-            <ProgressView />
-          </div>
-        )}
       </div>
 
       {/* Developer tools pane — docks eruda inline above the footer */}

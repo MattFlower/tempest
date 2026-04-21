@@ -1349,9 +1349,14 @@ const win: any = new BrowserWindow({
   rpc,
 });
 
-// Vertically center the macOS traffic-light buttons inside our 40px (h-10) top bar.
-// (x, y) is the top-left of the close button, measured from the window's top-left.
-win.setWindowButtonPosition(16, 17);
+// Vertically align the macOS traffic-light buttons with the icons in the
+// ViewModeBar (sidebar toggle on the left, HTTP indicator on the right).
+// (x, y) is the top-left of the close button, measured from the window's
+// top-left. The ViewModeBar is ~34px tall (pt-2.5 pb-1 around a 28px button,
+// see components/layout/ViewModeBar.tsx), and its icons render with their
+// visible centers near y≈22 — pulling the lights up from the AppKit default
+// keeps them level with those icons instead of drifting below.
+win.setWindowButtonPosition(12, 12);
 
 // --- Stream A: Wire PTY output/exit to webview ---
 // Before the webview attaches, RPC sends throw synchronously — swallow those

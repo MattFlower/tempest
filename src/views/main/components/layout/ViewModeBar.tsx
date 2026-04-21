@@ -1,5 +1,3 @@
-import { useCallback } from "react";
-import { ViewMode } from "../../../../shared/ipc-types";
 import { useStore } from "../../state/store";
 
 function SidebarToggleButton() {
@@ -9,7 +7,11 @@ function SidebarToggleButton() {
   return (
     <button
       onClick={toggleSidebar}
-      className="electrobun-webkit-app-region-no-drag p-1 rounded transition-colors hover:bg-[var(--ctp-surface0)]"
+      // Asymmetric pt/pb (instead of p-1 everywhere) nudges just this icon 1px
+      // lower inside its button, without changing the button's overall size or
+      // affecting the HTTP indicator on the other end of the bar, so the panel
+      // glyph lines up with the macOS traffic lights and the HTTP icon.
+      className="electrobun-webkit-app-region-no-drag pt-[5px] pb-[3px] px-1 rounded transition-colors hover:bg-[var(--ctp-surface0)]"
       title={sidebarVisible ? "Collapse sidebar (⌘\\)" : "Expand sidebar (⌘\\)"}
       aria-label={sidebarVisible ? "Collapse sidebar" : "Expand sidebar"}
     >
@@ -99,76 +101,19 @@ function HttpServerIcon() {
   );
 }
 
-interface ViewModeBarProps {
-  workspacePath: string | null;
-}
-
-const workspaceModes: { mode: ViewMode; label: string }[] = [
-  { mode: ViewMode.Dashboard, label: "Dashboard" },
-  { mode: ViewMode.Terminal, label: "Terminal" },
-  { mode: ViewMode.VCS, label: "VCS" },
-];
-
-export function ViewModeBar({ workspacePath }: ViewModeBarProps) {
-  const viewMode = useStore(
-    (s) => workspacePath ? (s.workspaceViewMode[workspacePath] ?? ViewMode.Terminal) : ViewMode.Terminal,
-  );
-  const setViewMode = useStore((s) => s.setViewMode);
-  const progressActive = useStore((s) => s.progressViewActive);
-  const setProgressActive = useStore((s) => s.setProgressViewActive);
-
-  const handleSelectWorkspaceMode = useCallback(
-    (mode: ViewMode) => {
-      if (progressActive) setProgressActive(false);
-      if (workspacePath) setViewMode(workspacePath, mode);
-    },
-    [workspacePath, setViewMode, progressActive, setProgressActive],
-  );
-
-  const handleToggleProgress = useCallback(() => {
-    setProgressActive(!progressActive);
-  }, [progressActive, setProgressActive]);
-
+export function ViewModeBar() {
+  // Padding is tuned so the bar's icons vertically line up with macOS's native
+  // red/yellow/green traffic lights. Their Y is set explicitly by
+  // win.setWindowButtonPosition(...) in src/bun/index.ts; pt/pb here fine-tune
+  // the icon Y to match. pl-[72px] on the left container reserves horizontal
+  // space for those traffic lights.
   return (
     <div
-      className="electrobun-webkit-app-region-drag flex items-center pt-2.5 pb-1.5 flex-shrink-0 px-4"
+      className="electrobun-webkit-app-region-drag flex items-center pt-2 pb-1 flex-shrink-0 px-4"
       style={{ backgroundColor: "var(--ctp-mantle)" }}
     >
       <div className="flex-1 flex justify-start pl-[72px]">
         <SidebarToggleButton />
-      </div>
-      <div
-        className="electrobun-webkit-app-region-no-drag flex items-center rounded-full overflow-hidden border border-[var(--ctp-surface0)]"
-        style={{ backgroundColor: "var(--ctp-crust)" }}
-      >
-        {/* Progress pill — always first */}
-        <button
-          onClick={handleToggleProgress}
-          className="px-4 py-2 text-xs font-medium rounded-full transition-colors duration-100"
-          style={{
-            backgroundColor: progressActive ? "var(--ctp-surface0)" : "transparent",
-            color: "var(--ctp-text)",
-          }}
-        >
-          Progress
-        </button>
-        {/* Workspace view mode pills */}
-        {workspaceModes.map(({ mode, label }) => {
-          const isActive = !progressActive && viewMode === mode;
-          return (
-            <button
-              key={mode}
-              onClick={() => handleSelectWorkspaceMode(mode)}
-              className="px-4 py-2 text-xs font-medium rounded-full transition-colors duration-100"
-              style={{
-                backgroundColor: isActive ? "var(--ctp-surface0)" : "transparent",
-                color: progressActive ? "var(--ctp-overlay1)" : "var(--ctp-text)",
-              }}
-            >
-              {label}
-            </button>
-          );
-        })}
       </div>
       <div className="flex-1 flex justify-end">
         <HttpServerIcon />

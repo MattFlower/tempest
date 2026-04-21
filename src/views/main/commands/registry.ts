@@ -7,7 +7,7 @@
 // and the command palette (renders a filtered list + its own palette-only "open with" entries).
 
 import type { Keystroke } from "../keybindings/keystroke";
-import { PaneTabKind, EditorType, ViewMode } from "../../../shared/ipc-types";
+import { PaneTabKind, EditorType, ViewMode, type SidebarView } from "../../../shared/ipc-types";
 import { useStore } from "../state/store";
 import { api } from "../state/rpc-client";
 import { toggleDevTools } from "../state/devtools";
@@ -82,6 +82,34 @@ function setViewModeForCurrentWorkspace(mode: ViewMode) {
   if (!selectedWorkspacePath) return;
   setProgressViewActive(false);
   setViewMode(selectedWorkspacePath, mode);
+}
+
+// Toggle a workspace view mode on or off: hitting the shortcut for the currently-
+// active mode returns the workspace to Terminal, mirroring the ActivityBar icon
+// behavior. Progress overlay is always cleared since it overrides the mode.
+function toggleViewModeForCurrentWorkspace(mode: ViewMode) {
+  const state = useStore.getState();
+  const { selectedWorkspacePath, setViewMode, setProgressViewActive, progressViewActive } = state;
+  if (!selectedWorkspacePath) return;
+  const current = state.workspaceViewMode[selectedWorkspacePath] ?? ViewMode.Terminal;
+  const alreadyActive = !progressViewActive && current === mode;
+  if (progressViewActive) setProgressViewActive(false);
+  setViewMode(selectedWorkspacePath, alreadyActive ? ViewMode.Terminal : mode);
+}
+
+// Show a sidebar view, with the same Progress-exit semantics as the ActivityBar
+// icons: when Progress is active, exit it and force-show the chosen view rather
+// than toggling the sidebar off (which is what activateSidebarView would do if
+// the view happened to already be active underneath the Progress overlay).
+function showSidebarView(view: SidebarView) {
+  const state = useStore.getState();
+  if (state.progressViewActive) {
+    state.setProgressViewActive(false);
+    state.setActiveSidebarView(view);
+    if (!state.sidebarVisible) state.toggleSidebar();
+    return;
+  }
+  state.activateSidebarView(view);
 }
 
 export const COMMANDS: Command[] = [
@@ -207,37 +235,54 @@ export const COMMANDS: Command[] = [
     run: resetRatios,
   },
 
-  // View modes
+  // View modes — keybindings match top-to-bottom order of the left activity bar:
+  //   ⌘1 Workspaces · ⌘2 Files · ⌘3 Progress · ⌘4 Dashboard · ⌘5 VCS.
+  // The Run-pane button deliberately has no default keybinding.
   {
-    id: "terminal-view",
-    label: "Terminal View",
+    id: "sidebar.workspaces",
+    label: "Show Workspaces",
     category: "view",
     defaultKeybinding: "cmd+1",
-    run: () => setViewModeForCurrentWorkspace(ViewMode.Terminal),
+    run: () => showSidebarView("workspaces"),
   },
   {
-    id: "vcs-view",
-    label: "VCS View",
+    id: "sidebar.files",
+    label: "Show Files",
     category: "view",
     defaultKeybinding: "cmd+2",
-    run: () => setViewModeForCurrentWorkspace(ViewMode.VCS),
-  },
-  {
-    id: "dashboard-view",
-    label: "Dashboard View",
-    category: "view",
-    defaultKeybinding: "cmd+3",
-    run: () => setViewModeForCurrentWorkspace(ViewMode.Dashboard),
+    run: () => showSidebarView("files"),
   },
   {
     id: "toggle-progress-view",
     label: "Toggle Progress View",
     category: "view",
-    defaultKeybinding: "cmd+5",
+    defaultKeybinding: "cmd+3",
     run: () => {
       const store = useStore.getState();
       store.setProgressViewActive(!store.progressViewActive);
     },
+  },
+  {
+    id: "dashboard-view",
+    label: "Toggle Dashboard View",
+    category: "view",
+    defaultKeybinding: "cmd+4",
+    run: () => toggleViewModeForCurrentWorkspace(ViewMode.Dashboard),
+  },
+  {
+    id: "vcs-view",
+    label: "Toggle VCS View",
+    category: "view",
+    defaultKeybinding: "cmd+5",
+    run: () => toggleViewModeForCurrentWorkspace(ViewMode.VCS),
+  },
+  {
+    id: "terminal-view",
+    label: "Terminal View",
+    category: "view",
+    // No default keybinding — Terminal is reachable by toggling off VCS / Dashboard
+    // or by switching sidebar views. This command remains available via the palette.
+    run: () => setViewModeForCurrentWorkspace(ViewMode.Terminal),
   },
 
   // Repos

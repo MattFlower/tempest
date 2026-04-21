@@ -204,10 +204,15 @@ export function MonacoEditorPane({
     const currentTheme = useStore.getState().config?.theme ?? "dark";
     monaco.editor.setTheme(currentTheme === "light" ? TEMPEST_LIGHT_THEME_NAME : TEMPEST_THEME_NAME);
 
-    // Jump to line if specified
+    // Jump to line if specified. Defer one frame so Monaco has done its
+    // initial layout pass — otherwise revealLineInCenter centers against a
+    // stale viewport height and the target line lands off-screen or at top.
     if (lineNumber) {
-      editor.revealLineInCenter(lineNumber);
-      editor.setPosition({ lineNumber, column: 1 });
+      const target = lineNumber;
+      editor.setPosition({ lineNumber: target, column: 1 });
+      requestAnimationFrame(() => {
+        editor.revealLineInCenter(target);
+      });
     }
 
     // Also bind Cmd+S inside Monaco's own keybinding system

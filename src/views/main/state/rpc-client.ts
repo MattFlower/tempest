@@ -652,6 +652,13 @@ export const api = {
     rpcRequest.listFiles({ workspacePath }),
   browsePath: (query: string, workspacePath: string) =>
     rpcRequest.browsePath({ query, workspacePath }),
+  findInFiles: (params: {
+    workspacePath: string;
+    query: string;
+    isRegex: boolean;
+    caseSensitive: boolean;
+    maxResults?: number;
+  }) => rpcRequest.findInFiles(params),
 
   // File tree (sidebar)
   listDir: (dirPath: string, workspacePath?: string) =>

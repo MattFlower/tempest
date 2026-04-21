@@ -47,6 +47,7 @@ import {
 import { buildEditorCommand } from "./editor/editor-command";
 import { getInstalledEditors, openInEditor } from "./editor/open-in";
 import { readFileForEditor, writeFileForEditor, resolveModulePath } from "./editor/file-service";
+import { FindInFilesSearcher } from "./find-in-files/searcher";
 import { AIContextProvider } from "./ai-context/ai-context-provider";
 import { PRMonitor } from "./pr/pr-monitor";
 import { lookupPRUrl } from "./pr/pr-url-lookup";
@@ -87,6 +88,9 @@ import {
   jjGetRangeChangedFiles,
   jjGetRangeFileDiff,
 } from "./vcs/jj-commit-provider";
+
+// --- Find in Files ---
+const findInFilesSearcher = new FindInFilesSearcher();
 
 // --- Stream A: Terminal + Session ---
 const ptyManager = new PtyManager();
@@ -719,6 +723,15 @@ const rpc: any = (BrowserView.defineRPC as any)({
       browsePath: async (params: any) => {
         const { query, workspacePath } = params as { query: string; workspacePath: string };
         return browsePath(query, workspacePath);
+      },
+      findInFiles: async (params: any) => {
+        return findInFilesSearcher.search({
+          workspacePath: params.workspacePath,
+          query: params.query,
+          isRegex: !!params.isRegex,
+          caseSensitive: !!params.caseSensitive,
+          maxResults: params.maxResults ?? 500,
+        });
       },
 
       // --- File tree (sidebar) ---

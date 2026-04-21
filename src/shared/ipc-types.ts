@@ -223,6 +223,21 @@ export interface OpenPRState {
   prURL: string;
 }
 
+// --- Find in Files ---
+
+export interface FindInFilesMatch {
+  filePath: string;
+  lineNumber: number;
+  lineText: string;
+  submatches: { start: number; end: number }[];
+}
+
+export interface FindInFilesResult {
+  matches: FindInFilesMatch[];
+  truncated: boolean;
+  error?: string;
+}
+
 // --- File Tree ---
 
 export interface DirEntry {

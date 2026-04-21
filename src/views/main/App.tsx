@@ -4,6 +4,7 @@ import { Sidebar } from "./components/sidebar/Sidebar";
 import { ActivityBar } from "./components/sidebar/ActivityBar";
 import { CommandPalette } from "./components/palette/CommandPalette";
 import { CreateClaudeSettingsDialog } from "./components/palette/CreateClaudeSettingsDialog";
+import { FindInFiles } from "./components/find-in-files/FindInFiles";
 import { WorkspaceDetail } from "./components/layout";
 import { ViewModeBar } from "./components/layout/ViewModeBar";
 import { ProgressView } from "./components/progress/ProgressView";
@@ -325,6 +326,9 @@ export function App() {
 
       {/* Command Palette overlay */}
       <CommandPalette />
+
+      {/* Find in Files overlay */}
+      <FindInFiles />
 
       {/* Settings dialog */}
       {settingsDialogVisible && <SettingsDialog />}

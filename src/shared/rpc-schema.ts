@@ -11,6 +11,7 @@ import type {
   CustomScript,
   DirEntry,
   FileTreeSessionState,
+  FindInFilesResult,
   HookEvent,
   HttpServerConfig,
   JJBookmark,
@@ -313,6 +314,16 @@ export interface BunRequests {
       entries?: string[];
       error?: string;
     };
+  };
+  findInFiles: {
+    params: {
+      workspacePath: string;
+      query: string;
+      isRegex: boolean;
+      caseSensitive: boolean;
+      maxResults?: number;
+    };
+    response: FindInFilesResult;
   };
 
   // File tree

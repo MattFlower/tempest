@@ -128,6 +128,13 @@ export const COMMANDS: Command[] = [
     defaultKeybinding: "cmd+p",
     run: () => useStore.getState().openCommandPaletteFiles(),
   },
+  {
+    id: "find-in-files",
+    label: "Find in Files",
+    category: "palette",
+    defaultKeybinding: "cmd+shift+f",
+    run: () => useStore.getState().toggleFindInFiles(),
+  },
 
   // Tabs
   {

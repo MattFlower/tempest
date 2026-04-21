@@ -104,6 +104,7 @@ function handleKeyDown(e: KeyboardEvent) {
       const cmd = getCommand(commandId);
       if (cmd) {
         e.preventDefault();
+        e.stopPropagation();
         dispatchCommand(cmd);
       }
     }
@@ -118,6 +119,7 @@ function handleKeyDown(e: KeyboardEvent) {
   // would arrive too late to match.
   if (maps.prefix.has(stroke)) {
     e.preventDefault();
+    e.stopPropagation();
     setPending(stroke);
     pendingTimer = setTimeout(clearPending, CHORD_TIMEOUT_MS);
     return;
@@ -128,6 +130,7 @@ function handleKeyDown(e: KeyboardEvent) {
     const cmd = getCommand(commandId);
     if (cmd) {
       e.preventDefault();
+      e.stopPropagation();
       dispatchCommand(cmd);
     }
   }
@@ -151,5 +154,7 @@ export function installKeybindingDispatcher(): void {
     }
   });
 
-  window.addEventListener("keydown", handleKeyDown);
+  // Capture phase so Tempest shortcuts win before a focused pane's own
+  // keydown handler (e.g. xterm.js) sees the event and forwards it to a PTY.
+  window.addEventListener("keydown", handleKeyDown, { capture: true });
 }

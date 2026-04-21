@@ -69,6 +69,7 @@ export interface TempestStore {
   activeSidebarView: SidebarView;
   commandPaletteVisible: boolean;
   commandPaletteInitialMode: "commands" | "files";
+  findInFilesVisible: boolean;
   settingsDialogVisible: boolean;
   settingsDialogInitialTab: "general" | "remote" | "tools" | "appearance" | "keybindings";
   cloneRepoDialogVisible: boolean;
@@ -141,6 +142,8 @@ export interface TempestStore {
 
   toggleCommandPalette: () => void;
   openCommandPaletteFiles: () => void;
+  toggleFindInFiles: () => void;
+  setFindInFilesVisible: (visible: boolean) => void;
   toggleSettingsDialog: () => void;
   openSettingsTab: (tab: "general" | "remote" | "tools" | "appearance" | "keybindings") => void;
   showCloneRepoDialog: () => void;
@@ -202,6 +205,7 @@ export const useStore = create<TempestStore>((set) => ({
   activeSidebarView: "workspaces" as const,
   commandPaletteVisible: false,
   commandPaletteInitialMode: "commands" as const,
+  findInFilesVisible: false,
   settingsDialogVisible: false,
   settingsDialogInitialTab: "general" as const,
   cloneRepoDialogVisible: false,
@@ -393,6 +397,9 @@ export const useStore = create<TempestStore>((set) => ({
     })),
   openCommandPaletteFiles: () =>
     set({ commandPaletteVisible: true, commandPaletteInitialMode: "files" as const }),
+  toggleFindInFiles: () =>
+    set((s) => ({ findInFilesVisible: !s.findInFilesVisible })),
+  setFindInFilesVisible: (visible) => set({ findInFilesVisible: visible }),
   toggleSettingsDialog: () =>
     set((s) => ({
       settingsDialogVisible: !s.settingsDialogVisible,

@@ -173,6 +173,13 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
   const findPreviousRef = useRef(() => {});
   const closeFindBarRef = useRef(() => {});
 
+  // Page zoom. Applied via CSS `zoom` in the content document; re-applied on
+  // every navigation since it's document-local. Clamped to [0.25, 5.0] in
+  // 0.1 steps, matching common browser behavior.
+  const zoomLevelRef = useRef(1);
+  const zoomInRef = useRef(() => {});
+  const zoomOutRef = useRef(() => {});
+
   // Attach webview event listeners once the element is in the DOM.
   useEffect(() => {
     if (!mounted) return;
@@ -207,6 +214,7 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
       // and install a Cmd+F listener so find works even when the native
       // WKWebView overlay has focus (keyboard events don't reach React).
       try {
+        const z = zoomLevelRef.current;
         el.executeJavascript(
           `if(window.__electrobunSendToHost){` +
             `window.__electrobunSendToHost({type:"page-title",title:document.title});` +
@@ -217,8 +225,11 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
                 `if(m&&e.key==="f"){e.preventDefault();window.__electrobunSendToHost({type:"find-shortcut"})}` +
                 `else if(m&&e.key==="g"){e.preventDefault();window.__electrobunSendToHost({type:e.shiftKey?"find-previous":"find-next"})}` +
                 `else if(e.key==="Escape"){window.__electrobunSendToHost({type:"find-close"})}` +
+                `else if(m&&e.shiftKey&&e.code==="Equal"){e.preventDefault();window.__electrobunSendToHost({type:"zoom-in"})}` +
+                `else if(m&&e.shiftKey&&e.code==="Minus"){e.preventDefault();window.__electrobunSendToHost({type:"zoom-out"})}` +
               `},true)` +
             `}` +
+            `(function(){var b=document.body;if(b){b.style.zoom=${JSON.stringify(String(z))}}})();` +
           `}`
         );
       } catch {}
@@ -270,6 +281,10 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
           findPreviousRef.current();
         } else if (data?.type === "find-close") {
           closeFindBarRef.current();
+        } else if (data?.type === "zoom-in") {
+          zoomInRef.current();
+        } else if (data?.type === "zoom-out") {
+          zoomOutRef.current();
         }
       } catch {}
     });
@@ -420,10 +435,38 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
     try { webviewRef.current?.stopFindInPage(); } catch {}
   }, []);
 
+  const applyZoom = useCallback(() => {
+    const el = webviewRef.current;
+    if (!el) return;
+    try {
+      el.executeJavascript(
+        `(function(){var b=document.body;if(b){b.style.zoom=${JSON.stringify(
+          String(zoomLevelRef.current),
+        )}}})();`,
+      );
+    } catch {}
+  }, []);
+
+  const zoomIn = useCallback(() => {
+    const next = Math.min(5, Math.round((zoomLevelRef.current + 0.1) * 100) / 100);
+    if (next === zoomLevelRef.current) return;
+    zoomLevelRef.current = next;
+    applyZoom();
+  }, [applyZoom]);
+
+  const zoomOut = useCallback(() => {
+    const next = Math.max(0.25, Math.round((zoomLevelRef.current - 0.1) * 100) / 100);
+    if (next === zoomLevelRef.current) return;
+    zoomLevelRef.current = next;
+    applyZoom();
+  }, [applyZoom]);
+
   // Keep refs in sync with latest callbacks.
   findNextRef.current = findNext;
   findPreviousRef.current = findPrevious;
   closeFindBarRef.current = closeFindBar;
+  zoomInRef.current = zoomIn;
+  zoomOutRef.current = zoomOut;
 
   return (
     <div className="flex flex-col" style={{ height: "100%", width: "100%" }}>

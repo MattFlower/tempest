@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Fixed
+
+### Changed
+
+### Removed
+
+## [0.17.0] - 2026-04-21
+
+### Added
+
 - New **Find in Files** command (`Cmd+Shift+F`) opens a modal overlay that searches the current workspace for a plain string or regular expression via ripgrep. Results show as a flat list of `path:line` entries with the matched line inline and the matched spans bolded. Toggles for case-sensitivity (`Aa`) and regex (`.*`) sit next to the input; regex is off by default. Up/Down navigate, Enter opens the selected match in an editor tab at the correct line (Markdown files open in the Markdown viewer), Esc dismisses. Large result sets are capped at 500 matches with a "refine your query" hint; invalid regex patterns surface an inline error instead of crashing. Also reachable via the command palette.
 - Browser panes now support zoom shortcuts: `Cmd+Shift+=` (i.e. `Cmd+Shift++`) zooms in and `Cmd+Shift+-` (i.e. `Cmd+Shift+_`) zooms out. Zoom is applied via CSS `zoom` on the page body, in 10% steps, clamped to [25%, 500%]. The current zoom level is re-applied on every navigation so it persists as you browse within a tab. Shortcuts are intercepted inside the WKWebView (via an injected keydown listener) so they work even when the native webview overlay has focus.
 - New `show_mermaid_diagram` MCP tool lets Claude render Mermaid diagrams (flowcharts, sequence diagrams, state machines, ER diagrams, etc.) in a browser pane next to the conversation. The tool returns a `diagram_id`; passing it back on a later call updates the same pane in place instead of spawning a new one, so iterating on a diagram doesn't accumulate near-duplicate tabs. If the user closed the pane between calls, an update silently reopens a new pane bound to the same id. Diagrams are stored under `~/.config/tempest/mermaid-diagrams/<workspaceKey>/<diagram_id>.html`.

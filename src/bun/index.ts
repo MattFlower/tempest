@@ -1625,10 +1625,10 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
       return ws?.path ?? workspaceKey;
     };
 
-    mcpServer.onShowWebpage = (workspaceKey, title, filePath) => {
+    mcpServer.onShowWebpage = (workspaceKey, title, filePath, pageId) => {
       const workspacePath = resolveWorkspacePath(workspaceKey);
       try {
-        win.webview.rpc.send.showWebpage({ title, filePath, workspacePath });
+        win.webview.rpc.send.showWebpage({ title, filePath, workspacePath, pageId });
       } catch { /* webview not ready */ }
     };
     mcpServer.onShowMermaidDiagram = (workspaceKey, title, filePath, diagramId) => {

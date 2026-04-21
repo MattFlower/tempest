@@ -30,6 +30,8 @@ export interface PaneTab {
   scrollbackContent?: string; // Transient: saved scrollback for restore on startup
   /** Transient: lets the show_mermaid_diagram MCP handler find an existing pane to reload. */
   mermaidDiagramId?: string;
+  /** Transient: lets the show_webpage MCP handler find an existing pane to reload. */
+  webpageId?: string;
 }
 
 export interface Pane {

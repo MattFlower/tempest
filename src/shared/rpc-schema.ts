@@ -740,7 +740,12 @@ export interface WebviewMessages {
   scriptOutput: { runId: string; data: string };
   scriptExit: { runId: string; exitCode: number };
   selectWorkspace: { workspacePath: string };
-  showWebpage: { title: string; filePath: string; workspacePath: string };
+  showWebpage: {
+    title: string;
+    filePath: string;
+    workspacePath: string;
+    pageId: string;
+  };
   showMermaidDiagram: {
     title: string;
     filePath: string;

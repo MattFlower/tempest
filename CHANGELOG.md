@@ -11,9 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - New `show_mermaid_diagram` MCP tool lets Claude render Mermaid diagrams (flowcharts, sequence diagrams, state machines, ER diagrams, etc.) in a browser pane next to the conversation. The tool returns a `diagram_id`; passing it back on a later call updates the same pane in place instead of spawning a new one, so iterating on a diagram doesn't accumulate near-duplicate tabs. If the user closed the pane between calls, an update silently reopens a new pane bound to the same id. Diagrams are stored under `~/.config/tempest/mermaid-diagrams/<workspaceKey>/<diagram_id>.html`.
 
-### Fixed
-
 ### Changed
+
+- `show_webpage` MCP tool now supports in-place updates the same way `show_mermaid_diagram` does. It returns a `page_id`; passing it back on a later call overwrites the existing file and reloads the existing pane instead of spawning a new tab. If the user closed the pane between calls, an update silently reopens a new pane bound to the same id.
+
+### Fixed
 
 ### Removed
 

@@ -305,31 +305,76 @@ const rpc = Electroview.defineRPC({
       showWebpage: (msg: any) => {
         Promise.all([
           import("./store"),
-          import("./actions"),
           import("../models/pane-node"),
           import("../../../shared/ipc-types"),
-        ]).then(([{ useStore }, actions, paneNode, { PaneTabKind }]) => {
+        ]).then(([{ useStore }, paneNode, { PaneTabKind }]) => {
           const store = useStore.getState();
           const tree = store.paneTrees[msg.workspacePath];
           if (!tree) return;
 
+          // Cache buster: force WKWebView to re-fetch even though the file
+          // name is stable (the filename encodes page_id so updates
+          // overwrite in place).
+          const reloadURL = `file://${msg.filePath}?v=${Date.now()}`;
+
+          // Try to find an existing pane bound to this page_id in the
+          // current workspace. If it's in a *different* workspace's tree
+          // we fall through to the create path, keeping the other pane
+          // intact somewhere else.
           const panes = paneNode.allPanes(tree);
+          let foundPaneId: string | undefined;
+          let foundTabId: string | undefined;
+          for (const pane of panes) {
+            const tab = pane.tabs.find((t: any) => t.webpageId === msg.pageId);
+            if (tab) {
+              foundPaneId = pane.id;
+              foundTabId = tab.id;
+              break;
+            }
+          }
+
+          if (foundPaneId && foundTabId) {
+            // Update branch: rewrite the tab's browserURL in place and tell
+            // the mounted webview to navigate. Updating browserURL alone
+            // isn't enough — BrowserPane only consumes `src` at mount time.
+            const newTree = paneNode.updatingPane(tree, foundPaneId, (pane: any) => ({
+              ...pane,
+              tabs: pane.tabs.map((t: any) =>
+                t.id === foundTabId ? { ...t, browserURL: reloadURL, label: msg.title } : t,
+              ),
+              selectedTabId: foundTabId,
+            }));
+            store.setPaneTree(msg.workspacePath, newTree);
+            store.setFocusedPaneId(foundPaneId);
+
+            try {
+              const el = document.getElementById(`browser-${foundTabId}`) as any;
+              el?.loadURL?.(reloadURL);
+            } catch { /* webview not mounted yet */ }
+
+            import("./rpc-client").then(({ api }) => {
+              api.notifyPaneTreeChanged(msg.workspacePath, paneNode.toNodeState(newTree));
+            });
+            return;
+          }
+
+          // Create branch: new pane stamped with webpageId so a future
+          // update can find it.
           const afterPaneId = store.focusedPaneId ?? panes[0]?.id;
           if (!afterPaneId) return;
 
-          // Ensure the workspace is selected so the user sees the new pane
           if (store.selectedWorkspacePath !== msg.workspacePath) {
             store.selectWorkspace(msg.workspacePath);
           }
 
           const tab = paneNode.createTab(PaneTabKind.Browser, msg.title, {
-            browserURL: `file://${msg.filePath}`,
+            browserURL: reloadURL,
+            webpageId: msg.pageId,
           });
           const newPane = paneNode.createPane(tab);
           const newTree = paneNode.addingPane(tree, newPane, afterPaneId);
           store.setPaneTree(msg.workspacePath, newTree);
           store.setFocusedPaneId(newPane.id);
-          // Persist
           import("./rpc-client").then(({ api }) => {
             api.notifyPaneTreeChanged(msg.workspacePath, paneNode.toNodeState(newTree));
           });

@@ -150,6 +150,101 @@ describe("McpHttpServer", () => {
     expect(parsed.error.message).toContain("Batch requests are not supported");
   });
 
+  it("show_webpage creates a file and invokes the callback with a UUID", async () => {
+    let capture: { workspaceKey: string; title: string; filePath: string; pageId: string } | null = null;
+    server.onShowWebpage = (workspaceKey, title, filePath, pageId) => {
+      capture = { workspaceKey, title, filePath, pageId };
+    };
+
+    const response = await post("/mcp/test-ws", {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "show_webpage",
+        arguments: { html: "<!DOCTYPE html><html><body>v1</body></html>", title: "Page" },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    const parsed = (await response.json()) as any;
+    expect(parsed.result.isError).toBeFalsy();
+    const text = parsed.result.content[0].text as string;
+
+    expect(capture).not.toBeNull();
+    expect(capture!.workspaceKey).toBe("test-ws");
+    expect(capture!.title).toBe("Page");
+    expect(capture!.pageId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(text).toContain(capture!.pageId);
+    expect(capture!.filePath).toBe(join(TMP_WEBPAGE_DIR, "test-ws", `${capture!.pageId}.html`));
+
+    expect(existsSync(capture!.filePath)).toBe(true);
+    expect(readFileSync(capture!.filePath, "utf-8")).toContain("v1");
+  });
+
+  it("show_webpage overwrites the same file on update and uses the caller's page_id", async () => {
+    let capture: { filePath: string; pageId: string } | null = null;
+    server.onShowWebpage = (_ws, _title, filePath, pageId) => {
+      capture = { filePath, pageId };
+    };
+
+    await post("/mcp/test-ws", {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "show_webpage",
+        arguments: { html: "<!DOCTYPE html><html><body>v1</body></html>", title: "Page" },
+      },
+    });
+    const firstCapture = capture!;
+
+    await post("/mcp/test-ws", {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "show_webpage",
+        arguments: {
+          html: "<!DOCTYPE html><html><body>v2 updated</body></html>",
+          title: "Page v2",
+          page_id: firstCapture.pageId,
+        },
+      },
+    });
+    const secondCapture = capture!;
+
+    expect(secondCapture.pageId).toBe(firstCapture.pageId);
+    expect(secondCapture.filePath).toBe(firstCapture.filePath);
+    expect(readFileSync(secondCapture.filePath, "utf-8")).toContain("v2 updated");
+  });
+
+  it("show_webpage rejects a path-traversal page_id and mints a fresh UUID", async () => {
+    let capture: { filePath: string; pageId: string } | null = null;
+    server.onShowWebpage = (_ws, _title, filePath, pageId) => {
+      capture = { filePath, pageId };
+    };
+
+    const response = await post("/mcp/test-ws", {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "show_webpage",
+        arguments: {
+          html: "<!DOCTYPE html><html><body>x</body></html>",
+          title: "Page",
+          page_id: "../../../etc/passwd",
+        },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(capture!.pageId).not.toBe("../../../etc/passwd");
+    expect(capture!.pageId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(capture!.filePath.startsWith(join(TMP_WEBPAGE_DIR, "test-ws") + "/")).toBe(true);
+  });
+
   it("lists both show_webpage and show_mermaid_diagram tools", async () => {
     const response = await post("/mcp/default", {
       jsonrpc: "2.0",

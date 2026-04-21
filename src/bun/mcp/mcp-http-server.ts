@@ -12,14 +12,14 @@ import { buildMermaidHTML } from "./mermaid-html-builder";
 
 const INSTRUCTIONS = `You are running inside Tempest, a developer tool with a pane-based UI. The user can see browser panes alongside their terminal.
 
-When discussing UI designs, frontend layouts, visual architecture, or anything that would be clearer as a visual than as text — proactively use show_webpage to render an HTML preview for the user. This is especially valuable during planning: instead of describing a proposed UI in words, show it.
+When discussing UI designs, frontend layouts, visual architecture, or anything that would be clearer as a visual than as text — proactively use show_webpage to render an HTML preview for the user. This is especially valuable during planning: instead of describing a proposed UI in words, show it. To iterate on the preview, pass the page_id returned by the first call back as page_id on subsequent calls — the same pane reloads with the new content instead of a new pane being spawned.
 
-For flowcharts, sequence diagrams, state machines, ER diagrams, Gantt charts, or any other Mermaid-supported visualization, use show_mermaid_diagram instead of hand-rolling HTML. To iterate on a diagram, pass the diagram_id returned by the first call back in as diagram_id on subsequent calls — the same pane reloads with the new content rather than a new pane being spawned.
+For flowcharts, sequence diagrams, state machines, ER diagrams, Gantt charts, or any other Mermaid-supported visualization, use show_mermaid_diagram instead of hand-rolling HTML. Iteration works the same way: pass the returned diagram_id back as diagram_id to update in place.
 
 You can call these tools multiple times to iterate on a design based on user feedback.
 
 Technical notes:
-- show_webpage: use a complete HTML document with inline CSS (no external stylesheets). SVGs, canvas, and standard JS all work.
+- show_webpage: use a complete HTML document with inline CSS (no external stylesheets). SVGs, canvas, and standard JS all work. Omit page_id to create; pass the returned id to update.
 - show_mermaid_diagram: pass Mermaid source only — Tempest renders it. Omit diagram_id to create; pass the returned id to update.`;
 
 const SERVER_INFO = { name: "tempest-webpage", version: "0.0.1" };
@@ -27,7 +27,7 @@ const SERVER_INFO = { name: "tempest-webpage", version: "0.0.1" };
 const SHOW_WEBPAGE_TOOL = {
   name: "show_webpage",
   description:
-    "Show HTML content to the user in a browser pane next to the conversation. Prefer this over describing UI designs, layouts, or visual architecture in text. Call multiple times to iterate on a design.",
+    "Show HTML content to the user in a browser pane next to the conversation. Prefer this over describing UI designs, layouts, or visual architecture in text. The response returns a page_id — pass it back as the page_id argument on a later call to update the same page in place instead of opening a new pane.",
   inputSchema: {
     type: "object",
     properties: {
@@ -38,6 +38,10 @@ const SHOW_WEBPAGE_TOOL = {
       title: {
         type: "string",
         description: "Title for the browser tab (e.g. 'Login Page Mockup', 'Architecture Diagram')",
+      },
+      page_id: {
+        type: "string",
+        description: "Optional. Omit on the first call; pass the page_id returned by a previous call to update that page instead of creating a new one.",
       },
     },
     required: ["html", "title"],
@@ -69,7 +73,7 @@ const SHOW_MERMAID_DIAGRAM_TOOL = {
 };
 
 // Matches RFC 4122-style UUIDs (any version). Other shapes are rejected to
-// prevent path traversal via diagram_id (e.g. "../evil").
+// prevent path traversal via diagram_id / page_id (e.g. "../evil").
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 class JsonRpcError extends Error {
@@ -99,8 +103,10 @@ export class McpHttpServer {
     this.mermaidDiagramsDir = options.mermaidDiagramsDir ?? MERMAID_DIAGRAMS_DIR;
   }
 
-  /** Called when a show_webpage tool is invoked. */
-  onShowWebpage: ((workspaceKey: string, title: string, filePath: string) => void) | null = null;
+  /** Called when a show_webpage tool is invoked (create or update). */
+  onShowWebpage:
+    | ((workspaceKey: string, title: string, filePath: string, pageId: string) => void)
+    | null = null;
 
   /** Called when a show_mermaid_diagram tool is invoked (create or update). */
   onShowMermaidDiagram:
@@ -303,20 +309,33 @@ export class McpHttpServer {
     const args = (params as { arguments?: Record<string, unknown> }).arguments as {
       html: string;
       title: string;
+      page_id?: string;
     };
+
+    // Only accept a caller-supplied page_id if it matches UUID shape.
+    // Anything else (missing, wrong shape, path-traversal attempt) → mint a
+    // fresh UUID. This keeps the filename a trusted, bounded token.
+    const pageId =
+      typeof args.page_id === "string" && UUID_REGEX.test(args.page_id)
+        ? args.page_id
+        : crypto.randomUUID();
 
     try {
       const previewDir = join(this.webpagePreviewsDir, workspaceKey);
       await mkdir(previewDir, { recursive: true });
 
-      const fileId = crypto.randomUUID();
-      const filePath = join(previewDir, `${fileId}.html`);
+      const filePath = join(previewDir, `${pageId}.html`);
       await Bun.write(filePath, args.html);
 
-      this.onShowWebpage?.(workspaceKey, args.title, filePath);
+      this.onShowWebpage?.(workspaceKey, args.title, filePath, pageId);
 
       return {
-        content: [{ type: "text", text: "Webpage displayed to the user in a new browser pane." }],
+        content: [
+          {
+            type: "text",
+            text: `Webpage displayed. page_id: ${pageId} — pass this back as page_id on a later call to update the same page instead of opening a new pane.`,
+          },
+        ],
       };
     } catch (err) {
       return {

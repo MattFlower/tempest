@@ -178,6 +178,7 @@ function getDefaultPreset(workspacePath: string, workspacesByRepo: Record<string
 export function JJView({ workspacePath }: JJViewProps) {
   const workspacesByRepo = useStore((s) => s.workspacesByRepo);
   const defaultPreset = getDefaultPreset(workspacePath, workspacesByRepo);
+  const refreshNonce = useStore((s) => s.vcsRefreshNonce[workspacePath] ?? 0);
 
   // Revset state
   const [activePreset, setActivePreset] = useState<JJPreset>(defaultPreset);
@@ -314,7 +315,8 @@ export function JJView({ workspacePath }: JJViewProps) {
 
   useEffect(() => {
     loadLog();
-  }, [loadLog]);
+    // refreshNonce included so Cmd+R re-fetches even when loadLog identity is stable.
+  }, [loadLog, refreshNonce]);
 
   // Auto-select working copy revision in non-range modes
   useEffect(() => {

@@ -296,6 +296,20 @@ export const COMMANDS: Command[] = [
     run: () => toggleViewModeForCurrentWorkspace(ViewMode.VCS),
   },
   {
+    id: "vcs.refresh",
+    label: "Refresh VCS View",
+    category: "view",
+    defaultKeybinding: "cmd+r",
+    run: () => {
+      const state = useStore.getState();
+      const { selectedWorkspacePath, workspaceViewMode, progressViewActive } = state;
+      if (!selectedWorkspacePath || progressViewActive) return;
+      const mode = workspaceViewMode[selectedWorkspacePath] ?? ViewMode.Terminal;
+      if (mode !== ViewMode.VCS) return;
+      state.bumpVcsRefresh(selectedWorkspacePath);
+    },
+  },
+  {
     id: "terminal-view",
     label: "Terminal View",
     category: "view",

@@ -84,6 +84,7 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
   const diffViewerRef = useRef<MonacoDiffViewerHandle>(null);
   const diffContainerRef = useRef<HTMLDivElement>(null);
   const setViewMode = useStore((s) => s.setViewMode);
+  const refreshNonce = useStore((s) => s.vcsRefreshNonce[workspacePath] ?? 0);
 
   // --- Scope selection state ---
   const [viewScope, setViewScope] = useState<DiffScope>(DiffScope.CurrentChange);
@@ -175,7 +176,8 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
 
   useEffect(() => {
     loadStatus();
-  }, [loadStatus]);
+    // refreshNonce included so Cmd+R re-fetches even when loadStatus identity is stable.
+  }, [loadStatus, refreshNonce]);
 
   // --- Scoped data loading ---
 
@@ -200,7 +202,7 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
       if (!cancelled) setCommitsLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [viewScope, workspacePath]);
+  }, [viewScope, workspacePath, refreshNonce]);
 
   // Load scoped files when scope/commitRef changes
   useEffect(() => {
@@ -229,7 +231,7 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [viewScope, selectedCommitRef, workspacePath]);
+  }, [viewScope, selectedCommitRef, workspacePath, refreshNonce]);
 
   // Load diff for selected file (working changes mode)
   useEffect(() => {

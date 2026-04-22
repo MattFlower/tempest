@@ -36,6 +36,12 @@ export interface TempestStore {
   // --- View mode (per workspace) ---
   workspaceViewMode: Record<string, ViewMode>; // keyed by workspace path
 
+  // --- VCS refresh nonce (per workspace) ---
+  // Bumped by the vcs.refresh command (Cmd+R in VCS view); VCSView/JJView read
+  // it as a useEffect dep to re-fetch status, commits, and scoped file lists.
+  vcsRefreshNonce: Record<string, number>;
+  bumpVcsRefresh: (workspacePath: string) => void;
+
   // --- Activity state (from hook events) ---
   workspaceActivity: Record<string, ActivityState>; // keyed by workspace path
 
@@ -171,6 +177,15 @@ export const useStore = create<TempestStore>((set) => ({
   maximizedPaneId: null,
 
   workspaceViewMode: {},
+
+  vcsRefreshNonce: {},
+  bumpVcsRefresh: (workspacePath) =>
+    set((s) => ({
+      vcsRefreshNonce: {
+        ...s.vcsRefreshNonce,
+        [workspacePath]: (s.vcsRefreshNonce[workspacePath] ?? 0) + 1,
+      },
+    })),
 
   workspaceActivity: {},
 

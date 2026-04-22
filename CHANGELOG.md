@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- New **Help → Keymap** menu item opens a read-only "Keyboard Shortcuts" pane that lists every command with an effective keystroke, grouped by category (Command Palette, Tabs, Panes, Views, Workspace, Repositories, Claude, GitHub, App, Help). A filter input narrows by label, command id, or formatted keystroke. Also reachable as the `help.keymap` command from the palette. The listing reflects the user's active keybinding overrides from Settings.
 - **Cmd+click** on a URL in a terminal pane (or a run-pane terminal) now opens it in a new Browser pane split off from the terminal, instead of the system browser. Plain click still opens in the system browser. Applies to both OSC 8 hyperlinks and auto-detected `http(s)://…` URLs in terminal output — so URLs emitted by Claude, Pi, and any shell command now route to a Tempest browser pane on Cmd+click.
 
 ### Fixed

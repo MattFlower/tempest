@@ -1518,6 +1518,12 @@ ApplicationMenu.setApplicationMenu([
       { role: "bringAllToFront" },
     ],
   },
+  {
+    label: "Help",
+    submenu: [
+      { label: "Keymap", action: "show-keymap" },
+    ],
+  },
 ]);
 
 ApplicationMenu.on("application-menu-clicked", (event: any) => {

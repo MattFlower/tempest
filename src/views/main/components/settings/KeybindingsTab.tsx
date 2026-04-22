@@ -20,10 +20,11 @@ const CATEGORY_LABEL: Record<CommandCategory, string> = {
   claude: "Claude",
   github: "GitHub",
   app: "App",
+  help: "Help",
 };
 
 const CATEGORY_ORDER: CommandCategory[] = [
-  "palette", "tabs", "panes", "view", "workspace", "repo", "claude", "github", "app",
+  "palette", "tabs", "panes", "view", "workspace", "repo", "claude", "github", "app", "help",
 ];
 
 interface PendingConflict {

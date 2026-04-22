@@ -10,6 +10,7 @@ import { HistoryViewer } from "../history/HistoryViewer";
 import { MarkdownViewer } from "../markdown/MarkdownViewer";
 import { PRDashboard } from "../pr/PRDashboard";
 import { EditorPane } from "../editor/EditorPane";
+import { KeymapHelp } from "../help/KeymapHelp";
 import { closeTab } from "../../state/actions";
 
 /** Resolve the source repo path for a workspace (for per-repo bookmarks). */
@@ -74,6 +75,8 @@ function TabContent({ tab, paneId, isFocused, isVisible, workspacePath }: { tab:
       return <MarkdownViewer filePath={tab.markdownFilePath} paneId={paneId} isFocused={isFocused} />;
     case PaneTabKind.PRDashboard:
       return <PRDashboard />;
+    case PaneTabKind.KeymapHelp:
+      return <KeymapHelp />;
     case PaneTabKind.Editor:
       if (!tab.editorFilePath) {
         return (

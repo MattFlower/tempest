@@ -45,6 +45,7 @@ export enum PaneTabKind {
   MarkdownViewer = "markdownViewer",
   Editor = "editor",
   PRDashboard = "prDashboard",
+  KeymapHelp = "keymapHelp",
 }
 
 // --- View Mode ---

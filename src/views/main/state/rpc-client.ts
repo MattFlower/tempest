@@ -557,6 +557,11 @@ const rpc = Electroview.defineRPC({
             case "toggle-devtools":
               import("./devtools").then(({ toggleDevTools }) => toggleDevTools());
               break;
+            case "show-keymap":
+              import("../commands/registry").then(({ getCommand }) => {
+                getCommand("help.keymap")?.run();
+              });
+              break;
           }
         });
       },

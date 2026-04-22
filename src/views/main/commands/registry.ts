@@ -31,7 +31,8 @@ export type CommandCategory =
   | "repo"
   | "claude"
   | "github"
-  | "app";
+  | "app"
+  | "help";
 
 export interface Command {
   id: string;
@@ -431,6 +432,15 @@ export const COMMANDS: Command[] = [
     category: "app",
     defaultKeybinding: "cmd+alt+i",
     run: () => toggleDevTools(),
+  },
+
+  // Help
+  {
+    id: "help.keymap",
+    label: "Keyboard Shortcuts",
+    category: "help",
+    canOpenAsPane: true,
+    run: () => addTabToFocusedPane(PaneTabKind.KeymapHelp, "Keymap"),
   },
 ];
 

@@ -1233,9 +1233,14 @@ const rpc: any = (BrowserView.defineRPC as any)({
       openInEditor: (params: any) => openInEditor(params.editorId, params.directory),
 
       // --- Browser DNS ---
+      // Uses Bun.dns.lookup (getaddrinfo) rather than Bun.dns.resolve (c-ares).
+      // Why: c-ares bypasses macOS's System Configuration framework, so it ignores
+      // VPN-injected scoped/split-DNS resolvers — making VPN-only hostnames appear
+      // unresolvable even when WKWebView (which uses NSURLSession + the system
+      // resolver) can reach them fine.
       resolveDns: async (params: any) => {
         try {
-          await (Bun.dns as any).resolve(params.hostname);
+          await (Bun.dns as any).lookup(params.hostname);
           return { ok: true };
         } catch (err: any) {
           return { ok: false, error: err?.code ?? err?.message ?? "DNS lookup failed" };

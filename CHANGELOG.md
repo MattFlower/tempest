@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Browser pane no longer shows a spurious "Can't find <host>" DNS error for VPN-only hostnames. The pre-flight DNS check in the Bun backend switched from `Bun.dns.resolve` (c-ares) to `Bun.dns.lookup` (getaddrinfo). c-ares bypasses macOS's System Configuration framework and ignores VPN-injected scoped/split-DNS resolvers, so on a machine connected to a corporate VPN the pre-flight failed for hostnames that WKWebView itself could have reached. `getaddrinfo` goes through the system resolver and honors scoped DNS, so public and VPN hostnames now both pass through to the webview.
+
 ### Changed
 
 ### Removed

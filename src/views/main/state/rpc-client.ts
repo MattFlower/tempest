@@ -893,6 +893,20 @@ export const api = {
   gitGetScopedFileDiff: (workspacePath: string, scope: import("../../../shared/ipc-types").DiffScope, filePath: string, commitRef?: string) =>
     rpcRequest.gitGetScopedFileDiff({ workspacePath, scope, filePath, commitRef }),
 
+  // Git Branch / Remote Operations
+  gitListBranchesAndRemotes: (workspacePath: string) =>
+    rpcRequest.gitListBranchesAndRemotes({ workspacePath }),
+  gitPull: (workspacePath: string) =>
+    rpcRequest.gitPull({ workspacePath }),
+  gitFetchAll: (workspacePath: string) =>
+    rpcRequest.gitFetchAll({ workspacePath }),
+  gitPushBranch: (workspacePath: string, branch: string, remote: string) =>
+    rpcRequest.gitPushBranch({ workspacePath, branch, remote }),
+  gitMergeBranch: (workspacePath: string, branch: string) =>
+    rpcRequest.gitMergeBranch({ workspacePath, branch }),
+  gitRebaseOnto: (workspacePath: string, branch: string) =>
+    rpcRequest.gitRebaseOnto({ workspacePath, branch }),
+
   // JJ (Jujutsu) VCS View
   jjLog: (workspacePath: string, revset?: string) =>
     rpcRequest.jjLog({ workspacePath, revset }),

@@ -27,6 +27,7 @@ import {
 } from "./MonacoDiffViewer";
 import { JJView } from "./JJView";
 import { GitScopeSelector } from "./GitScopeSelector";
+import { GitVCSToolbar } from "./GitVCSToolbar";
 import { GitCommitPicker } from "./GitCommitPicker";
 import { GitScopedFileList } from "./GitScopedFileList";
 import { AIContextPanel } from "../ai-context/AIContextPanel";
@@ -612,6 +613,22 @@ function GitVCSView({ workspacePath }: { workspacePath: string }) {
         className="flex flex-col h-full flex-shrink-0"
         style={{ width: leftPanelWidth, borderRight: "1px solid var(--ctp-surface0)" }}
       >
+        {/* Branch operations toolbar */}
+        <GitVCSToolbar
+          workspacePath={workspacePath}
+          onAction={(result, label) => {
+            if (result.success) {
+              setToast({ message: `${label} succeeded`, type: "success" });
+              loadStatus();
+            } else {
+              setToast({
+                message: `${label} failed: ${result.error ?? "unknown error"}`,
+                type: "error",
+              });
+            }
+          }}
+        />
+
         {/* Scope selector (always shown) */}
         <GitScopeSelector scope={viewScope} onScopeChange={setViewScope} />
 

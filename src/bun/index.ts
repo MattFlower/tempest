@@ -68,6 +68,12 @@ import {
   gitGetRecentCommits,
   gitGetScopedFiles,
   gitGetScopedFileDiff,
+  gitListBranchesAndRemotes,
+  gitPull,
+  gitFetchAll,
+  gitPushBranch,
+  gitMergeBranch,
+  gitRebaseOnto,
 } from "./vcs/git-commit-provider";
 import {
   jjLog,
@@ -1167,6 +1173,26 @@ const rpc: any = (BrowserView.defineRPC as any)({
       },
       gitGetScopedFileDiff: async (params: any) => {
         return await gitGetScopedFileDiff(params.workspacePath, params.scope, params.filePath, params.commitRef);
+      },
+
+      // --- Git Branch / Remote Operations ---
+      gitListBranchesAndRemotes: async (params: any) => {
+        return await gitListBranchesAndRemotes(params.workspacePath);
+      },
+      gitPull: async (params: any) => {
+        return await gitPull(params.workspacePath);
+      },
+      gitFetchAll: async (params: any) => {
+        return await gitFetchAll(params.workspacePath);
+      },
+      gitPushBranch: async (params: any) => {
+        return await gitPushBranch(params.workspacePath, params.branch, params.remote);
+      },
+      gitMergeBranch: async (params: any) => {
+        return await gitMergeBranch(params.workspacePath, params.branch);
+      },
+      gitRebaseOnto: async (params: any) => {
+        return await gitRebaseOnto(params.workspacePath, params.branch);
       },
 
       // --- JJ (Jujutsu) VCS View ---

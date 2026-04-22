@@ -39,7 +39,9 @@ import type {
   DiffScope,
   FileAIContext,
   FileChangeTimeline,
+  GitBranchListResult,
   GitCommitLogResult,
+  GitOpResult,
   GitScopedFilesResult,
   OpenPRState,
   PRDraftSummary,
@@ -601,6 +603,32 @@ export interface BunRequests {
   gitGetScopedFileDiff: {
     params: { workspacePath: string; scope: DiffScope; filePath: string; commitRef?: string };
     response: VCSFileDiffResult;
+  };
+
+  // --- Git Branch / Remote Operations ---
+  gitListBranchesAndRemotes: {
+    params: { workspacePath: string };
+    response: GitBranchListResult;
+  };
+  gitPull: {
+    params: { workspacePath: string };
+    response: GitOpResult;
+  };
+  gitFetchAll: {
+    params: { workspacePath: string };
+    response: GitOpResult;
+  };
+  gitPushBranch: {
+    params: { workspacePath: string; branch: string; remote: string };
+    response: GitOpResult;
+  };
+  gitMergeBranch: {
+    params: { workspacePath: string; branch: string };
+    response: GitOpResult;
+  };
+  gitRebaseOnto: {
+    params: { workspacePath: string; branch: string };
+    response: GitOpResult;
   };
 
   // --- JJ (Jujutsu) VCS View ---

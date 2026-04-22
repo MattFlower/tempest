@@ -534,6 +534,27 @@ export interface GitScopedFilesResult {
   summary: string;
 }
 
+// --- Git Branch / Remote Operations ---
+
+export interface GitBranchInfo {
+  name: string;
+  isRemote: boolean;
+  remote?: string;
+  isCurrent: boolean;
+}
+
+export interface GitBranchListResult {
+  branches: GitBranchInfo[];
+  current: string | null;
+  remotes: string[];
+}
+
+export interface GitOpResult {
+  success: boolean;
+  error?: string;
+  output?: string;
+}
+
 // --- JJ (Jujutsu) VCS View ---
 
 export interface JJRevision {

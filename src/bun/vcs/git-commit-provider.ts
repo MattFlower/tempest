@@ -17,6 +17,9 @@ import type {
   GitCommitLogResult,
   GitScopedFileEntry,
   GitScopedFilesResult,
+  GitBranchInfo,
+  GitBranchListResult,
+  GitOpResult,
 } from "../../shared/ipc-types";
 import { DiffScope } from "../../shared/ipc-types";
 import { detectLanguage, detectBaseBranch } from "./shared";
@@ -548,4 +551,122 @@ export async function gitGetScopedFileDiff(
   }
 
   return { originalContent, modifiedContent, filePath, language };
+}
+
+// --- Branch / Remote operations ---
+
+export async function gitListBranchesAndRemotes(
+  workspacePath: string,
+): Promise<GitBranchListResult> {
+  const remotesOut = await runGitOrThrow(["remote"], workspacePath);
+  const remotes = remotesOut
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const headOut = await runGit(
+    ["rev-parse", "--abbrev-ref", "HEAD"],
+    workspacePath,
+  );
+  const current =
+    headOut.exitCode === 0 && headOut.stdout.trim() !== "HEAD"
+      ? headOut.stdout.trim()
+      : null;
+
+  const refsOut = await runGitOrThrow(
+    ["for-each-ref", "--format=%(refname:short)", "refs/heads/", "refs/remotes/"],
+    workspacePath,
+  );
+
+  const branches: GitBranchInfo[] = [];
+  for (const raw of refsOut.split("\n")) {
+    const name = raw.trim();
+    if (!name) continue;
+    if (name.endsWith("/HEAD")) continue;
+
+    const matchedRemote = remotes.find((r) => name.startsWith(`${r}/`));
+    if (matchedRemote) {
+      branches.push({
+        name,
+        isRemote: true,
+        remote: matchedRemote,
+        isCurrent: false,
+      });
+    } else {
+      branches.push({
+        name,
+        isRemote: false,
+        isCurrent: name === current,
+      });
+    }
+  }
+
+  branches.sort((a, b) => {
+    if (a.isRemote !== b.isRemote) return a.isRemote ? 1 : -1;
+    return a.name.localeCompare(b.name);
+  });
+
+  return { branches, current, remotes };
+}
+
+export async function gitPull(workspacePath: string): Promise<GitOpResult> {
+  const { stdout, stderr, exitCode } = await runGit(["pull"], workspacePath);
+  if (exitCode !== 0) {
+    return { success: false, error: stderr.trim() || stdout.trim() || "Pull failed" };
+  }
+  return { success: true, output: stdout.trim() };
+}
+
+export async function gitFetchAll(workspacePath: string): Promise<GitOpResult> {
+  const { stdout, stderr, exitCode } = await runGit(
+    ["fetch", "--all", "--prune"],
+    workspacePath,
+  );
+  if (exitCode !== 0) {
+    return { success: false, error: stderr.trim() || "Fetch failed" };
+  }
+  return { success: true, output: (stdout + stderr).trim() };
+}
+
+export async function gitPushBranch(
+  workspacePath: string,
+  branch: string,
+  remote: string,
+): Promise<GitOpResult> {
+  const { stdout, stderr, exitCode } = await runGit(
+    ["push", "--set-upstream", remote, branch],
+    workspacePath,
+  );
+  if (exitCode !== 0) {
+    return { success: false, error: stderr.trim() || "Push failed" };
+  }
+  return { success: true, output: (stdout + stderr).trim() };
+}
+
+export async function gitMergeBranch(
+  workspacePath: string,
+  branch: string,
+): Promise<GitOpResult> {
+  const { stdout, stderr, exitCode } = await runGit(
+    ["merge", "--no-edit", branch],
+    workspacePath,
+  );
+  if (exitCode !== 0) {
+    return { success: false, error: stderr.trim() || stdout.trim() || "Merge failed" };
+  }
+  return { success: true, output: stdout.trim() };
+}
+
+export async function gitRebaseOnto(
+  workspacePath: string,
+  branch: string,
+): Promise<GitOpResult> {
+  const { stdout, stderr, exitCode } = await runGit(
+    ["rebase", branch],
+    workspacePath,
+  );
+  if (exitCode !== 0) {
+    return { success: false, error: stderr.trim() || stdout.trim() || "Rebase failed" };
+  }
+  return { success: true, output: stdout.trim() };
 }

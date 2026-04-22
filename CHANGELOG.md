@@ -13,11 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The top five left-activity-bar icons (Workspaces, Files, Progress, Dashboard, VCS) now behave as an exclusive radio group — only one lights up at a time. Previously, because Workspaces/Files control sidebar visibility while Dashboard/VCS control the workspace view mode, both groups could be lit simultaneously (e.g. Workspaces selected _and_ Dashboard selected). Clicking or shortcut-triggering a sidebar view now resets the workspace mode to Terminal, and entering Dashboard/VCS closes the sidebar. Toggling a mode off with the same shortcut/icon still leaves the sidebar alone.
 - Browser pane no longer shows a spurious "Can't find <host>" DNS error for VPN-only hostnames. The pre-flight DNS check in the Bun backend switched from `Bun.dns.resolve` (c-ares) to `Bun.dns.lookup` (getaddrinfo). c-ares bypasses macOS's System Configuration framework and ignores VPN-injected scoped/split-DNS resolvers, so on a machine connected to a corporate VPN the pre-flight failed for hostnames that WKWebView itself could have reached. `getaddrinfo` goes through the system resolver and honors scoped DNS, so public and VPN hostnames now both pass through to the webview.
 
 ### Changed
 
 ### Removed
+
+- The sidebar expand/collapse button in the top bar has been removed, along with the ⌘\ keyboard shortcut and the Cmd+\ menu accelerator. The "Toggle Sidebar" command still exists in the View menu and command palette, and the Workspaces / Files activity-bar icons re-open the sidebar to a specific view.
 
 ## [0.17.0] - 2026-04-21
 

@@ -86,30 +86,41 @@ function setViewModeForCurrentWorkspace(mode: ViewMode) {
 
 // Toggle a workspace view mode on or off: hitting the shortcut for the currently-
 // active mode returns the workspace to Terminal, mirroring the ActivityBar icon
-// behavior. Progress overlay is always cleared since it overrides the mode.
+// behavior. Progress overlay is cleared since it overrides the mode, and the
+// sidebar is closed so the Workspaces/Files icon deactivates — the five top
+// activity-bar icons behave as an exclusive radio group.
 function toggleViewModeForCurrentWorkspace(mode: ViewMode) {
   const state = useStore.getState();
-  const { selectedWorkspacePath, setViewMode, setProgressViewActive, progressViewActive } = state;
+  const { selectedWorkspacePath, setViewMode, setProgressViewActive, progressViewActive, sidebarVisible, toggleSidebar } = state;
   if (!selectedWorkspacePath) return;
   const current = state.workspaceViewMode[selectedWorkspacePath] ?? ViewMode.Terminal;
   const alreadyActive = !progressViewActive && current === mode;
   if (progressViewActive) setProgressViewActive(false);
   setViewMode(selectedWorkspacePath, alreadyActive ? ViewMode.Terminal : mode);
+  if (!alreadyActive && sidebarVisible) toggleSidebar();
 }
 
-// Show a sidebar view, with the same Progress-exit semantics as the ActivityBar
-// icons: when Progress is active, exit it and force-show the chosen view rather
-// than toggling the sidebar off (which is what activateSidebarView would do if
-// the view happened to already be active underneath the Progress overlay).
+// Show a sidebar view. Clears Progress and resets viewMode to Terminal so the
+// Dashboard/VCS icons deactivate — the five top activity-bar icons behave as
+// an exclusive radio group. When either flag was set we force-show the chosen
+// view rather than letting activateSidebarView toggle the sidebar off.
 function showSidebarView(view: SidebarView) {
   const state = useStore.getState();
-  if (state.progressViewActive) {
-    state.setProgressViewActive(false);
-    state.setActiveSidebarView(view);
-    if (!state.sidebarVisible) state.toggleSidebar();
+  const { progressViewActive, selectedWorkspacePath, workspaceViewMode, setViewMode, setProgressViewActive, setActiveSidebarView, sidebarVisible, toggleSidebar, activateSidebarView } = state;
+  const currentMode = selectedWorkspacePath
+    ? (workspaceViewMode[selectedWorkspacePath] ?? ViewMode.Terminal)
+    : ViewMode.Terminal;
+  const forceShow = progressViewActive || (!!selectedWorkspacePath && currentMode !== ViewMode.Terminal);
+  if (progressViewActive) setProgressViewActive(false);
+  if (selectedWorkspacePath && currentMode !== ViewMode.Terminal) {
+    setViewMode(selectedWorkspacePath, ViewMode.Terminal);
+  }
+  if (forceShow) {
+    setActiveSidebarView(view);
+    if (!sidebarVisible) toggleSidebar();
     return;
   }
-  state.activateSidebarView(view);
+  activateSidebarView(view);
 }
 
 export const COMMANDS: Command[] = [
@@ -412,7 +423,6 @@ export const COMMANDS: Command[] = [
     id: "toggle-sidebar",
     label: "Toggle Sidebar",
     category: "app",
-    defaultKeybinding: "cmd+\\",
     run: () => useStore.getState().toggleSidebar(),
   },
   {

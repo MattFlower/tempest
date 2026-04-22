@@ -1498,7 +1498,7 @@ ApplicationMenu.setApplicationMenu([
   {
     label: "View",
     submenu: [
-      { label: "Toggle Sidebar", action: "toggle-sidebar", accelerator: "Cmd+\\" },
+      { label: "Toggle Sidebar", action: "toggle-sidebar" },
       { label: "Command Palette", action: "command-palette", accelerator: "Cmd+Shift+P" },
       { type: "separator" },
       { label: "Progress", action: "view-progress", accelerator: "Cmd+5" },

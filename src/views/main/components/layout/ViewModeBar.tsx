@@ -1,44 +1,5 @@
 import { useStore } from "../../state/store";
 
-function SidebarToggleButton() {
-  const sidebarVisible = useStore((s) => s.sidebarVisible);
-  const toggleSidebar = useStore((s) => s.toggleSidebar);
-
-  return (
-    <button
-      onClick={toggleSidebar}
-      // Asymmetric pt/pb (instead of p-1 everywhere) nudges just this icon 1px
-      // lower inside its button, without changing the button's overall size or
-      // affecting the HTTP indicator on the other end of the bar, so the panel
-      // glyph lines up with the macOS traffic lights and the HTTP icon.
-      className="electrobun-webkit-app-region-no-drag pt-[5px] pb-[3px] px-1 rounded transition-colors hover:bg-[var(--ctp-surface0)]"
-      title={sidebarVisible ? "Collapse sidebar (⌘\\)" : "Expand sidebar (⌘\\)"}
-      aria-label={sidebarVisible ? "Collapse sidebar" : "Expand sidebar"}
-    >
-      <svg
-        className="w-5 h-5"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="var(--ctp-text)"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        {/* Panel outline */}
-        <rect x="3" y="4" width="18" height="16" rx="2" />
-        {/* Divider for sidebar */}
-        <line x1="9" y1="4" x2="9" y2="20" />
-        {/* Chevron: points right (expand) when hidden, left (collapse) when visible */}
-        {sidebarVisible ? (
-          <polyline points="7,9 5,12 7,15" />
-        ) : (
-          <polyline points="5,9 7,12 5,15" />
-        )}
-      </svg>
-    </button>
-  );
-}
-
 function HttpServerIcon() {
   const httpEnabled = useStore((s) => s.config?.httpServer?.enabled ?? false);
   const httpServerRunning = useStore((s) => s.httpServerRunning);
@@ -112,9 +73,7 @@ export function ViewModeBar() {
       className="electrobun-webkit-app-region-drag flex items-center pt-2 pb-1 flex-shrink-0 px-4"
       style={{ backgroundColor: "var(--ctp-mantle)" }}
     >
-      <div className="flex-1 flex justify-start pl-[72px]">
-        <SidebarToggleButton />
-      </div>
+      <div className="flex-1 pl-[72px]" />
       <div className="flex-1 flex justify-end">
         <HttpServerIcon />
       </div>

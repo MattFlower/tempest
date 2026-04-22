@@ -88,14 +88,17 @@ export function ActivityBar() {
     setProgressActive(!progressActive);
   };
 
-  // Clicking Workspaces or Files while Progress is active exits Progress and
-  // force-shows the chosen sidebar view (rather than toggling the sidebar
-  // closed, which is what the normal activateSidebarView does when the view is
-  // already active). When Progress is not active, fall back to the usual
-  // toggle-on-repeat-click behavior.
+  // The five top icons act as a radio group: activating one deactivates the
+  // others. Workspaces/Files control sidebar visibility, Dashboard/VCS control
+  // viewMode, Progress is its own flag — without the cross-clearing below, two
+  // icons from different groups could light up at once.
   const handleShowSidebarView = (view: SidebarView) => {
-    if (progressActive) {
-      setProgressActive(false);
+    const forceShow = progressActive || (!!selectedWorkspacePath && viewMode !== ViewMode.Terminal);
+    if (progressActive) setProgressActive(false);
+    if (selectedWorkspacePath && viewMode !== ViewMode.Terminal) {
+      setViewMode(selectedWorkspacePath, ViewMode.Terminal);
+    }
+    if (forceShow) {
       setActiveSidebarView(view);
       if (!sidebarVisible) toggleSidebar();
       return;
@@ -103,15 +106,16 @@ export function ActivityBar() {
     activateSidebarView(view);
   };
 
-  // Clicking a workspace-mode icon: enter that mode (and clear Progress if set).
-  // Clicking the currently-active Dashboard or VCS icon returns the workspace
-  // to Terminal mode, since the Workspaces / Files icons already represent
-  // Terminal mode and there's no separate Terminal pill.
+  // Clicking the currently-active Dashboard/VCS icon returns the workspace to
+  // Terminal mode; otherwise we enter the mode and close the sidebar so the
+  // Workspaces/Files icon deactivates.
   const handleSelectMode = (mode: ViewMode) => {
-    if (progressActive) setProgressActive(false);
     if (!selectedWorkspacePath) return;
-    const alreadyActive = !progressActive && viewMode === mode;
+    const wasProgress = progressActive;
+    if (wasProgress) setProgressActive(false);
+    const alreadyActive = !wasProgress && viewMode === mode;
     setViewMode(selectedWorkspacePath, alreadyActive ? ViewMode.Terminal : mode);
+    if (!alreadyActive && sidebarVisible) toggleSidebar();
   };
 
   const workspaceModeDisabled = !selectedWorkspacePath;

@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Fixed
+
+### Changed
+
+### Removed
+
+## [0.18.0] - 2026-04-21
+
+### Added
+
 - New **Help → Keymap** menu item opens a read-only "Keyboard Shortcuts" pane that lists every command with an effective keystroke, grouped by category (Command Palette, Tabs, Panes, Views, Workspace, Repositories, Claude, GitHub, App, Help). A filter input narrows by label, command id, or formatted keystroke. Also reachable as the `help.keymap` command from the palette. The listing reflects the user's active keybinding overrides from Settings.
 - Git VCS view now has a **Pull / Push / Merge / Rebase** toolbar above the Working / Commit / Since Trunk selectors. **Pull** is a dropdown with `Pull` and `Fetch (all remotes)`. **Push** opens a searchable dropdown of local branches; selecting one pushes to the only remote, or opens a remote-picker dialog when more than one remote exists. **Merge** and **Rebase** open searchable dropdowns of all branches except the current one and run `git merge --no-edit <branch>` / `git rebase <branch>` respectively. Each operation reports success or the underlying git error via the existing toast and refreshes the VCS status on success.
 - **Cmd+click** on a URL in a terminal pane (or a run-pane terminal) now opens it in a new Browser pane split off from the terminal, instead of the system browser. Plain click still opens in the system browser. Applies to both OSC 8 hyperlinks and auto-detected `http(s)://…` URLs in terminal output — so URLs emitted by Claude, Pi, and any shell command now route to a Tempest browser pane on Cmd+click.

@@ -6,7 +6,7 @@ import { SearchAddon } from "@xterm/addon-search";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { ProgressAddon } from "@xterm/addon-progress";
 import { ImageAddon } from "@xterm/addon-image";
-import { api } from "../../state/rpc-client";
+import { api, openUrlInNewBrowserPane } from "../../state/rpc-client";
 import { getTerminalTheme, getCurrentTheme } from "../../state/theme";
 
 export class TerminalInstance {
@@ -50,18 +50,10 @@ export class TerminalInstance {
       drawBoldTextInBrightColors: false,
       minimumContrastRatio: 1,
 
-      // OSC 8 hyperlinks: open in system browser on click, no confirmation dialog
+      // OSC 8 hyperlinks: Cmd+click opens in a new Tempest browser pane,
+      // plain click falls through to the system browser.
       linkHandler: {
-        activate: (_event: MouseEvent, uri: string) => {
-          try {
-            const url = new URL(uri);
-            if (url.protocol === "http:" || url.protocol === "https:") {
-              window.open(uri, "_blank");
-            }
-          } catch {
-            // Invalid URL — ignore
-          }
-        },
+        activate: (event: MouseEvent, uri: string) => this.activateUrl(event, uri),
       },
 
       theme: getTerminalTheme(getCurrentTheme()),
@@ -71,7 +63,9 @@ export class TerminalInstance {
     this.progressAddon = new ProgressAddon();
     this.serializeAddon = new SerializeAddon();
     this.terminal.loadAddon(this.fitAddon);
-    this.terminal.loadAddon(new WebLinksAddon());
+    this.terminal.loadAddon(
+      new WebLinksAddon((event, uri) => this.activateUrl(event, uri)),
+    );
     this.searchAddon = new SearchAddon();
     this.terminal.loadAddon(this.searchAddon);
     this.terminal.loadAddon(this.serializeAddon);
@@ -640,5 +634,19 @@ export class TerminalInstance {
     this.focusListenerCleanup?.();
     this.webglAddon?.dispose();
     this.terminal.dispose();
+  }
+
+  private activateUrl(event: MouseEvent, uri: string) {
+    try {
+      const url = new URL(uri);
+      if (url.protocol !== "http:" && url.protocol !== "https:") return;
+      if (event.metaKey) {
+        openUrlInNewBrowserPane(uri, this.id);
+      } else {
+        window.open(uri, "_blank");
+      }
+    } catch {
+      // Invalid URL — ignore
+    }
   }
 }

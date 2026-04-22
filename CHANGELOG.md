@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Cmd+click** on a URL in a terminal pane (or a run-pane terminal) now opens it in a new Browser pane split off from the terminal, instead of the system browser. Plain click still opens in the system browser. Applies to both OSC 8 hyperlinks and auto-detected `http(s)://…` URLs in terminal output — so URLs emitted by Claude, Pi, and any shell command now route to a Tempest browser pane on Cmd+click.
+
 ### Fixed
 
 ### Changed

@@ -250,6 +250,73 @@ async function upsertPreviewPane(params: {
   api.notifyPaneTreeChanged(params.workspacePath, paneNode.toNodeState(newTree));
 }
 
+/**
+ * Open a URL in a new Browser pane, split after the pane owning the
+ * originating terminal. Used by Cmd+click in terminal panes. Falls back to
+ * the currently-selected workspace + focused pane if the terminalId can't
+ * be located (defensive — shouldn't happen in practice).
+ */
+export async function openUrlInNewBrowserPane(
+  url: string,
+  originTerminalId?: string,
+) {
+  const [{ useStore }, paneNode, { PaneTabKind }] = await Promise.all([
+    import("./store"),
+    import("../models/pane-node"),
+    import("../../../shared/ipc-types"),
+  ]);
+
+  const store = useStore.getState();
+
+  let targetWorkspacePath: string | undefined;
+  let afterPaneId: string | undefined;
+
+  if (originTerminalId) {
+    for (const [wsPath, tree] of Object.entries(store.paneTrees)) {
+      for (const pane of paneNode.allPanes(tree as any)) {
+        if (pane.tabs.some((t: any) => t.terminalId === originTerminalId)) {
+          targetWorkspacePath = wsPath;
+          afterPaneId = pane.id;
+          break;
+        }
+      }
+      if (targetWorkspacePath) break;
+    }
+  }
+
+  if (!targetWorkspacePath) {
+    targetWorkspacePath = store.selectedWorkspacePath ?? undefined;
+    if (!targetWorkspacePath) return;
+    const fallbackTree = store.paneTrees[targetWorkspacePath];
+    if (!fallbackTree) return;
+    afterPaneId =
+      store.focusedPaneId ?? paneNode.allPanes(fallbackTree as any)[0]?.id;
+  }
+
+  if (!targetWorkspacePath || !afterPaneId) return;
+  const tree = store.paneTrees[targetWorkspacePath];
+  if (!tree) return;
+
+  let label = url;
+  try {
+    label = new URL(url).host || url;
+  } catch { /* keep full url as label */ }
+
+  const tab = paneNode.createTab(PaneTabKind.Browser, label, {
+    browserURL: url,
+  });
+  const newPane = paneNode.createPane(tab);
+  const newTree = paneNode.addingPane(tree, newPane, afterPaneId);
+
+  if (store.selectedWorkspacePath !== targetWorkspacePath) {
+    store.selectWorkspace(targetWorkspacePath);
+  }
+  store.setPaneTree(targetWorkspacePath, newTree);
+  store.setFocusedPaneId(newPane.id);
+
+  api.notifyPaneTreeChanged(targetWorkspacePath, paneNode.toNodeState(newTree));
+}
+
 // Initialize RPC and Electroview
 const rpc = Electroview.defineRPC({
   maxRequestTime: 120_000, // native file dialogs block until user selects

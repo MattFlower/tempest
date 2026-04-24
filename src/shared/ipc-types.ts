@@ -267,6 +267,8 @@ export interface FileTreeSessionState {
   scrollTop?: number;
   /** When true, ignored files / dotfiles render at full opacity. */
   showHidden?: boolean;
+  /** When true, the tree auto-reveals the active Monaco file on change. */
+  autoReveal?: boolean;
 }
 
 // --- Session State (Persistence) ---

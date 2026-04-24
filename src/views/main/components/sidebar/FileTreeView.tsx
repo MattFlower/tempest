@@ -40,6 +40,8 @@ export function FileTreeView() {
   const setCursor = useStore((s) => s.setFileTreeCursor);
   const showHidden = useStore((s) => s.fileTreeShowHidden);
   const setShowHidden = useStore((s) => s.setFileTreeShowHidden);
+  const autoReveal = useStore((s) => s.fileTreeAutoReveal);
+  const setAutoReveal = useStore((s) => s.setFileTreeAutoReveal);
   const vcsStatusMap = useStore((s) => s.fileTreeVcsStatus);
   const setFileTreeVcsStatus = useStore((s) => s.setFileTreeVcsStatus);
   const sidebarInfoMap = useStore((s) => s.sidebarInfo);
@@ -549,7 +551,10 @@ export function FileTreeView() {
   // Reveal the currently-open file in the tree: expand its owning repo,
   // workspace, and every ancestor directory, then move the cursor to it.
   // If there's no active file (no tab selected), no-op.
-  const revealActiveFile = useCallback(() => {
+  //
+  // `preserveFilter` skips clearing the filter input — used by auto-reveal so
+  // the tree doesn't wipe what the user is typing when the active file changes.
+  const revealActiveFile = useCallback((preserveFilter = false) => {
     if (!activeFilePath) return;
     const wsPath = findWorkspaceForPath(activeFilePath);
     if (!wsPath) return;
@@ -572,7 +577,7 @@ export function FileTreeView() {
     }
 
     setCursor(`file:${activeFilePath}`);
-    setFilterQuery("");
+    if (!preserveFilter) setFilterQuery("");
   }, [
     activeFilePath,
     findWorkspaceForPath,
@@ -581,6 +586,14 @@ export function FileTreeView() {
     setFileTreeExpanded,
     setCursor,
   ]);
+
+  // Auto-reveal: when enabled, follow the active Monaco file as it changes.
+  // Preserves the filter input so typing in the tree filter isn't interrupted
+  // by a focus change in another pane.
+  useEffect(() => {
+    if (!autoReveal) return;
+    revealActiveFile(true);
+  }, [autoReveal, activeFilePath, revealActiveFile]);
 
   // --- Keyboard navigation ---
   // The cursor lives on the container (single tabIndex=0). The visible-rows
@@ -698,13 +711,26 @@ export function FileTreeView() {
             type="button"
             title="Reveal active file"
             aria-label="Reveal active file"
-            onClick={revealActiveFile}
+            onClick={() => revealActiveFile()}
             disabled={!activeFilePath}
             className="p-1 rounded hover:bg-[var(--ctp-surface0)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             style={{ color: "var(--ctp-overlay0)" }}
           >
             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
               <path d="M8 1a.5.5 0 0 1 .5.5v5.293l2.646-2.647a.5.5 0 0 1 .708.708l-3.5 3.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L7.5 6.793V1.5A.5.5 0 0 1 8 1ZM2 11a.5.5 0 0 1 1 0v2a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5v-2a.5.5 0 0 1 1 0v2A1.5 1.5 0 0 1 12.5 14.5h-9A1.5 1.5 0 0 1 2 13v-2Z" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            title={autoReveal ? "Auto-reveal active file: on" : "Auto-reveal active file: off"}
+            aria-label="Toggle auto-reveal active file"
+            aria-pressed={autoReveal}
+            onClick={() => setAutoReveal(!autoReveal)}
+            className="p-1 rounded hover:bg-[var(--ctp-surface0)] transition-colors"
+            style={{ color: autoReveal ? "var(--ctp-blue)" : "var(--ctp-overlay0)" }}
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+              <path d="M9.354 2.146a.5.5 0 0 0-.708.708L10.293 4.5H7a3.5 3.5 0 0 0 0 7h1a.5.5 0 0 0 0-1H7a2.5 2.5 0 0 1 0-5h3.293L8.646 7.146a.5.5 0 1 0 .708.708l2.5-2.5a.5.5 0 0 0 0-.708l-2.5-2.5ZM6.646 13.854a.5.5 0 0 0 .708-.708L5.707 11.5H9a3.5 3.5 0 0 0 0-7H8a.5.5 0 0 0 0 1h1a2.5 2.5 0 0 1 0 5H5.707l1.647-1.646a.5.5 0 1 0-.708-.708l-2.5 2.5a.5.5 0 0 0 0 .708l2.5 2.5Z" />
             </svg>
           </button>
           <button

@@ -726,6 +726,8 @@ export const api = {
     expandedDirs?: string[];
     cursor?: string | null;
     scrollTop?: number;
+    showHidden?: boolean;
+    autoReveal?: boolean;
   }) => rpcRequest.saveFileTreeState(state),
 
   // Files

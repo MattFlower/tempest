@@ -119,6 +119,7 @@ export function App() {
         cursor: s.fileTreeCursor,
         scrollTop: s.fileTreeScrollTop,
         showHidden: s.fileTreeShowHidden,
+        autoReveal: s.fileTreeAutoReveal,
       }).catch(() => { /* swallow */ });
     };
     const unsub = useStore.subscribe((s, prev) => {
@@ -129,7 +130,8 @@ export function App() {
         s.fileTreeExpandedDirs === prev.fileTreeExpandedDirs &&
         s.fileTreeCursor === prev.fileTreeCursor &&
         s.fileTreeScrollTop === prev.fileTreeScrollTop &&
-        s.fileTreeShowHidden === prev.fileTreeShowHidden
+        s.fileTreeShowHidden === prev.fileTreeShowHidden &&
+        s.fileTreeAutoReveal === prev.fileTreeAutoReveal
       ) return;
       if (timer) clearTimeout(timer);
       timer = setTimeout(flush, 250);

@@ -97,6 +97,10 @@ export interface TempestStore {
   /** When true, ignored / dotfile rows render at full opacity; otherwise they
    *  render dimmed. Nothing is actually hidden — this only affects emphasis. */
   fileTreeShowHidden: boolean;
+  /** When true, the tree automatically reveals the active Monaco file
+   *  whenever it changes (focused pane's active tab). Manual toggle in the
+   *  Files toolbar; persisted alongside other file-tree prefs. */
+  fileTreeAutoReveal: boolean;
   /** VCS status per workspace for tree decorations. Populated lazily when a
    *  workspace is expanded; kept small — only workspaces currently expanded
    *  in the tree have entries. */
@@ -135,6 +139,7 @@ export interface TempestStore {
   setFileTreeCursor: (cursor: string | null) => void;
   setFileTreeScrollTop: (scrollTop: number) => void;
   setFileTreeShowHidden: (showHidden: boolean) => void;
+  setFileTreeAutoReveal: (autoReveal: boolean) => void;
   setFileTreeVcsStatus: (workspacePath: string, status: VCSStatusResult | null) => void;
   hydrateFileTree: (state: {
     activeSidebarView?: SidebarView;
@@ -144,6 +149,7 @@ export interface TempestStore {
     cursor?: string | null;
     scrollTop?: number;
     showHidden?: boolean;
+    autoReveal?: boolean;
   }) => void;
 
   toggleCommandPalette: () => void;
@@ -239,6 +245,7 @@ export const useStore = create<TempestStore>((set) => ({
   fileTreeCursor: null,
   fileTreeScrollTop: 0,
   fileTreeShowHidden: false,
+  fileTreeAutoReveal: false,
   fileTreeVcsStatus: {},
 
   // Actions
@@ -368,6 +375,7 @@ export const useStore = create<TempestStore>((set) => ({
   setFileTreeCursor: (cursor) => set({ fileTreeCursor: cursor }),
   setFileTreeScrollTop: (scrollTop) => set({ fileTreeScrollTop: scrollTop }),
   setFileTreeShowHidden: (showHidden) => set({ fileTreeShowHidden: showHidden }),
+  setFileTreeAutoReveal: (autoReveal) => set({ fileTreeAutoReveal: autoReveal }),
   setFileTreeVcsStatus: (workspacePath, status) =>
     set((s) => {
       if (status === null) {
@@ -402,6 +410,7 @@ export const useStore = create<TempestStore>((set) => ({
       if (state.cursor !== undefined) next.fileTreeCursor = state.cursor;
       if (typeof state.scrollTop === "number") next.fileTreeScrollTop = state.scrollTop;
       if (typeof state.showHidden === "boolean") next.fileTreeShowHidden = state.showHidden;
+      if (typeof state.autoReveal === "boolean") next.fileTreeAutoReveal = state.autoReveal;
       return next;
     }),
 

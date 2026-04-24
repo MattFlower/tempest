@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Settings → Codex** tab for keychain-backed Codex env vars (e.g. `OPENAI_API_KEY`). Mirrors the Pi tab — values live in the macOS Keychain, only the names persist to `config.json`. Pi/Codex tabs share one `AgentEnvVarsTab` component.
 - `codexPath` and `codexArgs` fields in `config.json`, and `codex` in the onboarding binary-check dialog.
 - New RPC handlers: `buildCodexCommand`, `resolveCodexSessionId`, `listCodexEnvVarNames` / `setCodexEnvVar` / `deleteCodexEnvVar`.
+- Files sidebar toolbar now has an **auto-reveal** toggle (↔ icon) next to the existing "Reveal active file" button. When on, the tree automatically expands and selects whatever file is open in the focused Monaco pane as you switch tabs or panes. Off by default; the setting persists in session state. The toggle preserves the tree's filter input while it follows the active file, so you can keep typing a filter without it being wiped on tab changes.
 
 ### Fixed
 

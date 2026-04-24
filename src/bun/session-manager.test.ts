@@ -106,6 +106,89 @@ describe("SessionManager.buildPiCommand", () => {
   });
 });
 
+describe("SessionManager.buildCodexCommand", () => {
+  it("shell-quotes codex binary path and args, no session id", async () => {
+    mkdirSync(tmpRoot, { recursive: true });
+
+    const config: AppConfig = {
+      workspaceRoot: tmpRoot,
+      claudeArgs: [],
+      codexPath: "/bin/echo",
+      codexArgs: ["--model", "gpt-5", "--name=O'Brien"],
+    };
+
+    const manager = new SessionManager(config);
+    const { command } = await manager.buildCodexCommand({
+      workspacePath: tmpRoot,
+    });
+
+    expect(command[0]).toBe("/bin/zsh");
+    expect(command[1]).toBe("-lic");
+
+    const cmd = command[2]!;
+    expect(cmd).toContain(`exec ${shellQuote("/bin/echo")}`);
+    expect(cmd).toContain(shellQuote("--model"));
+    expect(cmd).toContain(shellQuote("gpt-5"));
+    expect(cmd).toContain(shellQuote("--name=O'Brien"));
+    expect(cmd).not.toContain(shellQuote("resume"));
+  });
+
+  it("adds `resume <sessionId>` before user args when sessionId is provided", async () => {
+    mkdirSync(tmpRoot, { recursive: true });
+
+    const config: AppConfig = {
+      workspaceRoot: tmpRoot,
+      claudeArgs: [],
+      codexPath: "/bin/echo",
+      codexArgs: ["--flag"],
+    };
+
+    const manager = new SessionManager(config);
+    const { command } = await manager.buildCodexCommand({
+      workspacePath: tmpRoot,
+      sessionId: "abc-123-xyz",
+    });
+
+    const cmd = command[2]!;
+    const resumeIdx = cmd.indexOf(shellQuote("resume"));
+    const idIdx = cmd.indexOf(shellQuote("abc-123-xyz"));
+    const flagIdx = cmd.indexOf(shellQuote("--flag"));
+    expect(resumeIdx).toBeGreaterThan(0);
+    expect(idIdx).toBeGreaterThan(resumeIdx);
+    expect(flagIdx).toBeGreaterThan(idIdx);
+  });
+
+  it("injects configured Codex env vars from the keychain before exec", async () => {
+    mkdirSync(tmpRoot, { recursive: true });
+
+    const config: AppConfig = {
+      workspaceRoot: tmpRoot,
+      claudeArgs: [],
+      codexPath: "/bin/echo",
+      codexEnvVarNames: ["OPENAI_API_KEY", "MISSING_VAR"],
+    };
+
+    const fakeKeychain = {
+      setSecret: async () => {},
+      deleteSecret: async () => {},
+      getSecret: async (name: string) => {
+        if (name === "OPENAI_API_KEY") return "sk-test";
+        return null;
+      },
+    };
+
+    const manager = new SessionManager(config, fakeKeychain);
+    const { command } = await manager.buildCodexCommand({
+      workspacePath: tmpRoot,
+    });
+
+    const cmd = command[2]!;
+    expect(cmd).toContain(`OPENAI_API_KEY=${shellQuote("sk-test")}`);
+    expect(cmd).not.toContain("MISSING_VAR=");
+    expect(cmd.indexOf("OPENAI_API_KEY=")).toBeLessThan(cmd.indexOf("exec "));
+  });
+});
+
 describe("SessionManager.buildClaudeCommand", () => {
   it("shell-quotes Claude binary path and args", async () => {
     mkdirSync(tmpRoot, { recursive: true });

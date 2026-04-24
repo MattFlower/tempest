@@ -24,7 +24,7 @@ function addTabToFocusedPane(kind: PaneTabKind, label: string, overrides?: Recor
   const { focusedPaneId } = useStore.getState();
   if (!focusedPaneId) return;
   const tab = createTab(kind, label, {
-    ...(kind === PaneTabKind.Claude || kind === PaneTabKind.Shell || kind === PaneTabKind.Pi
+    ...(kind === PaneTabKind.Claude || kind === PaneTabKind.Shell || kind === PaneTabKind.Pi || kind === PaneTabKind.Codex
       ? { terminalId: crypto.randomUUID() }
       : {}),
     ...(kind === PaneTabKind.Browser ? { browserURL: "https://google.com" } : {}),
@@ -426,6 +426,7 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
     { label: "Claude", action: () => addTabToFocusedPane(PaneTabKind.Claude, "Claude") },
     { label: "Claude (Continue)", action: () => addTabToFocusedPane(PaneTabKind.Claude, "Claude", { resume: true }) },
     { label: "Pi", action: () => addTabToFocusedPane(PaneTabKind.Pi, "Pi") },
+    { label: "Codex", action: () => addTabToFocusedPane(PaneTabKind.Codex, "Codex") },
     { label: "Browser", action: () => addTabToFocusedPane(PaneTabKind.Browser, "Browser") },
     { label: "Chat History", action: () => addTabToFocusedPane(PaneTabKind.HistoryViewer, "History") },
   ];
@@ -435,6 +436,7 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
     { label: "Claude", action: () => splitWithTab(PaneTabKind.Claude, "Claude") },
     { label: "Claude (Continue)", action: () => splitWithTab(PaneTabKind.Claude, "Claude", { resume: true }) },
     { label: "Pi", action: () => splitWithTab(PaneTabKind.Pi, "Pi") },
+    { label: "Codex", action: () => splitWithTab(PaneTabKind.Codex, "Codex") },
     { label: "Browser", action: () => splitWithTab(PaneTabKind.Browser, "Browser") },
     { label: "Chat History", action: () => splitWithTab(PaneTabKind.HistoryViewer, "History") },
   ];

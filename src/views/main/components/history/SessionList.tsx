@@ -7,7 +7,7 @@
 import { useCallback, useMemo } from "react";
 import type { SessionSummary } from "../../../../shared/ipc-types";
 
-export type HistoryProvider = "claude" | "pi";
+export type HistoryProvider = "claude" | "pi" | "codex";
 
 interface SessionListProps {
   sessions: SessionSummary[];
@@ -117,6 +117,11 @@ export function SessionList({
           label="Pi"
           isActive={provider === "pi"}
           onClick={() => onProviderChange("pi")}
+        />
+        <ScopeButton
+          label="Codex"
+          isActive={provider === "codex"}
+          onClick={() => onProviderChange("codex")}
         />
       </div>
 

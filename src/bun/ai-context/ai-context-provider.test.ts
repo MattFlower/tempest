@@ -42,7 +42,20 @@ function createMockStore(
     ? messagesOrBySession
     : [];
 
-  return {
+  // AIContextProvider now consumes a HistoryAggregator: it calls
+  // `allProviders()` and iterates, then `getMessages(filePath)` routes
+  // to the owning provider. The mock exposes both methods on the
+  // aggregator and wraps a single fake provider.
+  const fakeProvider = {
+    providerId: "claude" as const,
+    isSearchAvailable: false,
+    initialize: mock(async () => {}),
+    getSessions: mock(async () => []),
+    searchSessions: mock(async () => []),
+    getMessages: mock(async (sessionFilePath: string) =>
+      messagesBySession?.[sessionFilePath] ?? sharedMessages,
+    ),
+    ownsSessionFile: (path: string) => sessions.some((s) => s.filePath === path),
     sessionsWithToolCallsForFile: mock(async () =>
       sessions.map((s) => ({
         filePath: s.filePath,
@@ -51,16 +64,17 @@ function createMockStore(
         modifiedAt: "2026-01-01T01:00:00Z",
       })),
     ),
-    getMessages: mock(async (sessionFilePath: string) =>
-      messagesBySession?.[sessionFilePath] ?? sharedMessages,
-    ),
-    // Stubs for other HistoryStore methods
-    initialize: mock(async () => {}),
-    getSessions: mock(async () => []),
-    searchSessions: mock(async () => []),
     refresh: mock(async () => {}),
     startRefreshTimer: mock(() => {}),
     stopRefreshTimer: mock(() => {}),
+  };
+
+  return {
+    allProviders: () => [fakeProvider],
+    provider: () => fakeProvider,
+    getMessages: mock(async (sessionFilePath: string) =>
+      messagesBySession?.[sessionFilePath] ?? sharedMessages,
+    ),
   } as any;
 }
 
@@ -358,7 +372,7 @@ describe("AIContextProvider", () => {
       const context = timeline!.changes[0]!.conversationContext;
       // Should include messages around index 2 (the Edit message): indices 0-3
       expect(context).toContain("You:");
-      expect(context).toContain("Claude:");
+      expect(context).toContain("Assistant:");
     });
 
     test("sorts timeline changes chronologically across sessions", async () => {
@@ -461,6 +475,120 @@ describe("AIContextProvider", () => {
       expect(timeline!.changes).toHaveLength(2);
       expect(timeline!.changes[0]!.index).toBe(0);
       expect(timeline!.changes[1]!.index).toBe(1);
+    });
+  });
+
+  describe("multi-provider fan-out", () => {
+    test("collects and dedupes sessions across Claude and Codex providers and routes getMessages to the owning provider", async () => {
+      const claudePath = "/home/u/.claude/sessions/abc.jsonl";
+      const codexPath = "/home/u/.codex/sessions/2026/03/01/rollout-xyz.jsonl";
+      const duplicatePath = codexPath; // same file reported by both providers
+
+      const claudeEdit = makeMessage("assistant", "via claude", [
+        {
+          tool: "Edit",
+          summary: "/path/to/file.ts",
+          input: JSON.stringify({
+            file_path: "/path/to/file.ts",
+            old_string: "claude-old",
+            new_string: "claude-new",
+          }),
+        },
+      ]);
+
+      const codexEdit = makeMessage("assistant", "via codex", [
+        {
+          tool: "Edit",
+          summary: "/path/to/file.ts",
+          input: JSON.stringify({
+            file_path: "/path/to/file.ts",
+            old_string: "codex-old",
+            new_string: "codex-new",
+          }),
+        },
+      ]);
+
+      const claudeGetMessages = mock(async (_p: string) => [claudeEdit]);
+      const codexGetMessages = mock(async (_p: string) => [codexEdit]);
+
+      const claudeProvider = {
+        providerId: "claude" as const,
+        isSearchAvailable: false,
+        initialize: mock(async () => {}),
+        getSessions: mock(async () => []),
+        searchSessions: mock(async () => []),
+        getMessages: claudeGetMessages,
+        ownsSessionFile: (p: string) => p === claudePath,
+        sessionsWithToolCallsForFile: mock(async () => [
+          {
+            filePath: claudePath,
+            firstPrompt: "claude session",
+            createdAt: "2026-01-01T00:00:00Z",
+            modifiedAt: "2026-01-01T01:00:00Z",
+          },
+          {
+            filePath: duplicatePath,
+            firstPrompt: "dupe reported by claude",
+            createdAt: "2026-01-01T00:00:00Z",
+            modifiedAt: "2026-01-01T01:00:00Z",
+          },
+        ]),
+        refresh: mock(async () => {}),
+        startRefreshTimer: mock(() => {}),
+        stopRefreshTimer: mock(() => {}),
+      };
+
+      const codexProvider = {
+        providerId: "codex" as const,
+        isSearchAvailable: false,
+        initialize: mock(async () => {}),
+        getSessions: mock(async () => []),
+        searchSessions: mock(async () => []),
+        getMessages: codexGetMessages,
+        ownsSessionFile: (p: string) => p === codexPath,
+        sessionsWithToolCallsForFile: mock(async () => [
+          {
+            filePath: codexPath,
+            firstPrompt: "codex session",
+            createdAt: "2026-01-02T00:00:00Z",
+            modifiedAt: "2026-01-02T01:00:00Z",
+          },
+        ]),
+        refresh: mock(async () => {}),
+        startRefreshTimer: mock(() => {}),
+        stopRefreshTimer: mock(() => {}),
+      };
+
+      const aggregator: any = {
+        allProviders: () => [claudeProvider, codexProvider],
+        getMessages: async (filePath: string) => {
+          if (claudeProvider.ownsSessionFile(filePath))
+            return claudeProvider.getMessages(filePath);
+          if (codexProvider.ownsSessionFile(filePath))
+            return codexProvider.getMessages(filePath);
+          return [];
+        },
+      };
+
+      const provider = new AIContextProvider(aggregator);
+      const result = await provider.contextForFile("/path/to/file.ts");
+      expect(result).not.toBeNull();
+
+      // Two unique session file paths: claudePath and codexPath. The
+      // duplicate codexPath reported by Claude must be deduped.
+      expect(result!.sessions).toHaveLength(2);
+      const sessionIds = new Set(result!.sessions.map((s) => s.id));
+      expect(sessionIds.has(claudePath)).toBe(true);
+      expect(sessionIds.has(codexPath)).toBe(true);
+
+      // Each session's messages must be fetched from its owning provider,
+      // not whichever provider reported it first.
+      const claudeSession = result!.sessions.find((s) => s.id === claudePath)!;
+      const codexSession = result!.sessions.find((s) => s.id === codexPath)!;
+      expect(claudeSession.messages).toEqual([claudeEdit]);
+      expect(codexSession.messages).toEqual([codexEdit]);
+      expect(claudeGetMessages).toHaveBeenCalledTimes(1);
+      expect(codexGetMessages).toHaveBeenCalledTimes(1);
     });
   });
 });

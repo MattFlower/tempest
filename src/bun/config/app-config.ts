@@ -67,13 +67,22 @@ export function normalizeConfig(raw: unknown): AppConfig {
   if (typeof raw.claudePath === "string") normalized.claudePath = raw.claudePath;
   if (typeof raw.ghPath === "string") normalized.ghPath = raw.ghPath;
   if (typeof raw.piPath === "string") normalized.piPath = raw.piPath;
+  if (typeof raw.codexPath === "string") normalized.codexPath = raw.codexPath;
 
   if (isStringArray(raw.piArgs)) {
     normalized.piArgs = raw.piArgs;
   }
 
+  if (isStringArray(raw.codexArgs)) {
+    normalized.codexArgs = raw.codexArgs;
+  }
+
   if (isStringArray(raw.piEnvVarNames)) {
     normalized.piEnvVarNames = raw.piEnvVarNames;
+  }
+
+  if (isStringArray(raw.codexEnvVarNames)) {
+    normalized.codexEnvVarNames = raw.codexEnvVarNames;
   }
 
   if (typeof raw.editor === "string") normalized.editor = raw.editor;

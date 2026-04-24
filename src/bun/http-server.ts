@@ -429,7 +429,8 @@ export class TempestHttpServer {
           if (
             tab.kind !== "claude" &&
             tab.kind !== "shell" &&
-            tab.kind !== "pi"
+            tab.kind !== "pi" &&
+            tab.kind !== "codex"
           ) continue;
           if (!tab.terminalId) continue;
           out.push({
@@ -652,6 +653,7 @@ const DASHBOARD_STYLES = `
   .term-kind-claude { background: #1e3a29; color: #a6e3a1; }
   .term-kind-shell { background: #313244; color: #89b4fa; }
   .term-kind-pi { background: #2e1e3a; color: #cba6f7; }
+  .term-kind-codex { background: #1e3a3a; color: #94e2d5; }
   .term-label { flex: 1; color: #cdd6f4; font-size: 0.9rem; }
   .term-session { color: #585b70; font-size: 0.75rem; font-family: monospace; }
   .term-status { color: #6c7086; font-size: 0.75rem; }
@@ -990,6 +992,7 @@ function dashboardHTML(
           const badgeClass =
             t.kind === 'claude' ? 'term-kind-claude' :
             t.kind === 'pi'     ? 'term-kind-pi' :
+            t.kind === 'codex'  ? 'term-kind-codex' :
                                   'term-kind-shell';
           const kindLabel = t.kind;
           const sessionStr = t.sessionID ? ('<span class="term-session">' + escapeAttr(t.sessionID.slice(0, 8)) + '</span>') : '';

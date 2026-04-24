@@ -39,6 +39,7 @@ export enum EditorType {
 export enum PaneTabKind {
   Claude = "claude",
   Pi = "pi",
+  Codex = "codex",
   Shell = "shell",
   Browser = "browser",
   HistoryViewer = "historyViewer",
@@ -140,9 +141,12 @@ export interface AppConfig {
   claudePath?: string;
   ghPath?: string;
   piPath?: string;
+  codexPath?: string;
   claudeArgs: string[];
   piArgs?: string[];
+  codexArgs?: string[];
   piEnvVarNames?: string[]; // Names of env vars passed to Pi at launch; values live in the macOS Keychain.
+  codexEnvVarNames?: string[]; // Names of env vars passed to Codex at launch; values live in the macOS Keychain.
   editor?: string; // e.g. "nvim", "hx", "vim", "code". Defaults to "nvim".
   monacoVimMode?: boolean; // Enable vim keybindings in Monaco editor. Defaults to false.
   theme?: "dark" | "light"; // Appearance theme. Defaults to "dark".
@@ -329,6 +333,7 @@ export interface BinaryStatus {
   jj: boolean;
   claude: boolean;
   gh: boolean;
+  codex: boolean;
 }
 
 // --- History ---

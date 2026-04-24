@@ -9,6 +9,7 @@ import type { SessionMessage, SessionSummary } from "../../../../shared/ipc-type
 import { ToolCallBadge, HIDDEN_TOOLS } from "./ToolCallBadge";
 import { renderInlineMarkdown } from "../inline-markdown";
 import { resumeSessionInNewTab } from "../../state/actions";
+import { api } from "../../state/rpc-client";
 import type { HistoryProvider } from "./SessionList";
 
 interface MessageStreamProps {
@@ -176,6 +177,23 @@ export function MessageStream({ messages, summary, searchQuery, provider }: Mess
       const fileName = summary.filePath.split("/").pop() ?? summary.filePath;
       const sessionId = fileName.replace(/\.jsonl$/, "");
       resumeSessionInNewTab("claude", sessionId);
+    } else if (provider === "codex") {
+      // Codex wants the session UUID; resolve it via RPC (reads the rollout
+      // header or falls back to the filename pattern).
+      void (async () => {
+        try {
+          const { codexSessionId } = await api.resolveCodexSessionId(summary.filePath);
+          if (codexSessionId) {
+            resumeSessionInNewTab("codex", codexSessionId);
+          } else {
+            console.warn(
+              `[codex] Could not resolve session id for ${summary.filePath}; rollout file may be missing or malformed.`,
+            );
+          }
+        } catch (err) {
+          console.error("[codex] resolveCodexSessionId failed:", err);
+        }
+      })();
     } else {
       // Pi consumes the absolute .jsonl path via --session <path>.
       resumeSessionInNewTab("pi", summary.filePath);
@@ -265,7 +283,7 @@ export function MessageStream({ messages, summary, searchQuery, provider }: Mess
                 backgroundColor: "var(--ctp-blue)",
                 color: "white",
               }}
-              title={`Open this session in a new ${provider === "claude" ? "Claude" : "Pi"} tab`}
+              title={`Open this session in a new ${provider === "claude" ? "Claude" : provider === "codex" ? "Codex" : "Pi"} tab`}
             >
               Resume in new tab
             </button>
@@ -477,6 +495,15 @@ function AssistantMessage({
             <path fill="#fff" d="M517.36 400 H634.72 V634.72 H517.36 Z" />
           </svg>
         </div>
+      ) : provider === "codex" ? (
+        <div
+          className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5"
+          style={{ backgroundColor: "#1e3a3a" }}
+        >
+          <span className="text-[10px] font-semibold" style={{ color: "#94e2d5" }}>
+            {"C"}
+          </span>
+        </div>
       ) : (
         <div
           className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5"
@@ -494,7 +521,7 @@ function AssistantMessage({
             className="text-[11px] font-semibold"
             style={{ color: "var(--ctp-subtext0)" }}
           >
-            {provider === "pi" ? "PI" : "CLAUDE"}
+            {provider === "pi" ? "PI" : provider === "codex" ? "CODEX" : "CLAUDE"}
           </span>
           {msg.timestamp && (
             <span

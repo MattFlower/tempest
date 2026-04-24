@@ -25,6 +25,7 @@ export const CCUSAGE_STATE_FILE = join(TEMPEST_DIR, "ccusage-state.json");
 // History cache
 export const HISTORY_CACHE_FILE = join(TEMPEST_DIR, "history-cache.json");
 export const PI_HISTORY_CACHE_FILE = join(TEMPEST_DIR, "pi-history-cache.json");
+export const CODEX_HISTORY_CACHE_FILE = join(TEMPEST_DIR, "codex-history-cache.json");
 
 // Progress view cache
 export const PROGRESS_CACHE_FILE = join(TEMPEST_DIR, "progress-cache.json");

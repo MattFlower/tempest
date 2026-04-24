@@ -56,6 +56,7 @@ function addTabToFocusedPane(kind: PaneTabKind, label: string, overrides?: Recor
     kind === PaneTabKind.Claude ||
     kind === PaneTabKind.Shell ||
     kind === PaneTabKind.Pi ||
+    kind === PaneTabKind.Codex ||
     (kind === PaneTabKind.Editor &&
       overrides?.editorType !== EditorType.Monaco &&
       !(overrides?.editorType === undefined && isMonacoDefault()));
@@ -163,6 +164,13 @@ export const COMMANDS: Command[] = [
     category: "tabs",
     canOpenAsPane: true,
     run: () => addTabToFocusedPane(PaneTabKind.Pi, "Pi"),
+  },
+  {
+    id: "new-codex",
+    label: "Codex",
+    category: "tabs",
+    canOpenAsPane: true,
+    run: () => addTabToFocusedPane(PaneTabKind.Codex, "Codex"),
   },
   {
     id: "new-shell",

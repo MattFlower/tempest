@@ -458,14 +458,18 @@ export function containsPane(node: PaneNode, paneId: string): boolean {
 // --- Resume a historical session in a new tab ---
 
 /**
- * Open a new Claude or Pi tab pre-populated with a session from the
- * Chat History viewer. For Claude, `sessionRef` is the .jsonl filename
- * sans extension (the session UUID). For Pi, `sessionRef` is the
- * absolute path to the .jsonl transcript — `buildPiCommand` consumes
- * it via `--session <path>`.
+ * Open a new Claude, Pi, or Codex tab pre-populated with a session from
+ * the Chat History viewer.
+ *
+ * - Claude: `sessionRef` is the .jsonl filename sans extension (the
+ *   session UUID). Passed as `--resume <id>`.
+ * - Pi: `sessionRef` is the absolute path to the .jsonl transcript.
+ *   Passed via `--session <path>`.
+ * - Codex: `sessionRef` is the Codex session UUID (from the rollout
+ *   header). Passed as `codex resume <id>`.
  */
 export function resumeSessionInNewTab(
-  provider: "claude" | "pi",
+  provider: "claude" | "pi" | "codex",
   sessionRef: string,
 ) {
   const ctx = currentTree();
@@ -482,6 +486,11 @@ export function resumeSessionInNewTab(
       ? createTab(PaneTabKind.Claude, "Claude", {
           terminalId,
           resume: true,
+          sessionId: sessionRef,
+        })
+      : provider === "codex"
+      ? createTab(PaneTabKind.Codex, "Codex", {
+          terminalId,
           sessionId: sessionRef,
         })
       : createTab(PaneTabKind.Pi, "Pi", {

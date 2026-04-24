@@ -12,7 +12,7 @@ import { useOverlay } from "../../state/useOverlay";
 import { applyTheme } from "../../state/theme";
 import { KeybindingsTab } from "./KeybindingsTab";
 
-type Tab = "general" | "remote" | "tools" | "appearance" | "pi" | "keybindings";
+type Tab = "general" | "remote" | "tools" | "appearance" | "pi" | "codex" | "keybindings";
 
 function isSameKeybindings(
   a: Record<string, string | null> | undefined,
@@ -291,6 +291,11 @@ export function SettingsDialog() {
             onClick={() => setActiveTab("pi")}
           />
           <TabButton
+            label="Codex"
+            active={activeTab === "codex"}
+            onClick={() => setActiveTab("codex")}
+          />
+          <TabButton
             label="Keybindings"
             active={activeTab === "keybindings"}
             onClick={() => setActiveTab("keybindings")}
@@ -327,7 +332,8 @@ export function SettingsDialog() {
                 setShowMarkdown={setShowMarkdown}
               />
             )}
-            {activeTab === "pi" && <PiEnvVarsTab />}
+            {activeTab === "pi" && <AgentEnvVarsTab agent="pi" />}
+            {activeTab === "codex" && <AgentEnvVarsTab agent="codex" />}
             {activeTab === "keybindings" && (
               <KeybindingsTab
                 keybindings={keybindings}
@@ -879,11 +885,13 @@ function RemoteTab({
   );
 }
 
-// --- Pi Env Vars Tab ---
+// --- Agent Env Vars Tab (Pi / Codex) ---
 
 const ENV_VAR_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-function PiEnvVarsTab() {
+type AgentEnvKind = "pi" | "codex";
+
+function AgentEnvVarsTab({ agent }: { agent: AgentEnvKind }) {
   const [names, setNames] = useState<string[] | null>(null);
   const [newName, setNewName] = useState("");
   const [newValue, setNewValue] = useState("");
@@ -892,9 +900,24 @@ function PiEnvVarsTab() {
   const [replacing, setReplacing] = useState<string | null>(null);
   const [replaceValue, setReplaceValue] = useState("");
 
+  const apiBindings =
+    agent === "codex"
+      ? {
+          list: api.listCodexEnvVarNames,
+          set: api.setCodexEnvVar,
+          del: api.deleteCodexEnvVar,
+        }
+      : {
+          list: api.listPiEnvVarNames,
+          set: api.setPiEnvVar,
+          del: api.deletePiEnvVar,
+        };
+  const agentLabel = agent === "codex" ? "Codex" : "Pi";
+
   useEffect(() => {
-    api.listPiEnvVarNames().then((result: string[]) => setNames(result));
-  }, []);
+    apiBindings.list().then((result: string[]) => setNames(result));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agent]);
 
   const handleAdd = async () => {
     const name = newName.trim();
@@ -909,13 +932,13 @@ function PiEnvVarsTab() {
     }
     setBusy(true);
     setError(null);
-    const result = await api.setPiEnvVar(name, value);
+    const result = await apiBindings.set(name, value);
     setBusy(false);
     if (!result.success) {
       setError(result.error ?? "Failed to save");
       return;
     }
-    const refreshed = await api.listPiEnvVarNames();
+    const refreshed = await apiBindings.list();
     setNames(refreshed);
     setNewName("");
     setNewValue("");
@@ -936,7 +959,7 @@ function PiEnvVarsTab() {
     if (replacing === null || replaceValue.length === 0) return;
     setBusy(true);
     setError(null);
-    const result = await api.setPiEnvVar(replacing, replaceValue);
+    const result = await apiBindings.set(replacing, replaceValue);
     setBusy(false);
     if (!result.success) {
       setError(result.error ?? "Failed to update");
@@ -949,22 +972,22 @@ function PiEnvVarsTab() {
   const handleDelete = async (name: string) => {
     setBusy(true);
     setError(null);
-    const result = await api.deletePiEnvVar(name);
+    const result = await apiBindings.del(name);
     setBusy(false);
     if (!result.success) {
       setError(result.error ?? "Failed to delete");
       return;
     }
-    const refreshed = await api.listPiEnvVarNames();
+    const refreshed = await apiBindings.list();
     setNames(refreshed);
   };
 
   return (
     <>
       <p className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
-        Environment variables passed to the Pi coding agent at launch. Values
-        are stored in the macOS Keychain and are never written to configuration
-        files. Changes take effect for new Pi sessions.
+        Environment variables passed to the {agentLabel} coding agent at launch.
+        Values are stored in the macOS Keychain and are never written to
+        configuration files. Changes take effect for new {agentLabel} sessions.
       </p>
 
       {names === null ? (

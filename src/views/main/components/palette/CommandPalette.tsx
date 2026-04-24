@@ -21,6 +21,7 @@ function addTabToFocusedPane(kind: PaneTabKind, label: string, overrides?: Recor
     kind === PaneTabKind.Claude ||
     kind === PaneTabKind.Shell ||
     kind === PaneTabKind.Pi ||
+    kind === PaneTabKind.Codex ||
     (kind === PaneTabKind.Editor &&
       overrides?.editorType !== EditorType.Monaco &&
       !(overrides?.editorType === undefined && isMonacoDefault()));

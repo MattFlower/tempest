@@ -6,7 +6,7 @@
 
 import type { SessionSummary, SessionMessage } from "../../shared/ipc-types";
 
-export type HistoryProviderId = "claude" | "pi";
+export type HistoryProviderId = "claude" | "pi" | "codex";
 
 export interface SessionHistoryProvider {
   readonly providerId: HistoryProviderId;

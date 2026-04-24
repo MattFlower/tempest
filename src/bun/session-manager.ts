@@ -132,20 +132,45 @@ export class SessionManager {
     const quoted = parts.map(shellQuote).join(" ");
     const envAssignments = [
       `TEMPEST_HOOK_SOCKET=${shellQuote(HookSettingsBuilder.socketPath)}`,
-      ...(await this.buildPiEnvAssignments()),
+      ...(await this.buildAgentEnvAssignments("pi", this.config.piEnvVarNames ?? [])),
     ].join(" ");
     const command = ["/bin/zsh", "-lic", `${envAssignments} exec ${quoted}`];
     return { command };
   }
 
+  async buildCodexCommand(params: {
+    workspacePath: string;
+    sessionId?: string;
+  }): Promise<{ command: string[] }> {
+    const codexPath = this.resolveBinary("codex", this.config.codexPath);
+    const parts: string[] = [codexPath];
+
+    if (params.sessionId) {
+      parts.push("resume", params.sessionId);
+    }
+
+    parts.push(...(this.config.codexArgs ?? []));
+
+    const quoted = parts.map(shellQuote).join(" ");
+    const assignments = await this.buildAgentEnvAssignments(
+      "codex",
+      this.config.codexEnvVarNames ?? [],
+    );
+    const prefix = assignments.length > 0 ? `${assignments.join(" ")} ` : "";
+    const command = ["/bin/zsh", "-lic", `${prefix}exec ${quoted}`];
+    return { command };
+  }
+
   /**
-   * Resolve each configured Pi env var name to a keychain value and return
+   * Resolve each configured env var name to a keychain value and return
    * shell-quoted `NAME='value'` fragments. Names that fail to resolve (missing
    * from keychain, or keychain unavailable) are skipped with a warning so a
-   * partial config can't block Pi from launching entirely.
+   * partial config can't block the agent from launching entirely.
    */
-  private async buildPiEnvAssignments(): Promise<string[]> {
-    const names = this.config.piEnvVarNames ?? [];
+  private async buildAgentEnvAssignments(
+    agent: string,
+    names: string[],
+  ): Promise<string[]> {
     if (names.length === 0 || !this.keychain) return [];
 
     const assignments: string[] = [];
@@ -154,7 +179,7 @@ export class SessionManager {
         const value = await this.keychain.getSecret(name);
         if (value === null) {
           console.warn(
-            `[session] Pi env var ${name} not found in keychain, skipping`,
+            `[session] ${agent} env var ${name} not found in keychain, skipping`,
           );
           continue;
         }

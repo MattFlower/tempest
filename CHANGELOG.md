@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Scrolling the mouse wheel over a pane now focuses it, so the wheel scrolls the pane under the cursor without requiring a click first. Moving the mouse alone no longer changes focus.
+
 ### Changed
 
 - Monaco editor tabs now show the workspace-relative file path in the editor header bar instead of only the filename, making same-named files in different directories easier to distinguish.

@@ -130,6 +130,7 @@ export const PaneView = memo(function PaneView({ pane, workspacePath }: PaneView
         }
       `}
       onMouseDown={handleFocus}
+      onWheel={handleFocus}
     >
       <TabBar pane={pane} />
 

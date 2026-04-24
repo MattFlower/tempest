@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Monaco editor tabs now show the workspace-relative file path in the editor header bar instead of only the filename, making same-named files in different directories easier to distinguish.
+
 ### Removed
 
 ## [0.18.0] - 2026-04-21

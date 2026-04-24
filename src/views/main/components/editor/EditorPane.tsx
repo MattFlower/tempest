@@ -41,6 +41,7 @@ export function EditorPane({
     return (
       <MonacoEditorPane
         filePath={filePath}
+        workspacePath={cwd}
         lineNumber={lineNumber}
         isFocused={isFocused}
         onCloseRequest={onCloseRequest}

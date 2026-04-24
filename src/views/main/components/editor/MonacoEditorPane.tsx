@@ -4,7 +4,7 @@
 // the Espresso Libre dark theme.
 // ============================================================
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import Editor, { loader, type OnMount } from "@monaco-editor/react";
 import type { editor, IDisposable } from "monaco-editor";
 // monaco-vim is pre-built as a self-contained ESM bundle (src/vendor/monaco-vim.bundle.js)
@@ -42,13 +42,26 @@ loader.config({ paths: { vs: "./monaco-editor/min/vs" } });
 
 interface MonacoEditorPaneProps {
   filePath: string;
+  workspacePath?: string;
   lineNumber?: number;
   isFocused: boolean;
   onCloseRequest?: () => void;
 }
 
+function displayPathForHeader(filePath: string, workspacePath?: string): string {
+  const normalizedFilePath = filePath.replace(/\\/g, "/");
+  const normalizedWorkspacePath = workspacePath?.replace(/\\/g, "/").replace(/\/+$/, "");
+
+  if (normalizedWorkspacePath && normalizedFilePath.startsWith(normalizedWorkspacePath + "/")) {
+    return normalizedFilePath.slice(normalizedWorkspacePath.length + 1);
+  }
+
+  return normalizedFilePath;
+}
+
 export function MonacoEditorPane({
   filePath,
+  workspacePath,
   lineNumber,
   isFocused,
   onCloseRequest,
@@ -74,7 +87,10 @@ export function MonacoEditorPane({
   const disposablesRef = useRef<IDisposable[]>([]);
 
   const vimEnabled = useStore((s) => s.config?.monacoVimMode ?? false);
-  const fileName = filePath.split("/").pop() ?? filePath;
+  const headerPath = useMemo(
+    () => displayPathForHeader(filePath, workspacePath),
+    [filePath, workspacePath],
+  );
 
   // Load file content on mount
   useEffect(() => {
@@ -334,7 +350,7 @@ export function MonacoEditorPane({
         }}
       >
         <span className="truncate flex-1" title={filePath}>
-          {fileName}
+          {headerPath}
           {isDirty && (
             <span
               className="ml-1.5 inline-block w-2 h-2 rounded-full"

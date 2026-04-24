@@ -103,6 +103,16 @@ export class SessionStateManager {
     return this.state?.workspaces[workspacePath]?.paneTree ?? null;
   }
 
+  /** Snapshot map of workspacePath -> pane tree for fan-out walks. */
+  getAllPaneStates(): Record<string, PaneNodeState> {
+    const out: Record<string, PaneNodeState> = {};
+    if (!this.state) return out;
+    for (const [wsPath, ws] of Object.entries(this.state.workspaces)) {
+      if (ws.paneTree) out[wsPath] = ws.paneTree;
+    }
+    return out;
+  }
+
   isRepoCollapsed(repoId: string): boolean {
     return this.state?.collapsedRepoIds?.includes(repoId) ?? false;
   }

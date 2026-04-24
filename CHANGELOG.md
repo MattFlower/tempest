@@ -9,11 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Codex (OpenAI's CLI coding agent) is now a first-class third coding agent alongside Claude and Pi. A "Codex" entry appears in the `+` tab menu, the **New**/**Split** toolbar menus, and the command palette (`new-codex`). Codex tabs launch `codex` through a login shell (same shell-quoting and env handling as Claude/Pi), and auto-resume the prior session on app restart.
+- Chat History viewer gains a **Codex** provider toggle alongside Claude and Pi. It scans `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`, lists / searches sessions with ripgrep, shows tool calls in the message stream, and offers "Resume in new tab" which launches `codex resume <uuid>`. A new Codex JSONL parser normalizes tool names (`shell`→`Bash`, `read_file`→`Read`, `apply_patch`→`Edit`, `write_file`→`Write`) so existing AI Context / ToolCallBadge filters recognize them.
+- VCS AI Context now fans out across every registered history provider (Claude, Pi, Codex) via `HistoryAggregator` instead of only Claude. The diff panel will show any provider's edits to a file, not just Claude's.
+- **Settings → Codex** tab for keychain-backed Codex env vars (e.g. `OPENAI_API_KEY`). Mirrors the Pi tab — values live in the macOS Keychain, only the names persist to `config.json`. Pi/Codex tabs share one `AgentEnvVarsTab` component.
+- `codexPath` and `codexArgs` fields in `config.json`, and `codex` in the onboarding binary-check dialog.
+- New RPC handlers: `buildCodexCommand`, `resolveCodexSessionId`, `listCodexEnvVarNames` / `setCodexEnvVar` / `deleteCodexEnvVar`.
+
 ### Fixed
 
 ### Changed
 
+- `AIContextProvider` now accepts a `HistoryAggregator` instead of a single `HistoryStore`. Conversation-context prefixes are now "Assistant:" (agent-agnostic) rather than "Claude:".
+- The Pi-specific `buildPiEnvAssignments` helper in `SessionManager` was renamed to `buildAgentEnvAssignments(agent, names)` and is now shared between Pi and Codex.
+- Pane-tree shell-cwd enrichment in `index.ts` now covers Pi and Codex tabs, not only Claude/Shell.
+
 ### Removed
+
+### Known limitations
+
+- Codex has no hook/extension API, so activity dots (Working / NeedsInput / Idle) don't light up for Codex tabs, Codex can't receive per-session MCP config from Tempest (the `show_webpage` / `show_mermaid_diagram` / `show_markdown` tools require adding the Tempest MCP server to `~/.codex/config.toml` manually), and there is no Codex equivalent of Claude's plan mode or permission prompts.
+- Codex session-id resolution is a best-effort cwd-matched fs watcher on `~/.codex/sessions/`: if two Codex tabs launch in the same cwd within the same fs-watch tick the mapping can swap.
 
 ## [0.18.0] - 2026-04-21
 

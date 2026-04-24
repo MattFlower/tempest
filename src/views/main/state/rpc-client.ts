@@ -616,6 +616,8 @@ export const api = {
     rpcRequest.buildShellCommand(params),
   buildPiCommand: (params: { workspacePath: string; sessionPath?: string }) =>
     rpcRequest.buildPiCommand(params),
+  buildCodexCommand: (params: { workspacePath: string; sessionId?: string }) =>
+    rpcRequest.buildCodexCommand(params),
   buildEditorCommand: (filePath: string, lineNumber?: number) =>
     rpcRequest.buildEditorCommand({ filePath, lineNumber }),
 
@@ -656,6 +658,13 @@ export const api = {
     rpcRequest.setPiEnvVar({ name, value }),
   deletePiEnvVar: (name: string) =>
     rpcRequest.deletePiEnvVar({ name }),
+
+  // Codex env vars (secrets stored in macOS Keychain)
+  listCodexEnvVarNames: () => rpcRequest.listCodexEnvVarNames(),
+  setCodexEnvVar: (name: string, value: string) =>
+    rpcRequest.setCodexEnvVar({ name, value }),
+  deleteCodexEnvVar: (name: string) =>
+    rpcRequest.deleteCodexEnvVar({ name }),
 
   // Repo settings
   getRepoSettings: (repoPath: string) =>
@@ -765,18 +774,20 @@ export const api = {
   getHistorySessions: (
     scope: "all" | "project",
     workspacePath?: string,
-    provider: "claude" | "pi" = "claude",
+    provider: "claude" | "pi" | "codex" = "claude",
   ) => rpcRequest.getHistorySessions({ scope, workspacePath, provider }),
   searchHistory: (
     query: string,
     scope: "all" | "project",
     workspacePath?: string,
-    provider: "claude" | "pi" = "claude",
+    provider: "claude" | "pi" | "codex" = "claude",
   ) => rpcRequest.searchHistory({ query, scope, workspacePath, provider }),
   getSessionMessages: (sessionFilePath: string) =>
     rpcRequest.getSessionMessages({ sessionFilePath }),
-  isHistorySearchAvailable: (provider: "claude" | "pi" = "claude") =>
+  isHistorySearchAvailable: (provider: "claude" | "pi" | "codex" = "claude") =>
     rpcRequest.isHistorySearchAvailable({ provider }),
+  resolveCodexSessionId: (sessionFilePath: string) =>
+    rpcRequest.resolveCodexSessionId({ sessionFilePath }),
 
   // Plan lookup
   getSessionPlanPath: (sessionId: string, workspacePath: string) =>

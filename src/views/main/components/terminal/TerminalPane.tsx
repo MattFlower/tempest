@@ -162,6 +162,17 @@ export function TerminalPane({
           console.error("Failed to build Pi command:", e);
           command = ["/bin/zsh", "-lic", "exec pi"];
         }
+      } else if (tabKindRef.current === PaneTabKind.Codex) {
+        try {
+          const result = await api.buildCodexCommand({
+            workspacePath: cwdRef.current,
+            sessionId: sessionIdRef.current,
+          });
+          command = result.command;
+        } catch (e) {
+          console.error("Failed to build Codex command:", e);
+          command = ["/bin/zsh", "-lic", "exec codex"];
+        }
       } else {
         try {
           const result = await api.buildShellCommand({

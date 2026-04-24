@@ -23,6 +23,7 @@ import { SessionActivityTracker } from "./hooks/session-activity-tracker";
 import { McpHttpServer } from "./mcp/mcp-http-server";
 
 import { lookupSessionID, findSessionIDs, lookupPlanPath } from "./session-id-lookup";
+import { CodexSessionWatcher } from "./codex-session-watcher";
 import { loadConfig, saveConfig as saveConfigFile, defaultConfig } from "./config/app-config";
 import { runMigration } from "./config/migrate";
 import { PathResolver } from "./config/path-resolver";
@@ -31,6 +32,7 @@ import { RemoteTerminalHub } from "./remote-terminal-hub";
 import { getUsageData } from "./usage/usage-service";
 import { HistoryStore } from "./history/history-store";
 import { PiHistoryStore } from "./history/pi-history-store";
+import { CodexHistoryStore } from "./history/codex-history-store";
 import { HistoryAggregator } from "./history/history-aggregator";
 import {
   readMarkdownFile,
@@ -140,10 +142,13 @@ const activityTracker = new SessionActivityTracker();
 // --- Stream G: History ---
 const historyStore = new HistoryStore();
 const piHistoryStore = new PiHistoryStore();
+const codexHistoryStore = new CodexHistoryStore();
+const codexSessionWatcher = new CodexSessionWatcher();
 const historyAggregator = new HistoryAggregator();
 historyAggregator.register(historyStore);
 historyAggregator.register(piHistoryStore);
-const aiContextProvider = new AIContextProvider(historyStore);
+historyAggregator.register(codexHistoryStore);
+const aiContextProvider = new AIContextProvider(historyAggregator);
 
 // --- Stream H: PR Feedback ---
 const prMonitor = new PRMonitor();
@@ -281,6 +286,45 @@ async function listDirEntries(dirPath: string, prefix?: string): Promise<string[
 }
 
 /**
+ * Find a live Codex terminal whose workspace matches `cwd`. Prefers tabs
+ * that don't yet have a sessionID assigned so repeated launches in the
+ * same workspace each get a fresh rollout mapping.
+ */
+function findCodexTerminalByCwd(cwd: string): string | null {
+  // Prefer unassigned codex tabs so each new rollout picks up a different
+  // terminal when multiple Codex tabs are open in one workspace.
+  let assignedFallback: string | null = null;
+  const walk = (node: any, workspacePath: string): string | null => {
+    if (!node) return null;
+    if (node.type === "leaf" && node.pane?.tabs) {
+      for (const tab of node.pane.tabs) {
+        if (tab.kind !== "codex") continue;
+        if (!tab.terminalId) continue;
+        if (workspacePath !== cwd) continue;
+        if (!ptyManager.isRunning(tab.terminalId)) continue;
+        if (!tab.sessionID && !tab.sessionId) return tab.terminalId;
+        assignedFallback = assignedFallback ?? tab.terminalId;
+      }
+      return null;
+    }
+    if (node.type === "split" && node.children) {
+      for (const child of node.children) {
+        const hit = walk(child, workspacePath);
+        if (hit) return hit;
+      }
+    }
+    return null;
+  };
+
+  const state = sessionStateManager.getAllPaneStates?.() ?? {};
+  for (const [wsPath, tree] of Object.entries(state)) {
+    const hit = walk(tree, wsPath);
+    if (hit) return hit;
+  }
+  return assignedFallback;
+}
+
+/**
  * Walk a PaneNodeState tree and populate sessionID on claude tabs
  * by looking up PID → ~/.claude/sessions/{PID}.json.
  * Falls back to cwd-based matching if PID lookup fails.
@@ -290,29 +334,37 @@ function enrichTreeWithSessionIds(node: any, workspacePath: string): void {
   if (!node) return;
   if (node.type === "leaf" && node.pane?.tabs) {
     for (const tab of node.pane.tabs) {
-      if (tab.kind !== "claude") continue;
-      // Try PID-based lookup first
-      if (tab.terminalId) {
-        const pid = ptyManager.getPid(tab.terminalId);
-        if (pid) {
-          const sessionFile = join(homedir(), ".claude", "sessions", `${pid}.json`);
-          try {
-            const data = readFileSync(sessionFile, "utf-8");
-            const session = JSON.parse(data);
-            if (session.sessionId) {
-              tab.sessionID = session.sessionId;
-              continue;
+      if (tab.kind === "claude") {
+        // Try PID-based lookup first
+        if (tab.terminalId) {
+          const pid = ptyManager.getPid(tab.terminalId);
+          if (pid) {
+            const sessionFile = join(homedir(), ".claude", "sessions", `${pid}.json`);
+            try {
+              const data = readFileSync(sessionFile, "utf-8");
+              const session = JSON.parse(data);
+              if (session.sessionId) {
+                tab.sessionID = session.sessionId;
+                continue;
+              }
+            } catch {
+              // File not found or parse error — fall through to cwd-based lookup
             }
-          } catch {
-            // File not found or parse error — fall through to cwd-based lookup
           }
         }
-      }
-      // Fallback: cwd-based matching
-      if (!tab.sessionID) {
-        const matches = findSessionIDs(workspacePath);
-        if (matches.length > 0) {
-          tab.sessionID = matches[0];
+        // Fallback: cwd-based matching
+        if (!tab.sessionID) {
+          const matches = findSessionIDs(workspacePath);
+          if (matches.length > 0) {
+            tab.sessionID = matches[0];
+          }
+        }
+      } else if (tab.kind === "codex") {
+        // Codex has no PID file; best-effort cwd-based lookup from the
+        // watcher's latest-per-cwd index.
+        if (!tab.sessionID) {
+          const id = codexSessionWatcher.lookupLatestByCwd(workspacePath);
+          if (id) tab.sessionID = id;
         }
       }
     }
@@ -332,7 +384,7 @@ function enrichTreeWithShellCwds(node: any): void {
   if (!node) return;
   if (node.type === "leaf" && node.pane?.tabs) {
     for (const tab of node.pane.tabs) {
-      if (tab.kind !== "shell" && tab.kind !== "claude") continue;
+      if (tab.kind !== "shell" && tab.kind !== "claude" && tab.kind !== "pi" && tab.kind !== "codex") continue;
       if (!tab.terminalId) continue;
       const cached = scrollbackCache.get(tab.terminalId);
       if (cached?.cwd) tab.shellCwd = cached.cwd;
@@ -515,6 +567,7 @@ const rpc: any = (BrowserView.defineRPC as any)({
       }),
       buildShellCommand: (params: any) => sessionManager.buildShellCommand(params),
       buildPiCommand: (params: any) => sessionManager.buildPiCommand(params),
+      buildCodexCommand: (params: any) => sessionManager.buildCodexCommand(params),
       buildEditorCommand: async (params: any) => {
         const config = await loadConfig();
         const editor = config.editor ?? "nvim";
@@ -631,6 +684,48 @@ const rpc: any = (BrowserView.defineRPC as any)({
             await workspaceManager.saveConfig({
               ...config,
               piEnvVarNames: existing.filter((n) => n !== name),
+            });
+          }
+          return { success: true };
+        } catch (err: any) {
+          return { success: false, error: err?.message ?? String(err) };
+        }
+      },
+
+      // --- Codex env vars (keychain-backed) ---
+      listCodexEnvVarNames: () => {
+        return workspaceManager.getConfig().codexEnvVarNames ?? [];
+      },
+      setCodexEnvVar: async (_params: any) => {
+        const { name, value } = _params as { name: string; value: string };
+        if (!isValidEnvVarName(name)) {
+          return { success: false, error: `Invalid env var name: ${name}` };
+        }
+        try {
+          await keychain.setSecret(name, value);
+          const config = workspaceManager.getConfig();
+          const existing = config.codexEnvVarNames ?? [];
+          if (!existing.includes(name)) {
+            await workspaceManager.saveConfig({
+              ...config,
+              codexEnvVarNames: [...existing, name].sort(),
+            });
+          }
+          return { success: true };
+        } catch (err: any) {
+          return { success: false, error: err?.message ?? String(err) };
+        }
+      },
+      deleteCodexEnvVar: async (_params: any) => {
+        const { name } = _params as { name: string };
+        try {
+          await keychain.deleteSecret(name);
+          const config = workspaceManager.getConfig();
+          const existing = config.codexEnvVarNames ?? [];
+          if (existing.includes(name)) {
+            await workspaceManager.saveConfig({
+              ...config,
+              codexEnvVarNames: existing.filter((n) => n !== name),
             });
           }
           return { success: true };
@@ -799,6 +894,7 @@ const rpc: any = (BrowserView.defineRPC as any)({
           jj: canResolve("jj", config.jjPath),
           claude: canResolve("claude", config.claudePath),
           gh: canResolve("gh", config.ghPath),
+          codex: canResolve("codex", config.codexPath),
         };
       },
       setWorkspaceRoot: async (_params: any) => {
@@ -844,6 +940,11 @@ const rpc: any = (BrowserView.defineRPC as any)({
       isHistorySearchAvailable: async (params: any) => {
         const provider = historyAggregator.provider(params?.provider ?? "claude");
         return provider.isSearchAvailable;
+      },
+      resolveCodexSessionId: async (params: any) => {
+        const { sessionFilePath } = params as { sessionFilePath: string };
+        const id = await codexHistoryStore.resolveCodexSessionId(sessionFilePath);
+        return { codexSessionId: id ?? null };
       },
 
       // --- Markdown (Feature 4) ---
@@ -1718,6 +1819,19 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
   startSessionsWatcher();
   sessionStateManager.startAutoSave();
 
+  // Codex: watch ~/.codex/sessions and route session-id discovery back
+  // to the webview by matching the rollout's cwd to a live terminal.
+  codexSessionWatcher.start((event) => {
+    const terminalId = findCodexTerminalByCwd(event.cwd);
+    if (!terminalId) return;
+    try {
+      win.webview.rpc.send.sessionIdResolved({
+        terminalId,
+        sessionId: event.sessionId,
+      });
+    } catch { /* webview not ready */ }
+  });
+
   try {
     await historyAggregator.initializeAll();
     historyAggregator.startRefreshTimers();
@@ -1791,6 +1905,7 @@ async function shutdown() {
     await sessionStateManager.flush();
     sessionStateManager.stopAutoSave();
     hookListener.stop();
+    codexSessionWatcher.stop();
     activityTracker.stopCleanupTimer();
     workspaceManager.stopSidebarRefresh();
     historyAggregator.stopRefreshTimers();

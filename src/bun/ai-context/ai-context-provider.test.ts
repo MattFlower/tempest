@@ -42,7 +42,20 @@ function createMockStore(
     ? messagesOrBySession
     : [];
 
-  return {
+  // AIContextProvider now consumes a HistoryAggregator: it calls
+  // `allProviders()` and iterates, then `getMessages(filePath)` routes
+  // to the owning provider. The mock exposes both methods on the
+  // aggregator and wraps a single fake provider.
+  const fakeProvider = {
+    providerId: "claude" as const,
+    isSearchAvailable: false,
+    initialize: mock(async () => {}),
+    getSessions: mock(async () => []),
+    searchSessions: mock(async () => []),
+    getMessages: mock(async (sessionFilePath: string) =>
+      messagesBySession?.[sessionFilePath] ?? sharedMessages,
+    ),
+    ownsSessionFile: (path: string) => sessions.some((s) => s.filePath === path),
     sessionsWithToolCallsForFile: mock(async () =>
       sessions.map((s) => ({
         filePath: s.filePath,
@@ -51,16 +64,17 @@ function createMockStore(
         modifiedAt: "2026-01-01T01:00:00Z",
       })),
     ),
-    getMessages: mock(async (sessionFilePath: string) =>
-      messagesBySession?.[sessionFilePath] ?? sharedMessages,
-    ),
-    // Stubs for other HistoryStore methods
-    initialize: mock(async () => {}),
-    getSessions: mock(async () => []),
-    searchSessions: mock(async () => []),
     refresh: mock(async () => {}),
     startRefreshTimer: mock(() => {}),
     stopRefreshTimer: mock(() => {}),
+  };
+
+  return {
+    allProviders: () => [fakeProvider],
+    provider: () => fakeProvider,
+    getMessages: mock(async (sessionFilePath: string) =>
+      messagesBySession?.[sessionFilePath] ?? sharedMessages,
+    ),
   } as any;
 }
 
@@ -358,7 +372,7 @@ describe("AIContextProvider", () => {
       const context = timeline!.changes[0]!.conversationContext;
       // Should include messages around index 2 (the Edit message): indices 0-3
       expect(context).toContain("You:");
-      expect(context).toContain("Claude:");
+      expect(context).toContain("Assistant:");
     });
 
     test("sorts timeline changes chronologically across sessions", async () => {

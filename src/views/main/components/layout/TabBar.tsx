@@ -84,7 +84,8 @@ export function TabBar({ pane }: TabBarProps) {
       if (
         kind === PaneTabKind.Shell ||
         kind === PaneTabKind.Claude ||
-        kind === PaneTabKind.Pi
+        kind === PaneTabKind.Pi ||
+        kind === PaneTabKind.Codex
       ) {
         payload.terminalId = crypto.randomUUID();
       }
@@ -174,6 +175,7 @@ export function TabBar({ pane }: TabBarProps) {
             <button onClick={() => addTabToPane(PaneTabKind.Claude, "Claude")} className="w-full text-left px-3 py-1.5 text-xs text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)] transition-colors">Claude</button>
             <button onClick={() => addTabToPane(PaneTabKind.Claude, "Claude", { resume: true })} className="w-full text-left px-3 py-1.5 text-xs text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)] transition-colors">Claude (Continue)</button>
             <button onClick={() => addTabToPane(PaneTabKind.Pi, "Pi")} className="w-full text-left px-3 py-1.5 text-xs text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)] transition-colors">Pi</button>
+            <button onClick={() => addTabToPane(PaneTabKind.Codex, "Codex")} className="w-full text-left px-3 py-1.5 text-xs text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)] transition-colors">Codex</button>
             <button onClick={() => addTabToPane(PaneTabKind.Browser, "Browser")} className="w-full text-left px-3 py-1.5 text-xs text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)] transition-colors">Browser</button>
             <button onClick={() => addTabToPane(PaneTabKind.HistoryViewer, "History")} className="w-full text-left px-3 py-1.5 text-xs text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)] transition-colors">Chat History</button>
           </div>

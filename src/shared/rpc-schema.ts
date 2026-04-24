@@ -106,6 +106,10 @@ export interface BunRequests {
     params: { workspacePath: string; sessionPath?: string };
     response: { command: string[] };
   };
+  buildCodexCommand: {
+    params: { workspacePath: string; sessionId?: string };
+    response: { command: string[] };
+  };
   buildEditorCommand: {
     params: { filePath: string; lineNumber?: number };
     response: { command: string[] };
@@ -196,6 +200,20 @@ export interface BunRequests {
     response: { success: boolean; error?: string };
   };
   deletePiEnvVar: {
+    params: { name: string };
+    response: { success: boolean; error?: string };
+  };
+
+  // Codex env vars (secrets stored in macOS Keychain)
+  listCodexEnvVarNames: {
+    params: void;
+    response: string[];
+  };
+  setCodexEnvVar: {
+    params: { name: string; value: string };
+    response: { success: boolean; error?: string };
+  };
+  deleteCodexEnvVar: {
     params: { name: string };
     response: { success: boolean; error?: string };
   };
@@ -380,7 +398,7 @@ export interface BunRequests {
     params: {
       scope: "all" | "project";
       workspacePath?: string;
-      provider?: "claude" | "pi";
+      provider?: "claude" | "pi" | "codex";
     };
     response: SessionSummary[];
   };
@@ -389,7 +407,7 @@ export interface BunRequests {
       query: string;
       scope: "all" | "project";
       workspacePath?: string;
-      provider?: "claude" | "pi";
+      provider?: "claude" | "pi" | "codex";
     };
     response: SessionSummary[];
   };
@@ -398,8 +416,12 @@ export interface BunRequests {
     response: SessionMessage[];
   };
   isHistorySearchAvailable: {
-    params: { provider?: "claude" | "pi" };
+    params: { provider?: "claude" | "pi" | "codex" };
     response: boolean;
+  };
+  resolveCodexSessionId: {
+    params: { sessionFilePath: string };
+    response: { codexSessionId: string | null };
   };
 
   // Markdown

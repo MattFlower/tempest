@@ -165,6 +165,7 @@ export function OnboardingDialog({ defaultRoot, onComplete }: OnboardingDialogPr
           <BinaryCheckRow name="git" found={binaries?.git ?? false} checking={checking} />
           <BinaryCheckRow name="jj" found={binaries?.jj ?? false} checking={checking} optional />
           <BinaryCheckRow name="claude" found={binaries?.claude ?? false} checking={checking} />
+          <BinaryCheckRow name="codex" found={binaries?.codex ?? false} checking={checking} optional />
           <BinaryCheckRow name="gh" found={binaries?.gh ?? false} checking={checking} optional />
         </div>
 

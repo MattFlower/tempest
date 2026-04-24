@@ -1,7 +1,8 @@
 // ============================================================
 // AI Context Provider — Port of AIContextProvider.swift
-// Searches JSONL history for Claude sessions that edited a
-// specific file. Builds context and timeline structures.
+// Fans out across every registered history provider (Claude, Pi,
+// Codex, ...) via HistoryAggregator and builds per-file context +
+// timeline structures from their combined edits.
 // ============================================================
 
 import type {
@@ -14,30 +15,47 @@ import type {
   SessionMessage,
   ToolCallInfo,
 } from "../../shared/ipc-types";
-import type { HistoryStore } from "../history/history-store";
+import type { HistoryAggregator } from "../history/history-aggregator";
 import { basename } from "node:path";
 
 export class AIContextProvider {
-  constructor(private readonly store: HistoryStore) {}
+  constructor(private readonly aggregator: HistoryAggregator) {}
 
   async contextForFile(
     filePath: string,
     projectPath?: string,
   ): Promise<FileAIContext | null> {
     const scope = projectPath ? "project" : "all";
-    const matchingSessions = await this.store.sessionsWithToolCallsForFile(
-      filePath,
-      scope,
-      projectPath,
-    );
 
-    if (matchingSessions.length === 0) return null;
+    // Fan out: collect matching sessions from every provider, then dedupe
+    // by filePath (a file system path is owned by exactly one provider,
+    // so collisions shouldn't happen — but this keeps the invariant if a
+    // provider ever reports over-broadly).
+    const seen = new Set<string>();
+    const allMatching: Array<{ filePath: string; firstPrompt: string }> = [];
+    for (const provider of this.aggregator.allProviders()) {
+      const matches = await provider.sessionsWithToolCallsForFile(
+        filePath,
+        scope,
+        projectPath,
+      );
+      for (const m of matches) {
+        if (seen.has(m.filePath)) continue;
+        seen.add(m.filePath);
+        allMatching.push({ filePath: m.filePath, firstPrompt: m.firstPrompt });
+      }
+    }
+
+    if (allMatching.length === 0) return null;
 
     const sessionContexts: AISessionContext[] = [];
     let totalChanges = 0;
 
-    for (const summary of matchingSessions) {
-      const messages = await this.store.getMessages(summary.filePath);
+    for (const summary of allMatching) {
+      // getMessages routes through the aggregator, which dispatches by
+      // ownsSessionFile so each session file is parsed by the right
+      // provider (Claude / Pi / Codex).
+      const messages = await this.aggregator.getMessages(summary.filePath);
       const fileChanges = extractFileChanges(messages, filePath);
       totalChanges += fileChanges.length;
 
@@ -206,7 +224,7 @@ function extractConversationContext(
     const msg = messages[i]!;
     const text = msg.text;
     if (!text) continue;
-    const prefix = msg.type === "user" ? "You" : "Claude";
+    const prefix = msg.type === "user" ? "You" : "Assistant";
     const truncated = text.length > 200 ? text.slice(0, 200) + "..." : text;
     parts.push(`${prefix}: ${truncated}`);
   }

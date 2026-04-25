@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Initial Language Server Protocol (LSP) integration for the Monaco editor (Phase 1). Tempest spawns one language server per `(workspace, language)` on demand, proxying hover, go-to-definition, and diagnostics through Monaco's provider API. Phase 1 ships TypeScript/JavaScript only and expects `typescript-language-server` to be on `PATH` — Phase 2 will add auto-install and broader language coverage. New Bun module at `src/bun/lsp/`: JSON-RPC framing (`jsonrpc.ts`), per-server lifecycle (`server-process.ts`), `(workspace, language)` registry with restart-on-crash document replay (`server-registry.ts`), per-uri document store, on-demand `ps`-based memory sampler, and per-language recipes. Webview registers global hover/definition providers in `src/views/main/components/editor/lsp/` and routes Monaco requests through new typed RPC methods (`lspHover`, `lspDefinition`, `lspDidOpen/Change/Close`, `lspListServers`, `lspRestart/StopServer`, `lspMemoryWatchStart/Stop`).
+- Footer LSP status item with a popover listing every running server, grouped by workspace, with restart/stop controls and a tail of stderr lines for debugging. Memory (RSS) is sampled only while the popover is open — closing it stops the Bun-side `ps` poll. The aggregate footer label shows server count, working/installing notes, or error count without ever including memory.
+- Renamed `UsageFooter` to a generic `Footer` host (`src/views/main/components/footer/Footer.tsx`) so additional status items (LSP today, future things tomorrow) live in one row. The token-usage display moved to `UsageItem` and is composed inside `Footer` alongside `LspItem`.
+- Settings → **LSP** tab with a global "Disable LSP" toggle. Disabling tears down every running server immediately and clears Monaco markers; re-enabling brings servers back lazily on the next file open.
+- Repository settings dialog gains a "Disable LSP for this repository" toggle that overrides the global setting per-repo. Toggling on tears down running servers under the repo at save time.
+- New shared types: `LspServerState`, `LspDiagnostic`, `LspHoverResult`, `LspLocation`, `LspRange`, `LspPosition`, `LspMemorySample`. New `AppConfig.lspDisabled` and `RepoSettings.disableLsp` flags.
+
 ### Fixed
 
 ### Changed

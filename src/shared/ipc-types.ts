@@ -158,6 +158,9 @@ export interface AppConfig {
   // Keybinding overrides: command id → normalized keystroke (e.g. "cmd+shift+p" or "cmd+k cmd+s").
   // `null` means "explicitly unbound" (suppress the default). A missing id uses its command's default binding.
   keybindings?: Record<string, string | null>;
+  // Master switch for LSP integration. When true, no language servers spawn
+  // anywhere; running servers are torn down and Monaco markers cleared.
+  lspDisabled?: boolean;
 }
 
 // --- Hook Events ---
@@ -436,6 +439,9 @@ export interface RepoSettings {
   disableMavenScripts?: boolean;
   hiddenMavenScripts?: string[];
   mavenScriptRunMode?: Record<string, ScriptRunMode>;
+  // Per-repo override: when true, no LSP servers spawn for workspaces under
+  // this repo, regardless of the global setting.
+  disableLsp?: boolean;
 }
 
 // --- Assigned PRs ---
@@ -599,3 +605,81 @@ export interface JJBookmark {
   remote?: string;
   isTracked: boolean;
 }
+
+// --- LSP (Language Server Protocol) ---
+//
+// Phase 1 surfaces hover, go-to-definition, and diagnostics. The protocol
+// bridge lives in src/bun/lsp/. The webview registers Monaco providers that
+// proxy through these RPC calls. See AI_DOCS/lsp.md (when written) for the
+// full lifecycle.
+
+export type LspServerStatus =
+  | "starting"   // process spawned, awaiting initialize response
+  | "ready"      // initialized; serving requests
+  | "indexing"   // server is actively indexing (rust-analyzer-style)
+  | "error"      // crashed or failed to initialize; will retry on next file open
+  | "stopped";   // explicitly stopped (workspace closed, settings disabled)
+
+/**
+ * Public-facing snapshot of one running LSP server. Pushed to the webview on
+ * state transitions; the footer's popover renders these directly.
+ */
+export interface LspServerState {
+  /** Composite key: `${workspacePath}::${languageId}`. */
+  id: string;
+  workspacePath: string;
+  /** Monaco-style language id (e.g. "typescript", "python"). */
+  languageId: string;
+  /** Display name pulled from the server's recipe (e.g. "typescript-language-server"). */
+  serverName: string;
+  status: LspServerStatus;
+  /** OS process id once spawned. Absent before spawn or after exit. */
+  pid?: number;
+  /** Last error message, populated when status is "error". */
+  lastError?: string;
+  /** Times the server has been auto-restarted since spawn. */
+  restartCount: number;
+}
+
+/**
+ * LSP position uses 0-based line/character (UTF-16 code units). Monaco uses
+ * 1-based line/column — the bridge converts at the boundary. We keep the
+ * LSP-native shape here because it's what the wire carries.
+ */
+export interface LspPosition {
+  line: number;
+  character: number;
+}
+
+export interface LspRange {
+  start: LspPosition;
+  end: LspPosition;
+}
+
+export interface LspLocation {
+  uri: string;
+  range: LspRange;
+}
+
+export type LspDiagnosticSeverity = 1 | 2 | 3 | 4; // Error | Warning | Info | Hint
+
+export interface LspDiagnostic {
+  range: LspRange;
+  severity?: LspDiagnosticSeverity;
+  code?: string | number;
+  source?: string;
+  message: string;
+}
+
+/** Hover content. We pass through markdown strings as-is from the server. */
+export interface LspHoverResult {
+  contents: string[]; // markdown blocks, in display order
+  range?: LspRange;
+}
+
+export interface LspMemorySample {
+  serverId: string;
+  /** Resident set size in bytes, or null if the process has exited. */
+  rssBytes: number | null;
+}
+

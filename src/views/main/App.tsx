@@ -10,7 +10,7 @@ import { ViewModeBar } from "./components/layout/ViewModeBar";
 import { ProgressView } from "./components/progress/ProgressView";
 import { OnboardingDialog } from "./components/onboarding/OnboardingDialog";
 import { SettingsDialog } from "./components/settings/SettingsDialog";
-import { UsageFooter } from "./components/usage/UsageFooter";
+import { Footer } from "./components/footer/Footer";
 import { RunPane } from "./components/runpane/RunPane";
 import { api } from "./state/rpc-client";
 import { fromNodeState } from "./models/pane-node";
@@ -320,8 +320,8 @@ export function App() {
       {/* Developer tools pane — docks eruda inline above the footer */}
       <DevToolsPane visible={devtoolsVisible} />
 
-      {/* Usage footer — token counts and costs */}
-      <UsageFooter />
+      {/* Footer — hosts LSP status, token usage, and other status items */}
+      <Footer />
 
       {/* Chord-in-progress indicator (e.g. "⌘K…" while waiting for a chord's second key) */}
       <ChordIndicator />

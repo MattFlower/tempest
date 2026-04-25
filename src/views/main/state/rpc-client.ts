@@ -489,6 +489,23 @@ const rpc = Electroview.defineRPC({
           idField: "markdownId",
         });
       },
+      lspDiagnostics: (msg: any) => {
+        // Lazy-import to keep the diagnostics module out of the rpc-client's
+        // immediate dep graph (it touches monaco-editor types).
+        import("../components/editor/lsp/lsp-diagnostics").then(({ applyDiagnostics }) => {
+          applyDiagnostics(msg.uri, msg.diagnostics);
+        });
+      },
+      lspServerStateChanged: (msg: any) => {
+        import("../components/editor/lsp/lsp-store").then(({ useLspStore }) => {
+          useLspStore.getState().applyServerState(msg.state);
+        });
+      },
+      lspMemoryUpdate: (msg: any) => {
+        import("../components/editor/lsp/lsp-store").then(({ useLspStore }) => {
+          useLspStore.getState().applyMemorySamples(msg.samples);
+        });
+      },
       menuAction: (msg: any) => {
         Promise.all([
           import("./store"),
@@ -980,4 +997,42 @@ export const api = {
   windowClose: () => rpcSend.windowClose(),
   windowMinimize: () => rpcSend.windowMinimize(),
   windowMaximize: () => rpcSend.windowMaximize(),
+
+  // LSP
+  lspListServers: () => rpcRequest.lspListServers(),
+  lspRestartServer: (serverId: string) => rpcRequest.lspRestartServer({ serverId }),
+  lspStopServer: (serverId: string) => rpcRequest.lspStopServer({ serverId }),
+  lspGetServerLog: (serverId: string) => rpcRequest.lspGetServerLog({ serverId }),
+  lspMemoryWatchStart: () => rpcRequest.lspMemoryWatchStart(),
+  lspMemoryWatchStop: () => rpcRequest.lspMemoryWatchStop(),
+  lspDidOpen: (params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    version: number;
+    text: string;
+  }) => rpcRequest.lspDidOpen(params),
+  lspDidChange: (params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    version: number;
+    text: string;
+  }) => rpcRequest.lspDidChange(params),
+  lspDidClose: (params: { workspacePath: string; uri: string; languageId: string }) =>
+    rpcRequest.lspDidClose(params),
+  lspHover: (params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    line: number;
+    character: number;
+  }) => rpcRequest.lspHover(params),
+  lspDefinition: (params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    line: number;
+    character: number;
+  }) => rpcRequest.lspDefinition(params),
 };

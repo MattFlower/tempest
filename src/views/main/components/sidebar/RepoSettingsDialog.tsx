@@ -152,6 +152,8 @@ export function RepoSettingsDialog({ repo, onDismiss }: Props) {
   const [archiveScript, setArchiveScript] = useState("");
   const [originalPrepareScript, setOriginalPrepareScript] = useState("");
   const [originalArchiveScript, setOriginalArchiveScript] = useState("");
+  const [disableLsp, setDisableLsp] = useState(false);
+  const [originalDisableLsp, setOriginalDisableLsp] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [prepareTestResult, setPrepareTestResult] = useState<{
@@ -172,6 +174,8 @@ export function RepoSettingsDialog({ repo, onDismiss }: Props) {
       setOriginalPrepareScript(settings.prepareScript ?? "");
       setArchiveScript(settings.archiveScript ?? "");
       setOriginalArchiveScript(settings.archiveScript ?? "");
+      setDisableLsp(settings.disableLsp ?? false);
+      setOriginalDisableLsp(settings.disableLsp ?? false);
       setLoading(false);
     })();
   }, [repo.path]);
@@ -181,6 +185,7 @@ export function RepoSettingsDialog({ repo, onDismiss }: Props) {
     await api.saveRepoSettings(repo.path, {
       prepareScript,
       archiveScript,
+      disableLsp,
     });
     setSaving(false);
     onDismiss();
@@ -215,7 +220,8 @@ export function RepoSettingsDialog({ repo, onDismiss }: Props) {
 
   const isDirty =
     prepareScript !== originalPrepareScript ||
-    archiveScript !== originalArchiveScript;
+    archiveScript !== originalArchiveScript ||
+    disableLsp !== originalDisableLsp;
 
   return (
     <div
@@ -286,6 +292,44 @@ export function RepoSettingsDialog({ repo, onDismiss }: Props) {
               testing={archiveTesting}
               testResult={archiveTestResult}
             />
+
+            <hr style={{ borderColor: "var(--ctp-surface1)" }} />
+
+            {/* Disable LSP for this repo. Overrides the global setting; useful
+                for repositories where servers index slowly or pull in too
+                much memory. */}
+            <div className="flex items-center justify-between gap-3 py-1">
+              <div className="flex flex-col gap-0.5">
+                <label
+                  className="text-[11px] font-semibold"
+                  style={{ color: "var(--ctp-subtext0)" }}
+                >
+                  Disable LSP for this repository
+                </label>
+                <p className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
+                  No language servers will spawn for workspaces under this repository.
+                </p>
+              </div>
+              <button
+                onClick={() => setDisableLsp(!disableLsp)}
+                className="relative flex-shrink-0 rounded-full transition-colors"
+                style={{
+                  width: 36,
+                  height: 20,
+                  backgroundColor: disableLsp ? "var(--ctp-green)" : "var(--ctp-surface1)",
+                }}
+              >
+                <div
+                  className="absolute top-0.5 rounded-full transition-transform"
+                  style={{
+                    width: 16,
+                    height: 16,
+                    backgroundColor: "var(--ctp-text)",
+                    transform: disableLsp ? "translateX(18px)" : "translateX(2px)",
+                  }}
+                />
+              </button>
+            </div>
           </>
         )}
 

@@ -41,9 +41,114 @@ import {
   jsonnetLanguageConfiguration,
   jsonnetMonarchLanguage,
 } from "./jsonnet-language";
+import { attachLsp, type LspBridgeHandle } from "./lsp/lsp-bridge";
+import { acquireLspProviders, registerModelContext } from "./lsp/lsp-providers";
+import { bindMonacoForDiagnostics, flushDiagnosticsFor } from "./lsp/lsp-diagnostics";
 
 // Configure Monaco to load from local bundled files
 loader.config({ paths: { vs: "./monaco-editor/min/vs" } });
+
+// Disable Monaco's bundled TS/JS providers that we now serve via LSP. Doing
+// this at loader.init time (rather than in handleEditorMount) ensures the
+// TypeScript module honours the config when it first registers providers —
+// configuring after the providers are already attached doesn't reliably
+// retract them in monaco-editor 0.55.x.
+//
+// We construct the ModeConfiguration explicitly rather than spreading the
+// existing object, because some monaco builds expose modeConfiguration as
+// a getter that doesn't enumerate all fields, and a spread would leave
+// stale `undefined` values that monaco interprets as "use default" (true).
+loader.init().then((monaco) => {
+  const ts = monaco.languages.typescript;
+  if (!ts) return; // monaco bundle without typescript support — nothing to do
+  for (const defaults of [ts.typescriptDefaults, ts.javascriptDefaults]) {
+    defaults.setDiagnosticsOptions({ noSemanticValidation: true });
+    defaults.setModeConfiguration({
+      // Keep the providers we don't yet implement via LSP; otherwise the
+      // editor would lose features (like signature help / completions) that
+      // Monaco's bundled service still provides usefully.
+      completionItems: true,
+      signatureHelp: true,
+      onTypeFormattingEdits: true,
+      documentRangeFormattingEdits: true,
+      codeActions: true,
+      inlayHints: true,
+      documentHighlights: true,
+      // Disable the providers our LSP serves — these would otherwise produce
+      // duplicate hovers and "Definitions (2)" peek views.
+      hovers: false,
+      definitions: false,
+      references: false,
+      rename: false,
+      documentSymbols: false,
+      diagnostics: false,
+    });
+  }
+  console.log("[MonacoEditor] disabled bundled TS/JS hovers + definitions; LSP now exclusive");
+
+  // Register an editor opener so Monaco's "Go to Definition" (and similar
+  // navigations to a different file) actually open the target. Without this,
+  // Monaco has no IEditorService for cross-file navigation: peek view shows
+  // a result but jumping does nothing.
+  //
+  // Our LSP returns a `file://` URI + range; we route the open through
+  // Tempest's tab system (createTab → addTab on the focused pane), the same
+  // path the existing Cmd+click-on-import handler uses.
+  try {
+    monaco.editor.registerEditorOpener({
+      openCodeEditor: async (_source, resource, selectionOrPosition) => {
+        if (resource.scheme !== "file") return false;
+
+        // Same-document navigation: let Monaco handle it (it'll just move
+        // the cursor + reveal). Returning false means "I'm not handling it".
+        const sourceModel = _source.getModel();
+        if (sourceModel && sourceModel.uri.toString() === resource.toString()) {
+          return false;
+        }
+
+        const filePath = resource.path;
+        const label = filePath.split("/").pop() ?? "Editor";
+
+        // Extract a line number from the navigation target. selectionOrPosition
+        // can be either a Range (selection) or a Position (cursor target).
+        let lineNumber: number | undefined;
+        if (selectionOrPosition) {
+          if ("lineNumber" in selectionOrPosition) {
+            lineNumber = selectionOrPosition.lineNumber;
+          } else if ("startLineNumber" in selectionOrPosition) {
+            lineNumber = selectionOrPosition.startLineNumber;
+          }
+        }
+
+        // Lazy-import the store + tab helpers to avoid a static dep cycle:
+        // pane-node.ts and store.ts depend transitively on this file.
+        const [{ useStore }, paneNode, { PaneTabKind }] = await Promise.all([
+          import("../../state/store"),
+          import("../../models/pane-node"),
+          import("../../../../shared/ipc-types"),
+        ]);
+        const { focusedPaneId } = useStore.getState();
+        if (!focusedPaneId) return false;
+
+        const config = useStore.getState().config;
+        const isMonaco = config?.editor === "monaco";
+        const tab = paneNode.createTab(PaneTabKind.Editor, label, {
+          ...(isMonaco ? {} : { terminalId: crypto.randomUUID() }),
+          editorFilePath: filePath,
+          ...(lineNumber !== undefined ? { editorLineNumber: lineNumber } : {}),
+        });
+
+        const { addTab } = await import("../../state/actions");
+        addTab(focusedPaneId, tab);
+        return true;
+      },
+    });
+  } catch (err) {
+    console.error("[MonacoEditor] registerEditorOpener failed:", err);
+  }
+}).catch((err) => {
+  console.error("[MonacoEditor] loader.init failed:", err);
+});
 
 interface MonacoEditorPaneProps {
   filePath: string;
@@ -90,6 +195,12 @@ export function MonacoEditorPane({
   // Monaco link providers are registered globally; capture their disposables
   // so they don't accumulate across editor mounts (e.g., tab switches / remounts).
   const disposablesRef = useRef<IDisposable[]>([]);
+  // LSP bridge for this editor's model + the release function for the
+  // global provider refcount. Both stay null when LSP isn't applicable
+  // for this file (no recipe, or no workspacePath).
+  const lspBridgeRef = useRef<LspBridgeHandle | null>(null);
+  const lspReleaseRef = useRef<(() => void) | null>(null);
+  const lspContextDisposeRef = useRef<(() => void) | null>(null);
 
   const vimEnabled = useStore((s) => s.config?.monacoVimMode ?? false);
   const headerPath = useMemo(
@@ -199,6 +310,14 @@ export function MonacoEditorPane({
         try { d.dispose(); } catch { /* ignore */ }
       }
       disposablesRef.current = [];
+      // Tear down LSP wiring: the bridge sends didClose, the provider
+      // refcount drops, and the model context map drops this entry.
+      try { lspBridgeRef.current?.dispose(); } catch { /* ignore */ }
+      lspBridgeRef.current = null;
+      try { lspReleaseRef.current?.(); } catch { /* ignore */ }
+      lspReleaseRef.current = null;
+      try { lspContextDisposeRef.current?.(); } catch { /* ignore */ }
+      lspContextDisposeRef.current = null;
     };
   }, []);
 
@@ -230,15 +349,15 @@ export function MonacoEditorPane({
         );
       }
 
-      // Disable semantic validation — Monaco's TS service doesn't have access
-      // to the project's node_modules or tsconfig, so module resolution errors
-      // are all false positives. Syntax validation is kept.
-      monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
-        noSemanticValidation: true,
-      });
-      monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
-        noSemanticValidation: true,
-      });
+      // Bind the diagnostics module to this Monaco instance so future
+      // lspDiagnostics pushes can locate models. Idempotent — only the
+      // first call captures the namespace, but it stays valid across
+      // editor remounts.
+      //
+      // (Note: TS/JS bundled provider configuration happens at module load
+      // via loader.init() above — doing it here is too late for Monaco
+      // 0.55.x to retract already-registered providers.)
+      bindMonacoForDiagnostics(monaco);
     }
     const currentTheme = useStore.getState().config?.theme ?? "dark";
     monaco.editor.setTheme(currentTheme === "light" ? TEMPEST_LIGHT_THEME_NAME : TEMPEST_THEME_NAME);
@@ -269,6 +388,28 @@ export function MonacoEditorPane({
       monaco.languages.registerLinkProvider({ language: "typescript" }, linkProvider),
       monaco.languages.registerLinkProvider({ language: "javascript" }, linkProvider),
     );
+
+    // --- LSP wiring ---
+    // We attach LSP only when this editor is opened from a workspace context;
+    // free-standing files (no workspacePath) keep Monaco's built-in behaviour.
+    const model = editor.getModel();
+    if (model && workspacePath) {
+      // Register provider context so the global hover/definition providers
+      // can route this model's requests to the correct (workspace, language).
+      lspContextDisposeRef.current = registerModelContext(model, workspacePath, language);
+      // Refcounted global hover/definition providers — only installed once.
+      lspReleaseRef.current = acquireLspProviders(monaco);
+      // Apply any diagnostics that arrived before this model existed.
+      flushDiagnosticsFor(monaco, model);
+      // Bridge the model's content + lifecycle to the language server.
+      // The bridge reads the URI directly from the model so it matches
+      // what our hover/definition providers will send.
+      lspBridgeRef.current = attachLsp({
+        model,
+        workspacePath,
+        languageId: language,
+      });
+    }
 
     // Handle Cmd+click on import specifiers: resolve the module and open it.
     // Monaco's standalone opener ignores custom URI schemes, so we handle
@@ -387,9 +528,15 @@ export function MonacoEditorPane({
         )}
       </div>
 
-      {/* Monaco editor */}
+      {/* Monaco editor.
+          `path` is critical: without it, Monaco gives the model a synthetic
+          URI like `inmemory://model/1` which doesn't match the `file://` URI
+          we send in textDocument/didOpen, so the LSP server has no document
+          at the URI our hover/definition providers query. We pass an
+          explicit `file://` URI so model.uri.toString() equals the LSP URI. */}
       <div className="flex-1 min-h-0">
         <Editor
+          path={`file://${filePath}`}
           defaultValue={content}
           language={language}
           theme={monacoThemeName}

@@ -44,7 +44,13 @@ function UsagePill({ label, data, costColor }: { label: string; data: UsageToken
   );
 }
 
-export function UsageFooter() {
+/**
+ * Token usage display for the Footer. Polls for usage data and renders the
+ * "stale/updated" timestamp on the left and TODAY/PROJECT pills on the right.
+ * The Footer host arranges items horizontally — UsageItem renders the timestamp
+ * with a flex-1 spacer so its pills sit at the right edge of the footer.
+ */
+export function UsageItem() {
   const [usage, setUsage] = useState<UsageResponse | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [, setTick] = useState(0); // force re-render for relative time
@@ -91,13 +97,7 @@ export function UsageFooter() {
     : undefined;
 
   return (
-    <div
-      className="flex items-center gap-3 px-3 py-1.5 flex-shrink-0"
-      style={{
-        backgroundColor: "var(--ctp-mantle)",
-        borderTop: "1px solid var(--ctp-surface0)",
-      }}
-    >
+    <>
       {/* Timestamp */}
       <div className="flex items-center gap-1 text-[10px]" style={{ color: "rgba(255,255,255,0.25)" }}>
         {usage?.isStale && <span style={{ color: "var(--ctp-yellow)", fontSize: "10px" }}>stale</span>}
@@ -115,6 +115,6 @@ export function UsageFooter() {
       {projectData && (
         <UsagePill label="PROJECT" data={projectData} costColor="var(--ctp-green)" />
       )}
-    </div>
+    </>
   );
 }

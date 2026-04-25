@@ -47,6 +47,7 @@ import {
   unwatchAllDirectoryTrees,
 } from "./file-tree/file-tree-service";
 import { buildEditorCommand } from "./editor/editor-command";
+import { LspRpc } from "./lsp/lsp-rpc";
 import { getInstalledEditors, openInEditor } from "./editor/open-in";
 import { readFileForEditor, writeFileForEditor, resolveModulePath } from "./editor/file-service";
 import { FindInFilesSearcher } from "./find-in-files/searcher";
@@ -536,6 +537,27 @@ function startSessionsWatcher(): void {
   }
 }
 
+// --- LSP (Stream J): typed wrapper around the language-server registry ---
+// pushDiagnostics/pushServerState/pushMemorySamples are populated lazily after
+// `win` is constructed below; the LspRpc surface uses them via the indirection
+// in `lspPush`, which gracefully no-ops before the webview is attached.
+const lspPush: {
+  diagnostics: (uri: string, diagnostics: any) => void;
+  serverState: (state: any) => void;
+  memorySamples: (samples: any) => void;
+} = {
+  diagnostics: () => { /* wired after window construction */ },
+  serverState: () => { /* wired after window construction */ },
+  memorySamples: () => { /* wired after window construction */ },
+};
+const lspRpc = new LspRpc({
+  workspaceManager,
+  getConfig: () => workspaceManager.getConfig(),
+  pushDiagnostics: (uri, diagnostics) => lspPush.diagnostics(uri, diagnostics),
+  pushServerState: (state) => lspPush.serverState(state),
+  pushMemorySamples: (samples) => lspPush.memorySamples(samples),
+});
+
 // Define RPC — all streams' handlers combined
 const rpc: any = (BrowserView.defineRPC as any)({
   handlers: {
@@ -754,7 +776,14 @@ const rpc: any = (BrowserView.defineRPC as any)({
         return workspaceManager.getRepoSettings(_params.repoPath);
       },
       saveRepoSettings: async (_params: any) => {
+        const previous = workspaceManager.getRepoSettings(_params.repoPath);
         await workspaceManager.saveRepoSettings(_params.repoPath, _params.settings);
+        // Tear down running LSP servers under this repo when LSP is freshly
+        // disabled. Toggling back on doesn't eagerly respawn — next file open
+        // brings servers up lazily.
+        if (_params.settings?.disableLsp && !previous?.disableLsp) {
+          void lspRpc.tearDownForRepo(_params.repoPath);
+        }
       },
       testPrepareScript: async (_params: any) => {
         return await workspaceManager.runPrepareScript(_params.script, _params.repoPath);
@@ -1434,6 +1463,19 @@ const rpc: any = (BrowserView.defineRPC as any)({
         }
         return results;
       },
+
+      // --- LSP (Stream J) ---
+      lspListServers: () => lspRpc.listServers(),
+      lspRestartServer: (params: any) => lspRpc.restartServer(params.serverId),
+      lspStopServer: (params: any) => lspRpc.stopServer(params.serverId),
+      lspGetServerLog: (params: any) => lspRpc.getServerLog(params.serverId),
+      lspMemoryWatchStart: () => lspRpc.memoryWatchStart(),
+      lspMemoryWatchStop: () => { lspRpc.memoryWatchStop(); },
+      lspDidOpen: (params: any) => lspRpc.didOpen(params),
+      lspDidChange: (params: any) => lspRpc.didChange(params),
+      lspDidClose: (params: any) => { lspRpc.didClose(params); },
+      lspHover: (params: any) => lspRpc.hover(params),
+      lspDefinition: (params: any) => lspRpc.definition(params),
     },
     messages: {
       // --- Terminal I/O (Stream A) ---
@@ -1573,6 +1615,28 @@ workspaceManager.onSidebarInfoUpdated = (workspacePath, info) => {
 workspaceManager.onConfigChanged = (config) => {
   try {
     win.webview.rpc.send.configChanged(config);
+  } catch { /* webview not ready yet */ }
+  // Tear down running LSP servers when the master switch flips on. Re-enabling
+  // doesn't eagerly respawn — servers come back lazily on the next file open.
+  if (config.lspDisabled) {
+    void lspRpc.tearDownAll();
+  }
+};
+
+// --- Stream J: Wire LSP push notifications ---
+lspPush.diagnostics = (uri, diagnostics) => {
+  try {
+    win.webview.rpc.send.lspDiagnostics({ uri, diagnostics });
+  } catch { /* webview not ready yet */ }
+};
+lspPush.serverState = (state) => {
+  try {
+    win.webview.rpc.send.lspServerStateChanged({ state });
+  } catch { /* webview not ready yet */ }
+};
+lspPush.memorySamples = (samples) => {
+  try {
+    win.webview.rpc.send.lspMemoryUpdate({ samples });
   } catch { /* webview not ready yet */ }
 };
 

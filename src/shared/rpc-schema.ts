@@ -47,6 +47,11 @@ import type {
   PRDraftSummary,
   PRDetailInfo,
   WorkspaceProgressInfo,
+  LspDiagnostic,
+  LspHoverResult,
+  LspLocation,
+  LspMemorySample,
+  LspServerState,
 } from "./ipc-types";
 
 // --- Bun-side handlers (Webview calls these) ---
@@ -764,6 +769,77 @@ export interface BunRequests {
     params: { workspacePath: string };
     response: { prompt: string | null; planMode: boolean | null };
   };
+
+  // LSP — see src/bun/lsp/. The bridge sits between Monaco's provider API
+  // (webview) and stdio JSON-RPC language servers (Bun).
+  lspListServers: {
+    params: void;
+    response: { servers: LspServerState[] };
+  };
+  lspRestartServer: {
+    params: { serverId: string };
+    response: { ok: boolean; error?: string };
+  };
+  lspStopServer: {
+    params: { serverId: string };
+    response: { ok: boolean };
+  };
+  lspGetServerLog: {
+    params: { serverId: string };
+    response: { lines: string[] };
+  };
+  lspMemoryWatchStart: {
+    params: void;
+    response: { samples: LspMemorySample[] };
+  };
+  lspMemoryWatchStop: {
+    params: void;
+    response: void;
+  };
+  lspDidOpen: {
+    params: {
+      workspacePath: string;
+      uri: string;
+      languageId: string;
+      version: number;
+      text: string;
+    };
+    response: void;
+  };
+  lspDidChange: {
+    params: {
+      workspacePath: string;
+      uri: string;
+      languageId: string;
+      version: number;
+      text: string;
+    };
+    response: void;
+  };
+  lspDidClose: {
+    params: { workspacePath: string; uri: string; languageId: string };
+    response: void;
+  };
+  lspHover: {
+    params: {
+      workspacePath: string;
+      uri: string;
+      languageId: string;
+      line: number;       // 0-based (LSP convention)
+      character: number;  // 0-based, UTF-16 code units
+    };
+    response: { result: LspHoverResult | null };
+  };
+  lspDefinition: {
+    params: {
+      workspacePath: string;
+      uri: string;
+      languageId: string;
+      line: number;
+      character: number;
+    };
+    response: { locations: LspLocation[] };
+  };
 }
 
 // --- Bun-side messages (Webview fires these, no response) ---
@@ -823,4 +899,10 @@ export interface WebviewMessages {
     workspacePath: string;
     markdownId: string;
   };
+  // LSP push channels. Diagnostics fire whenever the server publishes for an
+  // open document; serverStateChanged fires on every status transition; the
+  // memory sample stream is gated by lspMemoryWatchStart/Stop.
+  lspDiagnostics: { uri: string; diagnostics: LspDiagnostic[] };
+  lspServerStateChanged: { state: LspServerState };
+  lspMemoryUpdate: { samples: LspMemorySample[] };
 }

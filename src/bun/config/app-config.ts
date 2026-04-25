@@ -110,6 +110,8 @@ export function normalizeConfig(raw: unknown): AppConfig {
   const kb = normalizeKeybindings(raw.keybindings);
   if (kb) normalized.keybindings = kb;
 
+  if (typeof raw.lspDisabled === "boolean") normalized.lspDisabled = raw.lspDisabled;
+
   return normalized;
 }
 

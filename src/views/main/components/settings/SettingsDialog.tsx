@@ -12,7 +12,7 @@ import { useOverlay } from "../../state/useOverlay";
 import { applyTheme } from "../../state/theme";
 import { KeybindingsTab } from "./KeybindingsTab";
 
-type Tab = "general" | "remote" | "tools" | "appearance" | "pi" | "codex" | "keybindings";
+type Tab = "general" | "remote" | "tools" | "appearance" | "pi" | "codex" | "lsp" | "keybindings";
 
 function isSameKeybindings(
   a: Record<string, string | null> | undefined,
@@ -48,6 +48,9 @@ export function SettingsDialog() {
   const [showMermaidDiagram, setShowMermaidDiagram] = useState(true);
   const [showMarkdown, setShowMarkdown] = useState(true);
 
+  // LSP tab state
+  const [lspDisabled, setLspDisabled] = useState(false);
+
   // Keybindings tab state — map of commandId → override (string or null for unbound).
   // Missing entries fall back to the command's default keybinding.
   const [keybindings, setKeybindings] = useState<Record<string, string | null>>({});
@@ -78,6 +81,7 @@ export function SettingsDialog() {
       setShowWebpage(cfg.mcpTools?.showWebpage !== false);
       setShowMermaidDiagram(cfg.mcpTools?.showMermaidDiagram !== false);
       setShowMarkdown(cfg.mcpTools?.showMarkdown !== false);
+      setLspDisabled(cfg.lspDisabled ?? false);
       setKeybindings(cfg.keybindings ?? {});
       if (cfg.httpServer) {
         setHttpEnabled(cfg.httpServer.enabled);
@@ -113,6 +117,7 @@ export function SettingsDialog() {
       httpAllowTerminalConnect,
       httpAllowTerminalWrite,
       mcpTools: { showWebpage, showMermaidDiagram, showMarkdown },
+      lspDisabled,
       httpServer: {
         enabled: httpEnabled,
         port: httpPort,
@@ -199,6 +204,7 @@ export function SettingsDialog() {
       (config.mcpTools?.showWebpage !== false) !== showWebpage ||
       (config.mcpTools?.showMermaidDiagram !== false) !== showMermaidDiagram ||
       (config.mcpTools?.showMarkdown !== false) !== showMarkdown ||
+      (config.lspDisabled ?? false) !== lspDisabled ||
       (config.httpServer?.enabled ?? false) !== httpEnabled ||
       (config.httpServer?.port ?? 7778) !== httpPort ||
       (config.httpServer?.hostname ?? "127.0.0.1") !== httpHostname ||
@@ -296,6 +302,11 @@ export function SettingsDialog() {
             onClick={() => setActiveTab("codex")}
           />
           <TabButton
+            label="LSP"
+            active={activeTab === "lsp"}
+            onClick={() => setActiveTab("lsp")}
+          />
+          <TabButton
             label="Keybindings"
             active={activeTab === "keybindings"}
             onClick={() => setActiveTab("keybindings")}
@@ -334,6 +345,9 @@ export function SettingsDialog() {
             )}
             {activeTab === "pi" && <AgentEnvVarsTab agent="pi" />}
             {activeTab === "codex" && <AgentEnvVarsTab agent="codex" />}
+            {activeTab === "lsp" && (
+              <LspTab disabled={lspDisabled} setDisabled={setLspDisabled} />
+            )}
             {activeTab === "keybindings" && (
               <KeybindingsTab
                 keybindings={keybindings}
@@ -1255,6 +1269,42 @@ function McpToolsTab({
           </p>
         </div>
         <ToggleSwitch value={showMarkdown} onChange={setShowMarkdown} />
+      </div>
+    </>
+  );
+}
+
+// --- LSP Tab ---
+
+function LspTab({
+  disabled,
+  setDisabled,
+}: {
+  disabled: boolean;
+  setDisabled: (v: boolean) => void;
+}) {
+  return (
+    <>
+      <p className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
+        Tempest can run language servers (LSP) in the background to provide
+        hover info, go-to-definition, and diagnostics in the Monaco editor.
+        Per-repository overrides live in each repository's settings.
+      </p>
+
+      <div className="flex items-center justify-between gap-3 py-1">
+        <div className="flex flex-col gap-0.5">
+          <label
+            className="text-[11px] font-semibold"
+            style={{ color: "var(--ctp-subtext0)" }}
+          >
+            Disable LSP Globally
+          </label>
+          <p className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
+            When enabled, no language servers spawn in any workspace. Editing
+            still works — you just won't get IntelliSense.
+          </p>
+        </div>
+        <ToggleSwitch value={disabled} onChange={setDisabled} />
       </div>
     </>
   );

@@ -36,6 +36,11 @@ import { createTab } from "../../models/pane-node";
 import { addTab } from "../../state/actions";
 import { tempestTheme, TEMPEST_THEME_NAME, tempestLightTheme, TEMPEST_LIGHT_THEME_NAME } from "./tempest-theme";
 import { ImportLinkProvider, TEMPEST_FILE_SCHEME } from "./import-link-provider";
+import {
+  JSONNET_LANGUAGE_ID,
+  jsonnetLanguageConfiguration,
+  jsonnetMonarchLanguage,
+} from "./jsonnet-language";
 
 // Configure Monaco to load from local bundled files
 loader.config({ paths: { vs: "./monaco-editor/min/vs" } });
@@ -206,6 +211,24 @@ export function MonacoEditorPane({
       monaco.editor.defineTheme(TEMPEST_THEME_NAME, tempestTheme);
       monaco.editor.defineTheme(TEMPEST_LIGHT_THEME_NAME, tempestLightTheme);
       themeRegistered.current = true;
+
+      // Register Jsonnet — Monaco doesn't ship a built-in for it.
+      const langs = monaco.languages.getLanguages();
+      if (!langs.some((l: { id: string }) => l.id === JSONNET_LANGUAGE_ID)) {
+        monaco.languages.register({
+          id: JSONNET_LANGUAGE_ID,
+          extensions: [".jsonnet", ".libsonnet"],
+          aliases: ["Jsonnet", "jsonnet"],
+        });
+        monaco.languages.setLanguageConfiguration(
+          JSONNET_LANGUAGE_ID,
+          jsonnetLanguageConfiguration,
+        );
+        monaco.languages.setMonarchTokensProvider(
+          JSONNET_LANGUAGE_ID,
+          jsonnetMonarchLanguage,
+        );
+      }
 
       // Disable semantic validation — Monaco's TS service doesn't have access
       // to the project's node_modules or tsconfig, so module resolution errors

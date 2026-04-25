@@ -56,6 +56,8 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   clj: "clojure",
   scala: "scala",
   zig: "zig",
+  jsonnet: "jsonnet",
+  libsonnet: "jsonnet",
 };
 
 function inferLanguage(filePath: string): string {

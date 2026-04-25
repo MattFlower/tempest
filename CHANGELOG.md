@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Fixed
+
+### Changed
+
+### Removed
+
+## [0.19.0] - 2026-04-24
+
+### Added
+
 - The scripts (green arrow) menu now auto-detects Maven `pom.xml` files alongside `package.json`. Surfaces common lifecycle phases (`clean`, `compile`, `test`, `package`, `verify`, `install`, `clean install`) plus a curated set of plugin-specific entry points when their plugin is declared in the pom (e.g. `spring-boot:run`, `quarkus:dev`, `jetty:run`, `jib:dockerBuild`, `flyway:migrate`, `liquibase:update`, `exec:java`). Prefers `./mvnw` over `mvn` when the wrapper is present. Manage Scripts dialog gains a parallel "Auto-detect scripts from pom.xml" toggle and a Maven Scripts list with the same hide/show + Modal/Pane controls. New per-repo settings: `disableMavenScripts`, `hiddenMavenScripts`, `mavenScriptRunMode`. New RPC: `getMavenScripts`.
 - Monaco editor now recognizes Jsonnet (`.jsonnet`, `.libsonnet`) files. Registers a Monarch tokenizer for keywords (`local`, `function`, `import`, `self`, `super`, ...), `//` / `#` / `/* */` comments, single/double/triple-pipe (`|||...|||`) and `@`-verbatim strings, numbers, operators, and `std.*` builtins, plus language configuration for bracket matching and indent rules. Tokens reuse the existing Tempest theme rules so highlighting matches the rest of the editor.
 - Codex (OpenAI's CLI coding agent) is now a first-class third coding agent alongside Claude and Pi. A "Codex" entry appears in the `+` tab menu, the **New**/**Split** toolbar menus, and the command palette (`new-codex`). Codex tabs launch `codex` through a login shell (same shell-quoting and env handling as Claude/Pi), and auto-resume the prior session on app restart.

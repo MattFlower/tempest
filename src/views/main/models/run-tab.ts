@@ -1,6 +1,7 @@
 export type RunTabSource =
   | { kind: "custom"; scriptId: string; paramValues?: Record<string, string> }
-  | { kind: "package"; scriptName: string };
+  | { kind: "package"; scriptName: string }
+  | { kind: "maven"; scriptName: string };
 
 export type RunTabStatus = "running" | "exited";
 

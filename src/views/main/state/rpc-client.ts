@@ -696,6 +696,8 @@ export const api = {
     rpcRequest.resolveScriptLaunch(params),
   getPackageScripts: (workspacePath: string) =>
     rpcRequest.getPackageScripts({ workspacePath }),
+  getMavenScripts: (workspacePath: string) =>
+    rpcRequest.getMavenScripts({ workspacePath }),
   browseFile: (startingFolder?: string) =>
     rpcRequest.browseFile({ startingFolder }),
   getRemoteRepos: (repoPath: string) =>

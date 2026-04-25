@@ -433,6 +433,9 @@ export interface RepoSettings {
   disablePackageScripts?: boolean;
   hiddenPackageScripts?: string[];
   packageScriptRunMode?: Record<string, ScriptRunMode>;
+  disableMavenScripts?: boolean;
+  hiddenMavenScripts?: string[];
+  mavenScriptRunMode?: Record<string, ScriptRunMode>;
 }
 
 // --- Assigned PRs ---

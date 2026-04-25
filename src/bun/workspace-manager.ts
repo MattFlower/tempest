@@ -632,6 +632,70 @@ export class WorkspaceManager {
     return { runId };
   }
 
+  async getMavenScripts(workspacePath: string): Promise<{ scripts: Array<{ name: string; command: string }> }> {
+    try {
+      const pomPath = join(workspacePath, "pom.xml");
+      if (!existsSync(pomPath)) return { scripts: [] };
+
+      const raw = await Bun.file(pomPath).text();
+
+      // Prefer the Maven wrapper if it's checked into the repo.
+      const runner = existsSync(join(workspacePath, "mvnw")) ? "./mvnw" : "mvn";
+
+      const phases = [
+        "clean",
+        "compile",
+        "test",
+        "package",
+        "verify",
+        "install",
+        "clean install",
+      ];
+
+      // Strip XML comments so commented-out plugins aren't picked up.
+      const noComments = raw.replace(/<!--[\s\S]*?-->/g, "");
+
+      const artifactIds = new Set<string>();
+      for (const block of noComments.matchAll(/<plugin\b[^>]*>([\s\S]*?)<\/plugin>/g)) {
+        const inner = block[1];
+        if (!inner) continue;
+        const m = inner.match(/<artifactId>\s*([^<]+?)\s*<\/artifactId>/);
+        if (m && m[1]) artifactIds.add(m[1].trim());
+      }
+
+      // A small curated map: well-known plugins -> the goal a developer
+      // typically wants to invoke directly. Lifecycle phases already cover
+      // the common build/test goals, so we only surface plugin-specific
+      // entry points here.
+      const PLUGIN_GOALS: Record<string, string[]> = {
+        "spring-boot-maven-plugin": ["spring-boot:run"],
+        "quarkus-maven-plugin": ["quarkus:dev"],
+        "jetty-maven-plugin": ["jetty:run"],
+        "tomcat-maven-plugin": ["tomcat:run"],
+        "tomcat7-maven-plugin": ["tomcat7:run"],
+        "jib-maven-plugin": ["jib:dockerBuild"],
+        "flyway-maven-plugin": ["flyway:migrate", "flyway:info"],
+        "liquibase-maven-plugin": ["liquibase:update"],
+        "exec-maven-plugin": ["exec:java"],
+      };
+
+      const goals: string[] = [];
+      for (const id of artifactIds) {
+        const mapped = PLUGIN_GOALS[id];
+        if (mapped) goals.push(...mapped);
+      }
+
+      return {
+        scripts: [
+          ...phases.map((p) => ({ name: p, command: `${runner} ${p}` })),
+          ...goals.map((g) => ({ name: g, command: `${runner} ${g}` })),
+        ],
+      };
+    } catch {
+      return { scripts: [] };
+    }
+  }
+
   async getPackageScripts(workspacePath: string): Promise<{ scripts: Array<{ name: string; command: string }> }> {
     try {
       const pkgPath = join(workspacePath, "package.json");

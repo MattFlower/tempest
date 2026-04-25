@@ -81,6 +81,10 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
   const [disablePackageScripts, setDisablePackageScripts] = useState(false);
   const [hiddenPackageScripts, setHiddenPackageScripts] = useState<string[]>([]);
   const [packageScriptRunMode, setPackageScriptRunMode] = useState<Record<string, ScriptRunMode>>({});
+  const [mavenScripts, setMavenScripts] = useState<Array<{ name: string; command: string }>>([]);
+  const [disableMavenScripts, setDisableMavenScripts] = useState(false);
+  const [hiddenMavenScripts, setHiddenMavenScripts] = useState<string[]>([]);
+  const [mavenScriptRunMode, setMavenScriptRunMode] = useState<Record<string, ScriptRunMode>>({});
   const [installedEditors, setInstalledEditors] = useState<Array<{ id: string; name: string; category: "editor" | "terminal" | "file-manager" }>>([]);
 
   // Find workspace object to get name and status
@@ -107,28 +111,46 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
       disablePackageScripts?: boolean;
       hiddenPackageScripts?: string[];
       packageScriptRunMode?: Record<string, ScriptRunMode>;
+      disableMavenScripts?: boolean;
+      hiddenMavenScripts?: string[];
+      mavenScriptRunMode?: Record<string, ScriptRunMode>;
     }) => {
       setCustomScripts(settings.customScripts ?? []);
       setDisablePackageScripts(settings.disablePackageScripts ?? false);
       setHiddenPackageScripts(settings.hiddenPackageScripts ?? []);
       setPackageScriptRunMode(settings.packageScriptRunMode ?? {});
+      setDisableMavenScripts(settings.disableMavenScripts ?? false);
+      setHiddenMavenScripts(settings.hiddenMavenScripts ?? []);
+      setMavenScriptRunMode(settings.mavenScriptRunMode ?? {});
     });
   }, [workspace?.repoPath]);
 
-  // Load package.json scripts for this workspace (also refreshed on dropdown open)
-  const refreshPackageScripts = useCallback(() => {
-    if (!workspacePath || disablePackageScripts) {
+  // Load auto-detected scripts for this workspace (also refreshed on dropdown open)
+  const refreshAutoDetectedScripts = useCallback(() => {
+    if (!workspacePath) {
       setPackageScripts([]);
+      setMavenScripts([]);
       return;
     }
-    api.getPackageScripts(workspacePath).then((result: { scripts: Array<{ name: string; command: string }> }) => {
-      setPackageScripts(result.scripts);
-    });
-  }, [workspacePath, disablePackageScripts]);
+    if (disablePackageScripts) {
+      setPackageScripts([]);
+    } else {
+      api.getPackageScripts(workspacePath).then((result: { scripts: Array<{ name: string; command: string }> }) => {
+        setPackageScripts(result.scripts);
+      });
+    }
+    if (disableMavenScripts) {
+      setMavenScripts([]);
+    } else {
+      api.getMavenScripts(workspacePath).then((result: { scripts: Array<{ name: string; command: string }> }) => {
+        setMavenScripts(result.scripts);
+      });
+    }
+  }, [workspacePath, disablePackageScripts, disableMavenScripts]);
 
   useEffect(() => {
-    refreshPackageScripts();
-  }, [refreshPackageScripts]);
+    refreshAutoDetectedScripts();
+  }, [refreshAutoDetectedScripts]);
 
   const refreshInstalledEditors = useCallback(() => {
     api.getInstalledEditors().then((apps: Array<{ id: string; name: string; category: "editor" | "terminal" | "file-manager" }>) => {
@@ -164,7 +186,10 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
 
   const spawnInRunPane = useCallback(
     async (
-      source: { kind: "custom"; scriptId: string; paramValues?: Record<string, string> } | { kind: "package"; scriptName: string },
+      source:
+        | { kind: "custom"; scriptId: string; paramValues?: Record<string, string> }
+        | { kind: "package"; scriptName: string }
+        | { kind: "maven"; scriptName: string },
       label: string,
       script: string | undefined,
       scriptPath: string | undefined,
@@ -258,6 +283,30 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
       });
     },
     [workspace, packageScriptRunMode, spawnInRunPane],
+  );
+
+  const handleRunMavenScript = useCallback(
+    (ms: { name: string; command: string }) => {
+      if (!workspace) return;
+      const mode = mavenScriptRunMode[ms.name] ?? "modal";
+      if (mode === "bottomPane") {
+        spawnInRunPane(
+          { kind: "maven", scriptName: ms.name },
+          ms.name,
+          ms.command,
+          undefined,
+          undefined,
+        );
+        return;
+      }
+      setRunningScript({
+        id: `mvn-${ms.name}`,
+        name: ms.name,
+        script: ms.command,
+        showOutput: true,
+      });
+    },
+    [workspace, mavenScriptRunMode, spawnInRunPane],
   );
 
 
@@ -457,6 +506,9 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
   const visiblePackageScripts = packageScripts.filter(
     (ps) => !hiddenPackageScripts.includes(ps.name)
   );
+  const visibleMavenScripts = mavenScripts.filter(
+    (ms) => !hiddenMavenScripts.includes(ms.name)
+  );
 
   const scriptsItems: DropdownItem[] = [
     ...customScripts.map((cs) => ({
@@ -470,7 +522,14 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
       label: ps.command,
       action: () => handleRunPackageScript(ps),
     })),
-    ...(customScripts.length > 0 || visiblePackageScripts.length > 0
+    ...((customScripts.length > 0 || visiblePackageScripts.length > 0) && visibleMavenScripts.length > 0
+      ? [{ separator: true } as const]
+      : []),
+    ...visibleMavenScripts.map((ms) => ({
+      label: ms.command,
+      action: () => handleRunMavenScript(ms),
+    })),
+    ...(customScripts.length > 0 || visiblePackageScripts.length > 0 || visibleMavenScripts.length > 0
       ? [{ separator: true } as const]
       : []),
     { label: "Manage Scripts", action: () => setShowScriptDialog(true) },
@@ -531,7 +590,7 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
             label=""
             icon={<svg className="w-[1.375rem] h-[1.375rem]" viewBox="0 0 16 16" fill="var(--ctp-green)"><path d="M4 2l10 6-10 6V2z" /></svg>}
             items={scriptsItems}
-            onOpen={refreshPackageScripts}
+            onOpen={refreshAutoDetectedScripts}
           />
         </div>
       </div>
@@ -590,12 +649,19 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
           packageScripts={packageScripts}
           hiddenPackageScripts={hiddenPackageScripts}
           packageScriptRunMode={packageScriptRunMode}
+          disableMavenScripts={disableMavenScripts}
+          mavenScripts={mavenScripts}
+          hiddenMavenScripts={hiddenMavenScripts}
+          mavenScriptRunMode={mavenScriptRunMode}
           onChanged={setCustomScripts}
           onDisablePackageScriptsChanged={(disabled) => {
             setDisablePackageScripts(disabled);
           }}
           onHiddenPackageScriptsChanged={setHiddenPackageScripts}
           onPackageScriptRunModeChanged={setPackageScriptRunMode}
+          onDisableMavenScriptsChanged={setDisableMavenScripts}
+          onHiddenMavenScriptsChanged={setHiddenMavenScripts}
+          onMavenScriptRunModeChanged={setMavenScriptRunMode}
           onDismiss={() => setShowScriptDialog(false)}
         />
       )}

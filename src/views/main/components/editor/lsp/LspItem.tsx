@@ -89,10 +89,18 @@ function summarizeServers(list: LspServerState[]): Summary {
   let workingNote: string | undefined;
   for (const s of list) {
     if (s.status === "error") errorCount += 1;
-    else if (s.status === "starting" || s.status === "indexing") {
+    else if (
+      s.status === "installing" ||
+      s.status === "starting" ||
+      s.status === "indexing"
+    ) {
       workingCount += 1;
       if (!workingNote) {
-        workingNote = s.status === "starting" ? `starting ${s.serverName}…` : `${s.serverName} indexing…`;
+        // Installing wins as the most user-visible state — it's the longest
+        // wait and the user is most likely to want to know what's downloading.
+        if (s.status === "installing") workingNote = `installing ${s.serverName}…`;
+        else if (s.status === "starting") workingNote = `starting ${s.serverName}…`;
+        else workingNote = `${s.serverName} indexing…`;
       }
     }
   }
@@ -366,6 +374,7 @@ function ServerRow({
 function statusColor(status: LspServerState["status"]): string {
   switch (status) {
     case "ready": return "var(--ctp-green)";
+    case "installing": return "var(--ctp-blue)";
     case "starting": return "var(--ctp-yellow)";
     case "indexing": return "var(--ctp-yellow)";
     case "error": return "var(--ctp-red)";

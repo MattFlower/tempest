@@ -597,8 +597,22 @@ export function openFileInWorkspace(
   useStore.getState().selectWorkspace(workspacePath);
   if (tryOpen()) return;
 
+  // tryOpen calls addTab which calls setState synchronously, which fires
+  // every store subscriber — including this one — before tryOpen returns.
+  // Without a re-entry guard, the subscriber would call tryOpen again
+  // before the outer call has a chance to unsub, recursing until it blows
+  // the stack. Set `done` before invoking tryOpen so the re-entrant call
+  // bails immediately; if tryOpen reports failure (its inner preconditions
+  // weren't met), reset and wait for the next store change.
+  let done = false;
   const unsub = useStore.subscribe(() => {
-    if (tryOpen()) unsub();
+    if (done) return;
+    done = true;
+    if (!tryOpen()) {
+      done = false;
+      return;
+    }
+    unsub();
   });
   setTimeout(() => unsub(), 5000);
 }

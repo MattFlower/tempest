@@ -44,11 +44,6 @@ export function attachLsp(params: {
   const uri = model.uri.toString();
   let version = 1;
 
-  // Temporary diagnostic logging. Phase 1 is wired up via this URI; if it
-  // doesn't start with `file://`, the language server won't be able to find
-  // the document and hover/definition will silently return nothing.
-  console.log("[lsp-bridge] attaching", { uri, workspacePath, languageId });
-
   // Initial didOpen with the current text. The Bun side may need to
   // spawn the server lazily on first didOpen — that work is fire-and-
   // forget so we don't block the editor mount.

@@ -84,7 +84,44 @@ loader.init().then((monaco) => {
       diagnostics: false,
     });
   }
-  console.log("[MonacoEditor] disabled bundled TS/JS hovers + definitions; LSP now exclusive");
+  // Same treatment for Monaco's bundled JSON/HTML/CSS/SCSS/LESS language
+  // services — when our vscode-langservers-extracted servers are running,
+  // Monaco's bundled providers would otherwise produce duplicate hovers
+  // and "Definitions (N)" peek entries. The bundled services live under
+  // monaco.languages.{json,html,css}.* with similar API shape, so we
+  // reuse the same disable list.
+  const disabledModeConfig = {
+    completionItems: true,
+    signatureHelp: true,
+    onTypeFormattingEdits: true,
+    documentRangeFormattingEdits: true,
+    codeActions: true,
+    inlayHints: true,
+    documentHighlights: true,
+    hovers: false,
+    definitions: false,
+    references: false,
+    rename: false,
+    documentSymbols: false,
+    diagnostics: false,
+  };
+  for (const defaults of [
+    monaco.languages.json?.jsonDefaults,
+    monaco.languages.html?.htmlDefaults,
+    monaco.languages.css?.cssDefaults,
+    monaco.languages.css?.scssDefaults,
+    monaco.languages.css?.lessDefaults,
+  ]) {
+    // Each module is optional in the bundle. If it's not present (the user
+    // disabled it via custom worker setup), skip silently.
+    if (!defaults) continue;
+    try {
+      defaults.setModeConfiguration({ ...disabledModeConfig });
+    } catch (err) {
+      console.warn("[MonacoEditor] failed to disable bundled language service:", err);
+    }
+  }
+  console.log("[MonacoEditor] disabled bundled TS/JS/JSON/HTML/CSS hovers + definitions; LSP now exclusive");
 
   // Register an editor opener so Monaco's "Go to Definition" (and similar
   // navigations to a different file) actually open the target. Without this,

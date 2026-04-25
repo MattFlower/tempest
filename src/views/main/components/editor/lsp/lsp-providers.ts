@@ -70,8 +70,37 @@ export function acquireLspProviders(monaco: Monaco): () => void {
   };
 }
 
+/**
+ * Monaco language ids we register hover/definition providers for. Must be
+ * kept in sync with the `languageIds` arrays in src/bun/lsp/recipes.ts —
+ * if a recipe's language isn't listed here, Monaco never asks our LSP for
+ * hovers in that file and the user sees nothing despite the server running.
+ *
+ * Listing a language here for which no recipe exists is harmless: the
+ * provider's first step is a context lookup that returns null when no
+ * MonacoEditorPane has registered LSP context for the model.
+ */
+const SUPPORTED_LANGUAGES = [
+  // NPM bucket
+  "typescript", "javascript", "typescriptreact", "javascriptreact",
+  "python",
+  "html",
+  "css", "scss", "less",
+  "json", "jsonc",
+  "shell",
+  "yaml",
+  "dockerfile",
+  // GitHub bucket
+  "rust",
+  "lua",
+  "c", "cpp",
+  "markdown",
+  // Toolchain bucket
+  "go",
+];
+
 function install(monaco: Monaco): void {
-  for (const lang of ["typescript", "javascript", "typescriptreact", "javascriptreact"]) {
+  for (const lang of SUPPORTED_LANGUAGES) {
     if (registeredLanguages.has(lang)) continue;
     registeredLanguages.add(lang);
 

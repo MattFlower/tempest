@@ -37,6 +37,13 @@ export const PR_CHANNEL_SOCKET = join(TEMPEST_DIR, "pr-channel.sock");
 // Webpage previews
 export const WEBPAGE_PREVIEWS_DIR = join(TEMPEST_DIR, "webpage-previews");
 
+// LSP server install root.
+// Tempest manages its own copy of every language server under this directory:
+// `package.json`, `bun.lock`, and a Tempest-written `manifest.json` recording
+// which recipe is installed at which pinned version. `bun install` populates
+// `node_modules/.bin/<server-binary>` which we spawn at runtime.
+export const LSP_INSTALL_DIR = join(TEMPEST_DIR, "lsp");
+
 // Mermaid diagrams (show_mermaid_diagram MCP tool)
 export const MERMAID_DIAGRAMS_DIR = join(TEMPEST_DIR, "mermaid-diagrams");
 

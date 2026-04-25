@@ -614,10 +614,11 @@ export interface JJBookmark {
 // full lifecycle.
 
 export type LspServerStatus =
+  | "installing" // bun add in flight (npm bucket) — no process spawned yet
   | "starting"   // process spawned, awaiting initialize response
   | "ready"      // initialized; serving requests
   | "indexing"   // server is actively indexing (rust-analyzer-style)
-  | "error"      // crashed or failed to initialize; will retry on next file open
+  | "error"      // crashed or failed to install/initialize; user can retry
   | "stopped";   // explicitly stopped (workspace closed, settings disabled)
 
 /**

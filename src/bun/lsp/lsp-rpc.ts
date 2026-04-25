@@ -96,15 +96,19 @@ export class LspRpc {
   }
 
   async stopServer(serverId: string): Promise<{ ok: boolean }> {
-    const entry = this.registry.get(serverId);
-    if (!entry) return { ok: true };
-    await this.registry.stopWorkspace(entry.workspacePath);
+    await this.registry.stop(serverId);
     return { ok: true };
   }
 
   getServerLog(serverId: string): { lines: string[] } {
     const entry = this.registry.get(serverId);
     if (!entry) return { lines: [] };
+    // process is null while the installer is running. Surface the lastError
+    // (which holds bun stderr on install failure) so the popover's "view log"
+    // button is still useful before any process exists.
+    if (!entry.process) {
+      return { lines: entry.lastError ? [entry.lastError] : [] };
+    }
     return { lines: entry.process.getLogLines() };
   }
 
@@ -134,15 +138,9 @@ export class LspRpc {
   }): Promise<void> {
     if (!this.isAllowed(params.workspacePath)) return;
     const entry = await this.registry.getOrSpawn(params.workspacePath, params.languageId);
-    console.log("[lsp-rpc] didOpen", {
-      uri: params.uri,
-      languageId: params.languageId,
-      hasEntry: !!entry,
-      status: entry?.process.getStatus(),
-    });
-    if (!entry || entry.process.getStatus() !== "ready") {
-      // Server failed to start or is still initializing — DocumentStore
-      // still tracks the doc so a successful restart can replay it.
+    if (!entry || entry.status !== "ready" || !entry.process) {
+      // Server is installing, still initializing, or failed to start.
+      // DocumentStore still tracks the doc so a successful restart can replay it.
       entry?.docs.open(params.uri, params.languageId, params.version, params.text);
       return;
     }
@@ -168,7 +166,7 @@ export class LspRpc {
     const entry = this.registry.find(params.workspacePath, params.languageId);
     if (!entry) return;
     entry.docs.update(params.uri, params.version, params.text);
-    if (entry.process.getStatus() !== "ready") return;
+    if (entry.status !== "ready" || !entry.process) return;
     // Full-text sync. Servers that advertise incremental sync still accept
     // full-text didChange; we'll switch to incremental in phase 3 if perf
     // shows up as a problem.
@@ -186,7 +184,7 @@ export class LspRpc {
     const entry = this.registry.find(params.workspacePath, params.languageId);
     if (!entry) return;
     entry.docs.close(params.uri);
-    if (entry.process.getStatus() === "ready") {
+    if (entry.status === "ready" && entry.process) {
       entry.process.notify("textDocument/didClose", {
         textDocument: { uri: params.uri },
       });
@@ -202,12 +200,7 @@ export class LspRpc {
   }): Promise<{ result: LspHoverResult | null }> {
     if (!this.isAllowed(params.workspacePath)) return { result: null };
     const entry = this.registry.find(params.workspacePath, params.languageId);
-    console.log("[lsp-rpc] hover", {
-      uri: params.uri,
-      hasEntry: !!entry,
-      status: entry?.process.getStatus(),
-    });
-    if (!entry || entry.process.getStatus() !== "ready") return { result: null };
+    if (!entry || entry.status !== "ready" || !entry.process) return { result: null };
 
     try {
       const raw = (await entry.process.request("textDocument/hover", {
@@ -232,7 +225,7 @@ export class LspRpc {
   }): Promise<{ locations: LspLocation[] }> {
     if (!this.isAllowed(params.workspacePath)) return { locations: [] };
     const entry = this.registry.find(params.workspacePath, params.languageId);
-    if (!entry || entry.process.getStatus() !== "ready") return { locations: [] };
+    if (!entry || entry.status !== "ready" || !entry.process) return { locations: [] };
 
     try {
       const raw = (await entry.process.request("textDocument/definition", {

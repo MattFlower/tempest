@@ -3,15 +3,19 @@
 //
 // Lazy: a server doesn't spawn until something asks for it (`getOrSpawn`).
 // First-time spawn for a recipe goes through the installer, which may run
-// `bun add` to populate ~/.config/tempest/lsp/. While that's in flight the
-// entry exists in the registry with status "installing" and a null process,
-// so the footer can render "installing typescript-language-server…" without
-// holding the LSP request.
+// `bun add` to populate ~/.config/tempest/lsp/. Install runs in the
+// background — `getOrSpawn` returns the entry synchronously after creating
+// it, so document-sync RPCs can register the doc in the entry's
+// DocumentStore right away. Once the install + spawn succeed, the
+// background flow re-snapshots `entry.docs.all()` and replays didOpen
+// with the latest text — edits made while the user was waiting on the
+// install are preserved.
 //
-// Single-shot restart on crash: the next request triggers a fresh spawn
-// and replays didOpen for every doc the bridge had registered. After a
-// failed install or restart we back off — the entry stays in "error"
-// status until the user explicitly retries via the footer popover.
+// Cancellation: every entry carries a `generation` counter; stop and
+// restart bump it. The background install/start checks generation after
+// every await — when a stop or restart races with an in-flight install,
+// the older flow bails before transitioning state, spawning, or
+// notifying the server, so we never leak a server process.
 //
 // Disable handling: callers must not call getOrSpawn when the workspace's
 // repo (or the global config) has LSP off. The check lives one layer up
@@ -47,6 +51,13 @@ interface ServerEntry {
   lastError?: string;
   restartCount: number;
   lastSpawnAt: number;
+  /**
+   * Bumped by stop() and restart() to invalidate any in-flight
+   * installAndStart attempt. Background work captures this at start and
+   * checks after every await — a mismatch means the entry was reset out
+   * from under it and the in-flight work must abort without side effects.
+   */
+  generation: number;
 }
 
 export class LspServerRegistry {
@@ -59,20 +70,22 @@ export class LspServerRegistry {
   }
 
   /**
-   * Get the entry for (workspacePath, languageId), spawning if necessary.
-   * Returns null when no recipe matches the language — caller should treat
-   * that as "no LSP available; fall back to Monaco's bundled behaviour".
+   * Get the entry for (workspacePath, languageId), creating it (and
+   * kicking off install + start in the background) if necessary. Returns
+   * null when no recipe matches the language — caller should treat that
+   * as "no LSP available; fall back to Monaco's bundled behaviour".
    *
-   * The returned entry may be in any state — caller should consult
-   * `entry.status` rather than poking the process directly. In particular,
-   * an entry can come back in "installing" status (install in flight) or
-   * "error" (install or initialize failed); callers downstream of getOrSpawn
-   * decide what to do based on status, not by waiting for "ready".
+   * Returns synchronously (the install is fire-and-forget). The returned
+   * entry's `status` reflects the moment of return — usually "installing"
+   * for first-time entries on npm/github/toolchain recipes, or whatever
+   * status an existing entry happens to be in. Callers downstream of
+   * getOrSpawn decide what to do based on `entry.status`, not by waiting
+   * for "ready".
    */
-  async getOrSpawn(
+  getOrSpawn(
     workspacePath: string,
     languageId: string,
-  ): Promise<ServerEntry | null> {
+  ): ServerEntry | null {
     const recipe = recipeForLanguage(languageId);
     if (!recipe) return null;
 
@@ -86,9 +99,6 @@ export class LspServerRegistry {
       return existing;
     }
 
-    // Create the entry up front in "installing" state so the footer can
-    // show progress while the (potentially slow) `bun add` runs.
-    const docs = new DocumentStore();
     // System-bucket recipes resolve via PATH lookup with no real "install"
     // step, so they jump straight to "starting". Everything else may need
     // a download/build/extract — show "installing" so the footer note is
@@ -101,15 +111,19 @@ export class LspServerRegistry {
       primaryLanguageId: languageId,
       recipe,
       process: null,
-      docs,
+      docs: new DocumentStore(),
       status: initialStatus,
       restartCount: 0,
       lastSpawnAt: Date.now(),
+      generation: 0,
     };
     this.servers.set(id, entry);
     this.emitState(entry);
 
-    await this.installAndStart(entry);
+    // Fire-and-forget background install + start. Errors inside
+    // installAndStart are caught and translated to "error" status; we
+    // never let them propagate as unhandled rejections.
+    void this.installAndStart(entry);
     return entry;
   }
 
@@ -165,6 +179,10 @@ export class LspServerRegistry {
     const entry = this.servers.get(id);
     if (!entry) return;
 
+    // Bump generation so any install/start currently in flight bails
+    // when it next checks. Then tear down the existing process — we
+    // don't want a parallel install bringing up a duplicate behind us.
+    entry.generation += 1;
     if (entry.process) {
       try { await entry.process.stop("explicit"); } catch { /* ignore */ }
     }
@@ -176,7 +194,7 @@ export class LspServerRegistry {
     entry.lastSpawnAt = Date.now();
     this.emitState(entry);
 
-    await this.installAndStart(entry);
+    void this.installAndStart(entry);
   }
 
   /** Pids currently running — for the memory sampler. */
@@ -196,30 +214,38 @@ export class LspServerRegistry {
    * both initial spawn (getOrSpawn) and restart (popover button), so the
    * fail/retry behaviour is consistent.
    *
-   * On install failure: entry transitions to "error" with the bun stderr;
-   * we return without throwing so getOrSpawn can yield the entry back to
-   * the caller in error state.
+   * Cancellation contract: capture entry.generation at the top, check
+   * after every await before any state mutation or external side effect
+   * (spawn, notify). On mismatch, abort cleanly — don't transition
+   * status, don't emit state, tear down anything we started.
    *
-   * On spawn failure (binary exists but the process crashed during init):
-   * `LspServerProcess.start()` flips the status to "error" via its own
-   * status callback; we just record `lastError` and bail.
+   * Failure paths:
+   *   - install error → status "error", lastError = bun stderr
+   *   - spawn / initialize error → status "error", lastError = error msg,
+   *     proc stopped + cleared
+   *   - process crashes after start → handled separately by watchExit in
+   *     LspServerProcess, which transitions to "error" via its own callback
    */
   private async installAndStart(entry: ServerEntry): Promise<void> {
-    const docsToReplay = entry.docs.all();
+    const gen = entry.generation;
+    const aborted = () => entry.generation !== gen;
 
+    // --- Install phase ---
     let binaryPath: string;
     try {
       const result = await this.installer.resolve(entry.recipe);
+      if (aborted()) return;
       binaryPath = result.binaryPath;
     } catch (err: any) {
+      if (aborted()) return;
       entry.status = "error";
       entry.lastError = err?.message ?? String(err);
       this.emitState(entry);
       return;
     }
 
-    // Install done — transition to "starting" before spawning so the UI
-    // reflects the lifecycle phases distinctly.
+    // --- Spawn phase ---
+    if (aborted()) return;
     entry.status = "starting";
     this.emitState(entry);
 
@@ -233,7 +259,7 @@ export class LspServerRegistry {
       },
       {
         onStatusChange: (status, error) =>
-          this.handleStatusChange(entry.id, status, error),
+          this.handleStatusChange(entry.id, gen, status, error),
         onDiagnostics: (uri, diags) =>
           this.callbacks.onDiagnostics(uri, diags),
       },
@@ -242,10 +268,21 @@ export class LspServerRegistry {
 
     try {
       await proc.start();
-      // Replay didOpen for everything the registry already knew about.
-      // Initial spawn: this list is empty (DocumentStore is fresh).
-      // Restart: this list has every doc the bridge had registered.
-      for (const doc of docsToReplay) {
+      if (aborted()) {
+        // Stop bumped while we were initializing. Tear down the proc
+        // we just started so we don't leak a running server.
+        try { await proc.stop("explicit"); } catch { /* ignore */ }
+        return;
+      }
+
+      // Re-snapshot docs at replay time, not at function entry — the user
+      // may have typed during install/restart, and document-store.update
+      // rewrote the entries in place with the latest version + text.
+      // Replaying the original snapshot would send stale text to the
+      // server. Single-threaded JS guarantees no didChange RPC can
+      // interleave between status="ready" (set inside proc.start) and
+      // the synchronous notify loop below.
+      for (const doc of entry.docs.all()) {
         proc.notify("textDocument/didOpen", {
           textDocument: {
             uri: doc.uri,
@@ -256,27 +293,64 @@ export class LspServerRegistry {
         });
       }
     } catch (err: any) {
+      if (aborted()) {
+        try { await proc.stop("explicit"); } catch { /* ignore */ }
+        return;
+      }
+      // proc.start() rejected — most often the server returned an error
+      // for `initialize` while staying alive (config rejected, missing
+      // dependency, etc). The watchExit handler inside LspServerProcess
+      // wouldn't fire in that case, so without this branch the entry
+      // would stay stuck on "starting" forever.
+      entry.status = "error";
       entry.lastError = err?.message ?? String(err);
+      try { await proc.stop("explicit"); } catch { /* ignore */ }
+      entry.process = null;
+      this.emitState(entry);
     }
   }
 
   private async stopEntry(entry: ServerEntry): Promise<void> {
+    // Bump generation so any in-flight installAndStart bails when it
+    // next checks — without this, a server downloaded mid-stop could
+    // come up after we deleted its entry.
+    entry.generation += 1;
+
     if (entry.process) {
       try { await entry.process.stop("explicit"); } catch { /* ignore */ }
     }
+
+    // Clear any diagnostics this server published — without this, Monaco
+    // markers stay on the editor after the server stops, and the user
+    // sees stale red squiggles for a server that no longer exists. We
+    // reuse the existing onDiagnostics push channel: an empty array tells
+    // the webview's applyDiagnostics to clear that URI's markers.
+    for (const doc of entry.docs.all()) {
+      this.callbacks.onDiagnostics(doc.uri, []);
+    }
+
     this.servers.delete(entry.id);
     // Final state push so the UI sees the entry disappear cleanly.
     entry.status = "stopped";
     this.emitState(entry);
   }
 
+  /**
+   * Forwarder from LspServerProcess's onStatusChange to the registry's
+   * emitState. Drops events from a stale generation: a process that's
+   * been logically replaced by a restart can still fire status events
+   * (e.g. the watchExit watcher firing on the old proc), and those must
+   * not overwrite the new generation's state.
+   */
   private handleStatusChange(
     id: string,
+    gen: number,
     status: LspServerStatus,
     error?: string,
   ): void {
     const entry = this.servers.get(id);
     if (!entry) return;
+    if (entry.generation !== gen) return;
     entry.status = status;
     if (error) entry.lastError = error;
     if (status === "ready") entry.lastError = undefined;

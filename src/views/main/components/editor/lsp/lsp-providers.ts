@@ -24,10 +24,18 @@ import type { LspLocation, LspRange } from "../../../../../shared/ipc-types";
 
 /**
  * Per-model context that the providers need but Monaco doesn't natively
- * track. We keep a side-table keyed by model URI string. Models removed
- * from this map fall through to Monaco's bundled behaviour automatically.
+ * track. We keep a side-table keyed by model URI string. Refcounted: two
+ * MonacoEditorPanes for the same file (e.g. the same file opened in two
+ * splits) both call register, but the second pane unmounting must NOT
+ * delete the entry the first pane is still relying on. Only the last
+ * release removes the entry.
  */
-const modelContext = new Map<string, { workspacePath: string; languageId: string }>();
+interface ModelCtxEntry {
+  workspacePath: string;
+  languageId: string;
+  refcount: number;
+}
+const modelContext = new Map<string, ModelCtxEntry>();
 
 export function registerModelContext(
   model: MonacoEditor.ITextModel,
@@ -35,8 +43,21 @@ export function registerModelContext(
   languageId: string,
 ): () => void {
   const key = model.uri.toString();
-  modelContext.set(key, { workspacePath, languageId });
-  return () => { modelContext.delete(key); };
+  const existing = modelContext.get(key);
+  if (existing) {
+    existing.refcount += 1;
+  } else {
+    modelContext.set(key, { workspacePath, languageId, refcount: 1 });
+  }
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const ctx = modelContext.get(key);
+    if (!ctx) return;
+    ctx.refcount -= 1;
+    if (ctx.refcount <= 0) modelContext.delete(key);
+  };
 }
 
 /**

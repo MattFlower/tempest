@@ -3,9 +3,17 @@
 //
 // Installs the package named in a recipe via `bun add` into Tempest's
 // managed install dir, then returns the absolute path to the spawnable
-// binary in node_modules/.bin/. Concurrent installs of the same package
-// are deduped so that opening many files of one language at once doesn't
-// trigger redundant work.
+// binary in node_modules/.bin/.
+//
+// Concurrency contract:
+//   - Same recipe + same version requested twice concurrently: deduped
+//     via an inflight map. Both callers await the same install.
+//   - Different recipes (or different packages) requested concurrently:
+//     SERIALIZED via a chained-promise lock. `bun add` mutates the
+//     shared package.json + bun.lock + node_modules; running two of
+//     them in parallel in the same dir corrupts state. Manifest writes
+//     happen inside the same lock so the read-modify-write of
+//     manifest.json doesn't race either.
 //
 // We invoke `bun` via process.execPath rather than the literal string
 // "bun" because Tempest runs as a bundled .app whose PATH may not include
@@ -29,9 +37,21 @@ export interface InstallProgress {
 }
 
 export class NpmInstaller {
-  /** Concurrent-install dedupe keyed by `${package}@${version}`. */
+  /**
+   * Concurrent-install dedupe keyed by `${recipe.name}@${version}`. Two
+   * callers requesting the SAME recipe at the SAME version coalesce to
+   * one install. Across different recipes the lock below serializes
+   * them; this map just avoids duplicate work for identical requests.
+   */
   private inflight = new Map<string, Promise<void>>();
   private manifest = new ManifestStore();
+
+  /**
+   * Tail of the chain-promise lock. Each install enqueues `prev → fn`
+   * and replaces the tail. A failure in fn doesn't poison the chain
+   * because we attach a no-op .catch when extending it (see installLock).
+   */
+  private lockTail: Promise<void> = Promise.resolve();
 
   /**
    * Resolve a recipe to its installed binary path, installing on demand.
@@ -49,26 +69,21 @@ export class NpmInstaller {
     const npm = recipe.installer;
     const binaryPath = this.binaryPath(npm.binary);
 
-    // Fast path: manifest says this version is installed AND the binary
-    // is actually on disk. Both checks matter — the user could have
-    // wiped node_modules manually.
+    // Fast path (lock-free): manifest says this version is installed AND
+    // the binary is actually on disk. Both checks matter — the user
+    // could have wiped node_modules manually.
     const manifest = await this.manifest.read();
-    const installedVersion = manifest.servers[recipe.name];
-    if (installedVersion === npm.version && (await fileExists(binaryPath))) {
+    if (manifest.servers[recipe.name] === npm.version && (await fileExists(binaryPath))) {
       return { binaryPath };
     }
 
-    // Slow path: run `bun add`. Dedupe concurrent attempts on the same
-    // package — three vscode-* recipes that all install
-    // vscode-langservers-extracted should coalesce to one install.
-    const installKey = `${npm.package}@${npm.version}`;
-    let inflight = this.inflight.get(installKey);
+    // Slow path. Dedupe identical requests, serialize the rest.
+    const dedupeKey = `${recipe.name}@${npm.version}`;
+    let inflight = this.inflight.get(dedupeKey);
     if (!inflight) {
-      inflight = this.runInstall(npm, recipe.name, onProgress);
-      this.inflight.set(installKey, inflight);
-      // Use .finally to clear the cache regardless of success or failure.
-      // We don't await this — failures propagate through `await inflight` below.
-      void inflight.finally(() => this.inflight.delete(installKey));
+      inflight = this.installLock(() => this.doInstallAndCommit(recipe, onProgress));
+      this.inflight.set(dedupeKey, inflight);
+      void inflight.finally(() => this.inflight.delete(dedupeKey));
     }
     await inflight;
 
@@ -78,11 +93,62 @@ export class NpmInstaller {
           `Check that ${npm.package} actually ships ${npm.binary} as a bin entry.`,
       );
     }
-    await this.manifest.setServer(recipe.name, npm.version);
     return { binaryPath };
   }
 
-  private async runInstall(
+  /**
+   * Run `fn` after the previous lock holder finishes, and update the
+   * tail so the next caller waits on `fn`. Errors propagate to the
+   * caller via the returned promise but don't poison subsequent lock
+   * holders — the tail's `.catch(() => {})` swallows them.
+   */
+  private installLock<T>(fn: () => Promise<T>): Promise<T> {
+    const prev = this.lockTail;
+    const next = prev.then(fn);
+    // Extend the tail with a non-rejecting promise so a failed install
+    // doesn't make every future install reject as well.
+    this.lockTail = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  }
+
+  /**
+   * Inside-lock body: re-check the manifest (another caller may have
+   * just installed our package while we were queued), run `bun add` if
+   * needed, and commit the manifest entry. Manifest writes are
+   * serialized via the same lock that protects bun's package.json
+   * mutations, so concurrent calls can't lose entries.
+   */
+  private async doInstallAndCommit(
+    recipe: ServerRecipe,
+    onProgress: InstallProgress | undefined,
+  ): Promise<void> {
+    if (recipe.installer.kind !== "npm") return; // type-narrowing
+    const npm = recipe.installer;
+    const binaryPath = this.binaryPath(npm.binary);
+
+    // Re-check inside the lock. Two recipes that share an npm package
+    // (e.g. vscode-html-language-server and vscode-css-language-server
+    // both backed by vscode-langservers-extracted) take this path: the
+    // first installs the package, the second sees the package already
+    // present and skips `bun add` — but each writes its own manifest
+    // entry below.
+    const manifest = await this.manifest.read();
+    const packageReady = manifest.servers[recipe.name] === npm.version
+      && (await fileExists(binaryPath));
+    if (!packageReady) {
+      await this.runBunAdd(npm, recipe.name, onProgress);
+    }
+
+    // Commit manifest entry. Read-modify-write is safe here because
+    // we're inside the lock — no other install or manifest write can
+    // interleave between read and write.
+    await this.manifest.setServer(recipe.name, npm.version);
+  }
+
+  private async runBunAdd(
     npm: NpmInstallerSpec,
     recipeName: string,
     onProgress: InstallProgress | undefined,

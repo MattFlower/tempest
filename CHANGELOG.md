@@ -29,6 +29,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- LSP review pass — six issues from a code review:
+  - **Cancellation**: `LspServerRegistry.installAndStart` now captures a per-entry generation counter at the top and checks after every `await`. Stop/restart bumps the generation; in-flight installs that race with the bump bail before transitioning state, spawning, or notifying the server. Previously, stopping or restarting a server while its install was in flight could leak a running server process or resurrect a stopped one.
+  - **didOpen race**: `getOrSpawn` is now synchronous (the install runs in the background). `lspDidOpen` registers the doc in the per-server `DocumentStore` immediately, so `didChange` notifications during install update the canonical text rather than no-op'ing. `installAndStart` re-snapshots `entry.docs.all()` at replay time — edits made while the user was waiting on `bun add` make it to the server once it's ready.
+  - **Failed `initialize` handling**: when `proc.start()` rejects (most often because the server returns a JSON-RPC error to `initialize` while staying alive), the catch block now sets `entry.status = "error"`, records `lastError`, stops the proc, clears `entry.process`, and emits state. Previously the entry stayed stuck on `"starting"` indefinitely with no UI signal.
+  - **Multi-pane refcount**: opening the same file in two Monaco panes (e.g. via splits) now reuses one bridge keyed by URI. First attach sends `didOpen` and attaches `onDidChangeContent`; subsequent attaches just bump a refcount. Only the final release sends `didClose`. `modelContext` map likewise refcounted, so unmounting one pane doesn't strip context the other still needs. Previously, the version counters drifted across panes (server saw out-of-order versions like 5, 3, 6, 4...) and the first close killed LSP for the still-open pane.
+  - **NPM install serialization**: `NpmInstaller` now wraps its install + manifest commit in a single chained-promise lock so concurrent installs of different packages can't race on the shared `package.json` / `bun.lock` / `manifest.json`. Same-recipe inflight dedupe still applies. Previously, opening a TypeScript file and a Python file at the same time could run two `bun add` processes concurrently in the same dir, corrupting state.
+  - **Stale markers on stop**: `stopEntry` now pushes empty-diagnostics for every URI the server had open before deleting the entry. Reuses the existing `lspDiagnostics` push channel — empty array tells the webview to clear that URI's markers. Previously, disabling LSP (globally or per-repo) or stopping a server from the popover left red squiggles on the editor for documents whose owner no longer existed.
+
 ### Changed
 
 ### Removed

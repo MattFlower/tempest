@@ -129,30 +129,35 @@ export class LspRpc {
     }
   }
 
-  async didOpen(params: {
+  didOpen(params: {
     workspacePath: string;
     uri: string;
     languageId: string;
     version: number;
     text: string;
-  }): Promise<void> {
+  }): void {
     if (!this.isAllowed(params.workspacePath)) return;
-    const entry = await this.registry.getOrSpawn(params.workspacePath, params.languageId);
-    if (!entry || entry.status !== "ready" || !entry.process) {
-      // Server is installing, still initializing, or failed to start.
-      // DocumentStore still tracks the doc so a successful restart can replay it.
-      entry?.docs.open(params.uri, params.languageId, params.version, params.text);
-      return;
-    }
+    const entry = this.registry.getOrSpawn(params.workspacePath, params.languageId);
+    if (!entry) return;
+
+    // Always register the doc immediately, regardless of install/start
+    // state. The registry's installAndStart re-snapshots entry.docs at
+    // replay time, so any didChange the bridge sends while the server
+    // is still installing flows through entry.docs.update and reaches
+    // the server with the latest text once it's ready. Without this,
+    // didChange would no-op (no doc to update) and edits would be lost.
     entry.docs.open(params.uri, params.languageId, params.version, params.text);
-    entry.process.notify("textDocument/didOpen", {
-      textDocument: {
-        uri: params.uri,
-        languageId: params.languageId,
-        version: params.version,
-        text: params.text,
-      },
-    });
+
+    if (entry.status === "ready" && entry.process) {
+      entry.process.notify("textDocument/didOpen", {
+        textDocument: {
+          uri: params.uri,
+          languageId: params.languageId,
+          version: params.version,
+          text: params.text,
+        },
+      });
+    }
   }
 
   async didChange(params: {

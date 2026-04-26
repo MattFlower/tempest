@@ -7,6 +7,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import Editor, { loader, type OnMount } from "@monaco-editor/react";
 import type { editor, IDisposable } from "monaco-editor";
+import type * as MonacoNs from "monaco-editor";
 // monaco-vim is pre-built as a self-contained ESM bundle (src/vendor/monaco-vim.bundle.js)
 // that resolves monaco-editor imports from window.monaco at runtime.
 // Loaded dynamically via import() to avoid Bun's bundler pulling in monaco-editor ESM.
@@ -238,6 +239,10 @@ export function MonacoEditorPane({
   const [editorReady, setEditorReady] = useState(false);
 
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  // Monaco namespace captured at mount time. Needed by vim ex-commands
+  // that read marker state (e.g. jump to first/last diagnostic) since
+  // monaco.editor.getModelMarkers isn't reachable from the editor instance.
+  const monacoNsRef = useRef<typeof MonacoNs | null>(null);
   const currentContentRef = useRef<string>("");
   const themeRegistered = useRef(false);
   const vimModeRef = useRef<VimMode | null>(null);
@@ -362,6 +367,77 @@ export function MonacoEditorPane({
           ed.getAction("editor.action.triggerParameterHints")?.run();
         });
         Vim.map?.("gK", ":sighelp", "normal");
+
+        // LSP navigation verbs. Mirrors the conventions vim users carry
+        // over from coc.nvim / nvim-lspconfig: gd jumps to definition,
+        // gr opens the references peek, K shows hover docs (vim's
+        // built-in "lookup keyword help" mapped to LSP hover).
+        Vim.defineEx("def", "def", () => {
+          ed.getAction("editor.action.revealDefinition")?.run();
+        });
+        Vim.map?.("gd", ":def", "normal");
+
+        Vim.defineEx("refs", "refs", () => {
+          ed.getAction("editor.action.goToReferences")?.run();
+        });
+        Vim.map?.("gr", ":refs", "normal");
+
+        Vim.defineEx("hover", "hover", () => {
+          ed.getAction("editor.action.showHover")?.run();
+        });
+        Vim.map?.("K", ":hover", "normal");
+
+        // ]d / [d → next / previous diagnostic. Matches the vim
+        // unimpaired-style bracket conventions for navigating between
+        // markers.
+        Vim.defineEx("diagnext", "diagnext", () => {
+          ed.getAction("editor.action.marker.next")?.run();
+        });
+        Vim.map?.("]d", ":diagnext", "normal");
+
+        Vim.defineEx("diagprev", "diagprev", () => {
+          ed.getAction("editor.action.marker.prev")?.run();
+        });
+        Vim.map?.("[d", ":diagprev", "normal");
+
+        // [D / ]D → first / last diagnostic in the file. Monaco doesn't
+        // expose dedicated actions for these, so we read markers off the
+        // model and jump directly. Sort by line then column to get a
+        // stable document order regardless of how the server emitted
+        // them.
+        const jumpToMarker = (which: "first" | "last") => {
+          const monacoNs = monacoNsRef.current;
+          const model = ed.getModel();
+          if (!monacoNs || !model) return;
+          const markers = monacoNs.editor.getModelMarkers({ resource: model.uri });
+          if (markers.length === 0) return;
+          const sorted = [...markers].sort((a, b) =>
+            a.startLineNumber - b.startLineNumber || a.startColumn - b.startColumn,
+          );
+          const target = which === "first" ? sorted[0] : sorted[sorted.length - 1];
+          const pos = { lineNumber: target.startLineNumber, column: target.startColumn };
+          ed.setPosition(pos);
+          ed.revealPositionInCenter(pos);
+          ed.focus();
+        };
+        Vim.defineEx("diagfirst", "diagfirst", () => jumpToMarker("first"));
+        Vim.map?.("[D", ":diagfirst", "normal");
+        Vim.defineEx("diaglast", "diaglast", () => jumpToMarker("last"));
+        Vim.map?.("]D", ":diaglast", "normal");
+
+        // Leader-prefixed LSP refactors. monaco-vim's default mapleader
+        // is `\`, so out of the box these are `\cr` and `\ca`; users
+        // who remap leader (e.g. to space) get the corresponding
+        // sequences automatically.
+        Vim.defineEx("rename", "rename", () => {
+          ed.getAction("editor.action.rename")?.run();
+        });
+        Vim.map?.("<leader>cr", ":rename", "normal");
+
+        Vim.defineEx("codeaction", "codeaction", () => {
+          ed.getAction("editor.action.quickFix")?.run();
+        });
+        Vim.map?.("<leader>ca", ":codeaction", "normal");
       }
     })();
 
@@ -394,6 +470,7 @@ export function MonacoEditorPane({
 
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    monacoNsRef.current = monaco;
     setEditorReady(true);
 
     // Register dark and light themes once

@@ -8,6 +8,29 @@ import {
 import { formatKeystroke } from "../../keybindings/keystroke";
 import { useStore } from "../../state/store";
 
+// Vim-mode bindings registered by MonacoEditorPane. These aren't part of
+// the customizable keybinding system — they're hardcoded `Vim.map` /
+// `Vim.defineEx` calls, so they're surfaced here as a separate
+// reference-only section that's only visible when vim mode is enabled.
+type VimBinding = { keys: string; ex: string; description: string };
+
+const VIM_BINDINGS: VimBinding[] = [
+  { keys: ":w", ex: ":write", description: "Save file" },
+  { keys: ":q", ex: ":quit", description: "Close tab" },
+  { keys: ":wq", ex: ":wquit", description: "Save and close tab" },
+  { keys: "gd", ex: ":def", description: "Go to definition" },
+  { keys: "gr", ex: ":refs", description: "Find references" },
+  { keys: "K", ex: ":hover", description: "Show hover docs" },
+  { keys: "gO", ex: ":symbols", description: "Go to symbol in file (outline)" },
+  { keys: "gK", ex: ":sighelp", description: "Trigger signature help" },
+  { keys: "]d", ex: ":diagnext", description: "Next diagnostic" },
+  { keys: "[d", ex: ":diagprev", description: "Previous diagnostic" },
+  { keys: "]D", ex: ":diaglast", description: "Last diagnostic in file" },
+  { keys: "[D", ex: ":diagfirst", description: "First diagnostic in file" },
+  { keys: "<leader>cr", ex: ":rename", description: "Rename symbol" },
+  { keys: "<leader>ca", ex: ":codeaction", description: "Code actions / quick fix" },
+];
+
 const CATEGORY_LABEL: Record<CommandCategory, string> = {
   palette: "Command Palette",
   tabs: "Tabs",
@@ -36,6 +59,7 @@ const CATEGORY_ORDER: CommandCategory[] = [
 
 export function KeymapHelp() {
   const overrides = useStore((s) => s.config?.keybindings);
+  const vimEnabled = useStore((s) => s.config?.monacoVimMode ?? false);
   const [query, setQuery] = useState("");
 
   const grouped = useMemo(() => {
@@ -61,6 +85,20 @@ export function KeymapHelp() {
       commands: byCat.get(cat)!,
     }));
   }, [overrides, query]);
+
+  const vimMatches = useMemo(() => {
+    if (!vimEnabled) return [];
+    const q = query.trim().toLowerCase();
+    if (!q) return VIM_BINDINGS;
+    return VIM_BINDINGS.filter(
+      (b) =>
+        b.description.toLowerCase().includes(q) ||
+        b.keys.toLowerCase().includes(q) ||
+        b.ex.toLowerCase().includes(q),
+    );
+  }, [vimEnabled, query]);
+
+  const noResults = grouped.length === 0 && vimMatches.length === 0;
 
   return (
     <div
@@ -94,7 +132,7 @@ export function KeymapHelp() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
-        {grouped.length === 0 ? (
+        {noResults ? (
           <div
             className="text-center text-xs py-10"
             style={{ color: "var(--ctp-overlay0)" }}
@@ -111,10 +149,65 @@ export function KeymapHelp() {
                 overrides={overrides}
               />
             ))}
+            {vimMatches.length > 0 && <VimSection bindings={vimMatches} />}
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+function VimSection({ bindings }: { bindings: VimBinding[] }) {
+  return (
+    <section className="flex flex-col gap-1">
+      <h2
+        className="text-[10px] uppercase tracking-wider px-1 pb-1"
+        style={{ color: "var(--ctp-overlay1)" }}
+      >
+        Editor (Vim Mode)
+      </h2>
+      <div
+        className="rounded overflow-hidden"
+        style={{ backgroundColor: "var(--ctp-mantle)" }}
+      >
+        {bindings.map((b, i) => (
+          <div
+            key={b.ex}
+            className="flex items-center gap-3 px-3 py-2"
+            style={{
+              borderTop: i === 0 ? "none" : "1px solid var(--ctp-surface0)",
+            }}
+          >
+            <div
+              className="flex-1 text-sm truncate"
+              style={{ color: "var(--ctp-text)" }}
+            >
+              {b.description}
+            </div>
+            <span
+              className="px-2 py-0.5 rounded text-[11px] font-mono"
+              style={{
+                backgroundColor: "var(--ctp-surface1)",
+                color: "var(--ctp-subtext0)",
+                letterSpacing: "0.05em",
+              }}
+            >
+              {b.ex}
+            </span>
+            <span
+              className="px-2 py-0.5 rounded text-[11px] font-mono"
+              style={{
+                backgroundColor: "var(--ctp-surface0)",
+                color: "var(--ctp-text)",
+                letterSpacing: "0.15em",
+              }}
+            >
+              {b.keys}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

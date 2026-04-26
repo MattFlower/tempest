@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tempest — A macOS Developer Workspace</title>
-  <meta name="description" content="Tempest is a native macOS developer tool with integrated terminal, browser, editor, and git workflows — all in a single app.">
+  <title>Tempest — A macOS Workspace for AI-Assisted Development</title>
+  <meta name="description" content="Tempest is a native macOS workspace built for developers working with Claude, Codex, and Pi. Terminal, editor, managed LSP, browser, and git — without context-switching.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -292,6 +292,100 @@
       line-height: 1.6;
     }
 
+    /* --- Tour --- */
+    .tour {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px 100px;
+    }
+
+    .tour-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 28px;
+    }
+
+    .tour-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .tour-card:hover { border-color: var(--accent-dim); }
+
+    .tour-card img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-bottom: 1px solid var(--border);
+      cursor: zoom-in;
+    }
+
+    /* --- Lightbox --- */
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      background: rgba(5, 5, 10, 0.92);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 32px;
+      cursor: zoom-out;
+      opacity: 0;
+      transition: opacity 0.15s ease-out;
+    }
+    .lightbox.open {
+      display: flex;
+      opacity: 1;
+    }
+    .lightbox img {
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+    }
+    .lightbox-close {
+      position: absolute;
+      top: 20px;
+      right: 24px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(20, 20, 30, 0.8);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      font-size: 20px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+    .lightbox-close:hover { border-color: var(--accent-dim); }
+
+    .tour-caption {
+      padding: 18px 22px 22px;
+    }
+
+    .tour-caption h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .tour-caption p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.55;
+    }
+
     /* --- Tech --- */
     .tech {
       max-width: 1100px;
@@ -387,6 +481,7 @@
       .nav-links a:not(.nav-cta) { display: none; }
       .hero { padding-top: 100px; }
       .feature-grid { grid-template-columns: 1fr; }
+      .tour-grid { grid-template-columns: 1fr; }
       .tech-grid { grid-template-columns: 1fr 1fr; }
     }
   </style>
@@ -399,6 +494,7 @@
       <div class="nav-logo">Tempest</div>
       <div class="nav-links">
         <a href="#features">Features</a>
+        <a href="#tour">Tour</a>
         <a href="#tech">Tech</a>
         <a href="docs/">Docs</a>
         <a href="https://github.com/MattFlower/tempest" class="nav-cta">GitHub</a>
@@ -412,10 +508,11 @@
       <span class="dot"></span>
       In active development
     </div>
-    <h1>One workspace.<br>Everything you need.</h1>
+    <h1>Code with agents.<br>Without the tab sprawl.</h1>
     <p class="hero-sub">
-      Tempest is a native macOS developer tool with an integrated terminal, browser,
-      editor, and git workflows &mdash; all in a single, fast app.
+      Tempest is a native macOS workspace built for developers working alongside AI coding
+      agents. Claude, Codex, and Pi run as first-class tabs next to your terminal, editor,
+      managed LSP, browser, and Git/Jujutsu tools &mdash; all in one fast app.
     </p>
     <div class="hero-actions">
       <a href="https://github.com/MattFlower/tempest" class="btn-primary">
@@ -427,7 +524,7 @@
 
     <div class="screenshot-wrapper">
       <div class="screenshot">
-        <img src="static/terminal-screen.webp" alt="Image of the main Tempest page">
+        <img src="static/hero-workspace.webp" alt="Tempest workspace: Monaco editor with LSP diagnostics, a Claude Code tab streaming a response, and the Workspaces sidebar showing per-workspace activity dots.">
       </div>
     </div>
   </section>
@@ -437,34 +534,40 @@
     <p class="section-label">Features</p>
     <h2 class="section-title">Everything in one window</h2>
     <p class="section-sub">
-      Stop switching between apps. Tempest brings your terminal, browser, editor,
-      and git tools together in a single native workspace.
+      Tempest brings your AI coding agents, terminal, editor, browser, and version
+      control into a single native workspace &mdash; with the integration plumbing already
+      done for you.
     </p>
     <div class="feature-grid">
       <div class="feature-card">
+        <div class="feature-icon">&#9881;</div>
+        <h3>Three coding agents, one window</h3>
+        <p>Claude Code, OpenAI Codex, and Pi all run as native tabs. Tempest auto-resumes each agent's prior session on restart, and per-workspace dots tell you whether the agent is working, waiting on input, or idle.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#9854;</div>
+        <h3>Chat history viewer</h3>
+        <p>List, full-text search, and view past sessions across Claude, Codex, and Pi. "Resume in new tab" relaunches any session in place &mdash; no copying conversation IDs around.</p>
+      </div>
+      <div class="feature-card">
         <div class="feature-icon">&#9000;</div>
         <h3>Terminal</h3>
-        <p>xterm.js with WebGL rendering and a real PTY backend via Bun.Terminal. Fast, native-feeling, with full color and Unicode support.</p>
+        <p>xterm.js with WebGL rendering and a real PTY backend via Bun.Terminal. Fast, full color, full Unicode. Cmd+click any URL to open it in a Browser pane next to the terminal.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#9998;</div>
+        <h3>Editor with managed LSP</h3>
+        <p>Monaco with Vim bindings, plus auto-installed language servers for 14+ languages (TypeScript, Python, Rust, Go, C/C++, Java, and more). Hover, definitions, refs, rename, completions, code actions &mdash; out of the box.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#9741;</div>
         <h3>Browser</h3>
-        <p>Tabbed browsing powered by the system WKWebView. Browse docs, preview your work, and manage bookmarks without leaving the workspace.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">&#9998;</div>
-        <h3>Editor</h3>
-        <p>Monaco editor with Vim bindings. Syntax highlighting, code intelligence, and the editing experience you already know.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">&#8801;</div>
-        <h3>Markdown viewer</h3>
-        <p>Live-rendered markdown with Mermaid diagram support. Great for docs, READMEs, Claude Plans, and design notes.</p>
+        <p>Tabbed browsing powered by the system WKWebView. Read docs, preview your work, and zoom inside the page without leaving the workspace.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#10562;</div>
         <h3>Git &amp; Jujutsu integration</h3>
-        <p>Built-in diff viewer, VCS status, and file staging for both Git and Jujutsu. See what changed and commit without switching to a separate tool.</p>
+        <p>Diff viewer, status, staging, and a full Pull / Push / Merge / Rebase toolbar that works in both Git and Jujutsu repos. AI Context shows which agent edited each file.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#10003;</div>
@@ -472,29 +575,109 @@
         <p>Track and review pull requests directly in your workspace. Stay on top of reviews without context-switching to the browser.</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon">&#8634;</div>
-        <h3>Session management</h3>
-        <p>Workspace persistence, session state restore, and terminal scrollback capture. Close and reopen exactly where you left off.</p>
-      </div>
-      <div class="feature-card">
         <div class="feature-icon">&#9707;</div>
         <h3>Workspaces</h3>
-        <p>Create, archive, and switch between workspaces, each with their own terminals, browser tabs, and sessions. Activity indicators show whether each workspace is idle, working, or waiting for input.</p>
+        <p>One workspace per task &mdash; each with its own terminals, browser tabs, agents, and sessions. Create, archive, and switch with full state restore, including terminal scrollback.</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon">&#9993;</div>
-        <h3>Ask Claude</h3>
-        <p>Highlight text in VCS View and send it to Claude Code with context automatically included. Spec-driven development made interactive.</p>
+        <div class="feature-icon">&#128269;</div>
+        <h3>Find in Files</h3>
+        <p>Cmd+Shift+F opens a ripgrep-backed search across the workspace, with regex and case toggles. Enter jumps straight to the match in the editor or markdown viewer.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#9654;</div>
-        <h3>Custom scripts</h3>
-        <p>Define parameterized scripts and run them with a button click. Automate repetitive tasks without leaving the workspace.</p>
+        <h3>Run pane &amp; scripts</h3>
+        <p>Dockable bottom pane for long-running scripts &mdash; auto-detected from package.json and pom.xml, or fully custom. Each script runs in a PTY-backed tab and survives workspace switches.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#8801;</div>
+        <h3>Markdown &amp; Mermaid</h3>
+        <p>Live-rendered Markdown with Mermaid diagrams and Cmd+F find-in-page. Tempest's MCP tools also let agents render markdown, mermaid, and full HTML pages directly into a side pane.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#8984;</div>
-        <h3>Command palette</h3>
-        <p>Quick access to commands and files with Cmd+Shift+P and Cmd+P. Open results in the current pane or use arrow keys to target left or right.</p>
+        <h3>Palette &amp; keybindings</h3>
+        <p>Cmd+Shift+P for commands, Cmd+P for files, arrow keys to target left or right pane. Every shortcut is reassignable from Settings, including chord sequences like ⌘K ⌘S.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128241;</div>
+        <h3>Remote control</h3>
+        <p>Optional HTTP server with bearer-token auth, a web dashboard, and a QR code for easy mobile pairing &mdash; check status or trigger commands from your phone.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tour -->
+  <section class="tour" id="tour">
+    <p class="section-label">Tour</p>
+    <h2 class="section-title">A look around</h2>
+    <p class="section-sub">
+      Highlights from the workspace &mdash; agents, LSP, history, version control,
+      search, and more.
+    </p>
+    <div class="tour-grid">
+      <div class="tour-card">
+        <img src="static/agents-three-up.webp" alt="Three coding agents — Claude, Codex, and Pi — running side by side in Tempest tabs, each mid-conversation, with activity dots in different states.">
+        <div class="tour-caption">
+          <h3>Three coding agents, one window</h3>
+          <p>Claude, Codex, and Pi as native tabs. Activity dots tell you which agent is working, idle, or waiting for input.</p>
+        </div>
+      </div>
+      <div class="tour-card">
+        <img src="static/history-viewer.webp" alt="Tempest's chat history viewer with provider toggle, search input, filtered session list, and an expanded session showing tool calls.">
+        <div class="tour-caption">
+          <h3>Chat history viewer</h3>
+          <p>Search every past Claude / Codex / Pi session with ripgrep. "Resume in new tab" relaunches any session in place.</p>
+        </div>
+      </div>
+      <div class="tour-card">
+        <img src="static/lsp-popover.webp" alt="Monaco editor showing an LSP hover popup, with the footer LSP popover open listing running language servers grouped by workspace.">
+        <div class="tour-caption">
+          <h3>Managed language servers</h3>
+          <p>Auto-installed LSP for 14+ languages, with hover, definitions, refs, rename, and code actions. The footer shows live server status.</p>
+        </div>
+      </div>
+      <div class="tour-card">
+        <img src="static/vcs-toolbar.webp" alt="Tempest's VCS view showing the Pull / Push / Merge / Rebase toolbar, a branch picker dropdown, and a file diff with an AI Context chip.">
+        <div class="tour-caption">
+          <h3>Git &amp; Jujutsu, with AI Context</h3>
+          <p>Pull / Push / Merge / Rebase toolbar over a unified diff view. AI Context shows which agent edited each file.</p>
+        </div>
+      </div>
+      <div class="tour-card">
+        <img src="static/find-in-files.webp" alt="Find in Files modal centered over the workspace, showing a regex query, several matched lines with bolded spans, and Enter-to-jump hint.">
+        <div class="tour-caption">
+          <h3>Find in Files</h3>
+          <p>Cmd+Shift+F opens a ripgrep-backed search with regex and case toggles. Enter jumps straight to the match.</p>
+        </div>
+      </div>
+      <div class="tour-card">
+        <img src="static/run-page.webp" alt="Dockable bottom Run pane with multiple script tabs running in parallel, each with Restart and Stop controls.">
+        <div class="tour-caption">
+          <h3>Run pane for long scripts</h3>
+          <p>Dockable bottom pane. Each script lives in a PTY-backed tab and survives workspace switches.</p>
+        </div>
+      </div>
+      <div class="tour-card">
+        <img src="static/markdown-mermaid.webp" alt="Markdown viewer rendering a design doc with a Mermaid sequence diagram next to a Claude Code conversation.">
+        <div class="tour-caption">
+          <h3>Markdown &amp; Mermaid</h3>
+          <p>Live-rendered Markdown with Mermaid diagrams. Agents can also render visuals into a side pane via Tempest's MCP tools.</p>
+        </div>
+      </div>
+      <div class="tour-card">
+        <img src="static/terminal-browser-split.webp" alt="Terminal pane on the left with a URL in its output, opened as a Browser pane on the right via Cmd+click.">
+        <div class="tour-caption">
+          <h3>Terminal &times; browser</h3>
+          <p>Cmd+click any URL in a terminal to open it in a Browser pane next to the shell &mdash; no app-switching.</p>
+        </div>
+      </div>
+      <div class="tour-card">
+        <img src="static/keybindings-editor.webp" alt="Settings → Keybindings dialog with a search filter, a binding being captured as a chord, and a conflict warning.">
+        <div class="tour-caption">
+          <h3>Reassignable keybindings</h3>
+          <p>Every shortcut is reassignable, including chord sequences like ⌘K ⌘S. Conflicts are caught before you save.</p>
+        </div>
       </div>
     </div>
   </section>
@@ -504,8 +687,9 @@
     <p class="section-label">Under the hood</p>
     <h2 class="section-title">Built on solid foundations</h2>
     <p class="section-sub">
-      Two-process architecture: a Bun backend for performance-critical work and a
-      React webview for the UI, communicating via typed RPC.
+      Two-process architecture: a Bun backend for performance-critical work &mdash; PTYs,
+      LSP, file I/O, git, agent hooks &mdash; and a React webview for the UI, communicating
+      over a typed RPC bridge.
     </p>
     <div class="tech-grid">
       <div class="tech-item">
@@ -529,16 +713,24 @@
         <p>Terminal emulation</p>
       </div>
       <div class="tech-item">
+        <p class="mono">Monaco + LSP</p>
+        <p>Editor &amp; language servers</p>
+      </div>
+      <div class="tech-item">
         <p class="mono">Zustand</p>
         <p>State management</p>
       </div>
       <div class="tech-item">
-        <p class="mono">Monaco</p>
-        <p>Code editor</p>
-      </div>
-      <div class="tech-item">
         <p class="mono">WKWebView</p>
         <p>Native browser engine</p>
+      </div>
+      <div class="tech-item">
+        <p class="mono">ripgrep</p>
+        <p>Find in Files / history search</p>
+      </div>
+      <div class="tech-item">
+        <p class="mono">Mermaid</p>
+        <p>Inline diagram rendering</p>
       </div>
     </div>
   </section>
@@ -559,6 +751,51 @@
   <footer>
     <p>&copy; 2026 Tempest. Built with <a href="https://electrobun.dev/">Electrobun</a>.</p>
   </footer>
+
+  <!-- Lightbox -->
+  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-hidden="true">
+    <button class="lightbox-close" type="button" aria-label="Close">&times;</button>
+    <img alt="">
+  </div>
+
+  <script>
+    (function () {
+      var lightbox = document.getElementById('lightbox');
+      var lightboxImg = lightbox.querySelector('img');
+      var closeBtn = lightbox.querySelector('.lightbox-close');
+
+      function open(src, alt) {
+        lightboxImg.src = src;
+        lightboxImg.alt = alt || '';
+        lightbox.classList.add('open');
+        lightbox.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function close() {
+        lightbox.classList.remove('open');
+        lightbox.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+        // Defer src clear so the fade-out doesn't flicker.
+        setTimeout(function () {
+          if (!lightbox.classList.contains('open')) lightboxImg.src = '';
+        }, 200);
+      }
+
+      document.querySelectorAll('.tour-card img').forEach(function (img) {
+        img.addEventListener('click', function () {
+          open(img.currentSrc || img.src, img.alt);
+        });
+      });
+
+      // Close on any click inside the lightbox — backdrop, image, or close button.
+      lightbox.addEventListener('click', close);
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && lightbox.classList.contains('open')) close();
+      });
+    })();
+  </script>
 
 </body>
 </html>

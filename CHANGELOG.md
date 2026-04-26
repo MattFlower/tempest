@@ -65,6 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Settings dialog widened from 520px to 676px (+30%) so the full tab row, including the rightmost "Keybindings" tab, fits without clipping.
+
 ### Removed
 
 ## [0.19.0] - 2026-04-24

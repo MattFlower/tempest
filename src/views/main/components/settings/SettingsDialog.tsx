@@ -247,7 +247,7 @@ export function SettingsDialog() {
         style={{
           backgroundColor: "var(--ctp-base)",
           border: "1px solid var(--ctp-surface0)",
-          width: 520,
+          width: 676,
           maxHeight: "85vh",
         }}
         onClick={(e) => e.stopPropagation()}

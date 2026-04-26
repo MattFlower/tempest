@@ -148,6 +148,13 @@ export const COMMANDS: Command[] = [
     defaultKeybinding: "cmd+shift+f",
     run: () => useStore.getState().toggleFindInFiles(),
   },
+  {
+    id: "palette.recent-files",
+    label: "Open Recent File",
+    category: "palette",
+    defaultKeybinding: "cmd+e",
+    run: () => useStore.getState().toggleRecentFilesPalette(),
+  },
 
   // Tabs
   {

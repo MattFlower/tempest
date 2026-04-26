@@ -81,6 +81,11 @@ export function addTab(paneId: string, tab: PaneTab) {
   }));
   commitTree(ctx.workspacePath, newTree);
   useStore.getState().setFocusedPaneId(paneId);
+
+  const filePath = tab.editorFilePath ?? tab.markdownFilePath;
+  if (filePath) {
+    api.notifyFileOpened(ctx.workspacePath, filePath).catch(() => {});
+  }
 }
 
 export function closeTab(paneId: string, tabId: string) {
@@ -658,6 +663,7 @@ export function openFileInSplit(
     s.setFocusedPaneId(newPane.id);
     s.setMaximizedPaneId(null);
     api.notifyPaneTreeChanged(workspacePath, toNodeState(newTree));
+    api.notifyFileOpened(workspacePath, filePath).catch(() => {});
     return true;
   };
 

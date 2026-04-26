@@ -3,6 +3,7 @@ import { useStore } from "./state/store";
 import { Sidebar } from "./components/sidebar/Sidebar";
 import { ActivityBar } from "./components/sidebar/ActivityBar";
 import { CommandPalette } from "./components/palette/CommandPalette";
+import { RecentFilesPalette } from "./components/palette/RecentFilesPalette";
 import { CreateClaudeSettingsDialog } from "./components/palette/CreateClaudeSettingsDialog";
 import { FindInFiles } from "./components/find-in-files/FindInFiles";
 import { WorkspaceDetail } from "./components/layout";
@@ -328,6 +329,9 @@ export function App() {
 
       {/* Command Palette overlay */}
       <CommandPalette />
+
+      {/* Recent Files overlay */}
+      <RecentFilesPalette />
 
       {/* Find in Files overlay */}
       <FindInFiles />

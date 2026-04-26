@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Recent Files selector: a new palette (default `Cmd+E`, command `Open Recent File`) for reopening files you've recently *closed* in the current workspace. Files currently open in any pane are filtered out — the list reactively repopulates when you close a tab. Supports fuzzy filtering, arrow-key navigation, and `←` / `→` to open in a split pane. Recents are tracked per-workspace at the `addTab` chokepoint (so palette, file tree, find-in-files, go-to-definition, etc. all feed the list), capped at 50, and persisted to `session-state.json`. Component at `src/views/main/components/palette/RecentFilesPalette.tsx`; results preserve recency order rather than re-sorting by fuzzy score.
+
 ### Fixed
 
 ### Changed

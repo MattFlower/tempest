@@ -11,6 +11,7 @@ import { PaneTabKind } from "../shared/ipc-types";
 import { TEMPEST_DIR } from "./config/paths";
 
 const CURRENT_VERSION = 1;
+const RECENT_FILES_LIMIT = 50;
 
 export class SessionStateManager {
   private readonly stateFilePath: string;
@@ -44,6 +45,22 @@ export class SessionStateManager {
           delete state.workspaces[wsPath];
           cleaned = true;
         }
+      }
+
+      // Migrate legacy `recentFiles` from inside WorkspacePaneState to the
+      // top-level map. Older builds nested it; new builds keep it separate so
+      // savePaneState can't clobber it. Safe to remove this branch later.
+      const recentMap = state.recentFilesByWorkspace ?? {};
+      for (const [wsPath, ws] of Object.entries(state.workspaces)) {
+        const legacy = (ws as { recentFiles?: string[] }).recentFiles;
+        if (legacy && legacy.length > 0 && !recentMap[wsPath]) {
+          recentMap[wsPath] = legacy;
+          cleaned = true;
+        }
+        delete (ws as { recentFiles?: string[] }).recentFiles;
+      }
+      if (Object.keys(recentMap).length > 0) {
+        state.recentFilesByWorkspace = recentMap;
       }
 
       // Clear selected workspace if its directory is gone
@@ -97,6 +114,21 @@ export class SessionStateManager {
 
   getPRState(workspacePath: string): OpenPRState | null {
     return this.state?.workspaces[workspacePath]?.prState ?? null;
+  }
+
+  recordRecentFile(workspacePath: string, filePath: string): void {
+    if (!filePath) return;
+    this.ensureState();
+    const map = this.state!.recentFilesByWorkspace ?? {};
+    const previous = map[workspacePath] ?? [];
+    const next = [filePath, ...previous.filter((p) => p !== filePath)].slice(0, RECENT_FILES_LIMIT);
+    map[workspacePath] = next;
+    this.state!.recentFilesByWorkspace = map;
+    this.dirty = true;
+  }
+
+  getRecentFiles(workspacePath: string): string[] {
+    return this.state?.recentFilesByWorkspace?.[workspacePath] ?? [];
   }
 
   getPaneState(workspacePath: string): PaneNodeState | null {

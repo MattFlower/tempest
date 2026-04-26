@@ -344,6 +344,14 @@ export interface BunRequests {
     params: { workspacePath: string };
     response: string[];
   };
+  getRecentFiles: {
+    params: { workspacePath: string };
+    response: string[];
+  };
+  notifyFileOpened: {
+    params: { workspacePath: string; filePath: string };
+    response: void;
+  };
   browsePath: {
     params: { query: string; workspacePath: string };
     response: {

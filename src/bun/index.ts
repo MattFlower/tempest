@@ -868,6 +868,14 @@ const rpc: any = (BrowserView.defineRPC as any)({
       listFiles: async (params: any) => {
         return listFilesInDir((params as { workspacePath: string }).workspacePath);
       },
+      getRecentFiles: (params: any) => {
+        const { workspacePath } = params as { workspacePath: string };
+        return sessionStateManager.getRecentFiles(workspacePath);
+      },
+      notifyFileOpened: (params: any) => {
+        const { workspacePath, filePath } = params as { workspacePath: string; filePath: string };
+        sessionStateManager.recordRecentFile(workspacePath, filePath);
+      },
       browsePath: async (params: any) => {
         const { query, workspacePath } = params as { query: string; workspacePath: string };
         return browsePath(query, workspacePath);

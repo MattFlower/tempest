@@ -752,6 +752,10 @@ export const api = {
   // Files
   listFiles: (workspacePath: string) =>
     rpcRequest.listFiles({ workspacePath }),
+  getRecentFiles: (workspacePath: string) =>
+    rpcRequest.getRecentFiles({ workspacePath }),
+  notifyFileOpened: (workspacePath: string, filePath: string) =>
+    rpcRequest.notifyFileOpened({ workspacePath, filePath }),
   browsePath: (query: string, workspacePath: string) =>
     rpcRequest.browsePath({ query, workspacePath }),
   findInFiles: (params: {

@@ -283,6 +283,11 @@ export interface SessionState {
   workspaces: Record<string, WorkspacePaneState>;
   collapsedRepoIds?: string[];
   fileTree?: FileTreeSessionState;
+  /** MRU file paths opened as editor / markdown tabs, keyed by workspace path.
+   *  Index 0 is the most recently opened. Lives outside `workspaces` so it
+   *  isn't clobbered by `savePaneState`, and so it can be recorded even if
+   *  the pane-tree write hasn't landed yet. */
+  recentFilesByWorkspace?: Record<string, string[]>;
 }
 
 export interface WorkspacePaneState {

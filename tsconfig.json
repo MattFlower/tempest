@@ -25,5 +25,21 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
-  }
+  },
+  // Keep tsserver's project under its 20 MB non-TS-file budget. Without
+  // this, the bundled output in `build/` (a 14 MB bun/index.js plus several
+  // multi-MB Monaco workers) blows the limit and tsserver disables the
+  // language service for the whole project — breaking rename, find-references,
+  // and any other semantic operation that crosses files. (Hover and
+  // document-symbols use lighter paths that work even with the language
+  // service disabled, which is why those features kept working.)
+  //
+  // node_modules is excluded by tsserver's defaults; we list it here for
+  // explicitness alongside the build outputs.
+  "exclude": [
+    "build",
+    "dist",
+    ".log",
+    "node_modules"
+  ]
 }

@@ -1476,6 +1476,11 @@ const rpc: any = (BrowserView.defineRPC as any)({
       lspDidClose: (params: any) => { lspRpc.didClose(params); },
       lspHover: (params: any) => lspRpc.hover(params),
       lspDefinition: (params: any) => lspRpc.definition(params),
+      lspCompletion: (params: any) => lspRpc.completion(params),
+      lspReferences: (params: any) => lspRpc.references(params),
+      lspDocumentSymbols: (params: any) => lspRpc.documentSymbols(params),
+      lspPrepareRename: (params: any) => lspRpc.prepareRename(params),
+      lspRename: (params: any) => lspRpc.rename(params),
     },
     messages: {
       // --- Terminal I/O (Stream A) ---

@@ -16,6 +16,10 @@ coverage
 logs
 _.log
 report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+# tsserver writes logs into <cwd>/.log/tsserver-log-*/ when verbose
+# logging is enabled (off by default in our LSP server-process config;
+# flipped on ad-hoc when debugging).
+.log
 
 # dotenv environment variable files
 .env

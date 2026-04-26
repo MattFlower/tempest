@@ -132,6 +132,50 @@ export class LspServerProcess {
       workspaceFolders: [
         { uri: this.config.rootUri, name: this.config.workspaceFolderName },
       ],
+      // typescript-language-server tunes some behaviour based on hostInfo
+      // — without it, certain semantic operations (rename in particular)
+      // can fail with "No Project" because tsserver doesn't fully open the
+      // project. Other LSP servers ignore this field, so it's safe to
+      // always pass.
+      //
+      // tsserver runs as two separate processes: a "syntax server" for
+      // lightweight ops (hover, syntactic diagnostics, document symbols)
+      // and a "semantic server" for ops that need full project info
+      // (rename, references, find-implementations). With useSyntaxServer
+      // set to "auto" (the default), typescript-language-server tries to
+      // route requests to the lighter server when possible — but we've
+      // observed it failing to bring up the semantic server for rename
+      // and references, throwing "No Project" because the semantic
+      // server doesn't have our file open. Forcing "never" routes every
+      // request through the semantic server, which always has the
+      // project loaded after initialize + didOpen. Costs a bit more RAM
+      // and slows the first hover by a fraction; both negligible in
+      // exchange for reliable rename / find-references.
+      initializationOptions: {
+        hostInfo: "tempest",
+        // Type-acquisition spawns a separate downloader process that
+        // races with project loading and has been seen to leave
+        // tsserver in a state where the file is open but no project
+        // is associated. Disabling it is safe because we already have
+        // the project's own typescript installed.
+        disableAutomaticTypingAcquisition: true,
+        tsserver: {
+          useSyntaxServer: "never",
+          // No logVerbosity here — tsserver only writes its multi-MB
+          // log file when verbose logging is on. The popover already
+          // shows window/logMessage notifications which is enough
+          // signal for routine debugging; flip this to "verbose"
+          // ad-hoc when investigating a specific issue.
+        },
+        preferences: {
+          providePrefixAndSuffixTextForRename: true,
+          allowRenameOfImportPath: true,
+          includeCompletionsForModuleExports: true,
+          includeCompletionsWithInsertText: true,
+          includeAutomaticOptionalChainCompletions: true,
+          includeCompletionsWithSnippetText: true,
+        },
+      },
     };
 
     const initResult = (await this.request("initialize", initParams)) as {
@@ -326,9 +370,21 @@ export class LspServerProcess {
 }
 
 /**
- * Client capabilities sent in `initialize`. We only advertise the features
- * we actually consume in phase 1 — adding a feature later is just adding
- * its capability bit and the corresponding provider on the webview side.
+ * Client capabilities sent in `initialize`.
+ *
+ * Beyond declaring what features we consume, advertising the right
+ * capabilities affects the SHAPE of server responses:
+ *   - `documentSymbol.hierarchicalDocumentSymbolSupport: true` makes
+ *     servers return the modern `DocumentSymbol[]` tree instead of the
+ *     legacy flat `SymbolInformation[]` (which our normalizer drops).
+ *   - `rename.prepareSupport: true` enables servers (notably tsserver)
+ *     to validate the rename target before responding.
+ *   - `completion.completionItem.snippetSupport: true` lets servers
+ *     return `$1` / `$2` placeholders we'll translate to Monaco snippets.
+ *
+ * We don't advertise capabilities for features we haven't built (code
+ * actions, signature help, semantic tokens, etc.) — that prevents
+ * servers from sending data we'd just discard.
  */
 function clientCapabilities(): Record<string, unknown> {
   return {
@@ -351,10 +407,58 @@ function clientCapabilities(): Record<string, unknown> {
         relatedInformation: true,
         versionSupport: false,
       },
+      completion: {
+        dynamicRegistration: false,
+        contextSupport: true,
+        completionItem: {
+          snippetSupport: true,
+          commitCharactersSupport: false,
+          documentationFormat: ["markdown", "plaintext"],
+          deprecatedSupport: true,
+          insertReplaceSupport: false,
+          resolveSupport: { properties: ["documentation", "detail"] },
+          insertTextModeSupport: { valueSet: [1] },
+        },
+      },
+      references: {
+        dynamicRegistration: false,
+      },
+      documentSymbol: {
+        dynamicRegistration: false,
+        // The big one: opt into the hierarchical DocumentSymbol shape so
+        // tsserver / pyright / etc. don't fall back to the flat
+        // SymbolInformation result, which has a `location` field instead
+        // of `range` + `selectionRange` and gets rejected by our
+        // normalizer.
+        hierarchicalDocumentSymbolSupport: true,
+        symbolKind: {
+          valueSet: [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
+            14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
+          ],
+        },
+      },
+      rename: {
+        dynamicRegistration: false,
+        prepareSupport: true,
+        // PrepareSupportDefaultBehavior: Identifier = 1.
+        // Tells the server: "if you don't have a custom prepareRename
+        // implementation, fall back to using the identifier under the
+        // cursor as the rename range."
+        prepareSupportDefaultBehavior: 1,
+        honorsChangeAnnotations: false,
+      },
     },
     workspace: {
       workspaceFolders: true,
       configuration: false,
+      // Some servers gate semantic operations on workspace edit support
+      // — without this, tsserver's rename can refuse to compute edits.
+      workspaceEdit: {
+        documentChanges: true,
+        resourceOperations: ["create", "rename", "delete"],
+        failureHandling: "abort",
+      },
     },
   };
 }

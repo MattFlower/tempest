@@ -1035,4 +1035,40 @@ export const api = {
     line: number;
     character: number;
   }) => rpcRequest.lspDefinition(params),
+  lspCompletion: (params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    line: number;
+    character: number;
+    triggerCharacter?: string;
+  }) => rpcRequest.lspCompletion(params),
+  lspReferences: (params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    line: number;
+    character: number;
+    includeDeclaration: boolean;
+  }) => rpcRequest.lspReferences(params),
+  lspDocumentSymbols: (params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+  }) => rpcRequest.lspDocumentSymbols(params),
+  lspPrepareRename: (params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    line: number;
+    character: number;
+  }) => rpcRequest.lspPrepareRename(params),
+  lspRename: (params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    line: number;
+    character: number;
+    newName: string;
+  }) => rpcRequest.lspRename(params),
 };

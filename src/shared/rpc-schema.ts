@@ -47,11 +47,15 @@ import type {
   PRDraftSummary,
   PRDetailInfo,
   WorkspaceProgressInfo,
+  LspCompletionList,
   LspDiagnostic,
+  LspDocumentSymbol,
   LspHoverResult,
   LspLocation,
   LspMemorySample,
+  LspPrepareRenameResult,
   LspServerState,
+  LspWorkspaceEdit,
 } from "./ipc-types";
 
 // --- Bun-side handlers (Webview calls these) ---
@@ -839,6 +843,62 @@ export interface BunRequests {
       character: number;
     };
     response: { locations: LspLocation[] };
+  };
+  lspCompletion: {
+    params: {
+      workspacePath: string;
+      uri: string;
+      languageId: string;
+      line: number;
+      character: number;
+      /** Trigger character that fired the completion (`.`, `:`, ...) or
+       *  null/undefined when triggered by typing or invocation. */
+      triggerCharacter?: string;
+    };
+    response: { result: LspCompletionList | null };
+  };
+  lspReferences: {
+    params: {
+      workspacePath: string;
+      uri: string;
+      languageId: string;
+      line: number;
+      character: number;
+      /** Whether to include the symbol's own declaration in results.
+       *  Monaco's "Find All References" includes it; "Go to References"
+       *  typically does too. */
+      includeDeclaration: boolean;
+    };
+    response: { locations: LspLocation[] };
+  };
+  lspDocumentSymbols: {
+    params: {
+      workspacePath: string;
+      uri: string;
+      languageId: string;
+    };
+    response: { symbols: LspDocumentSymbol[] };
+  };
+  lspPrepareRename: {
+    params: {
+      workspacePath: string;
+      uri: string;
+      languageId: string;
+      line: number;
+      character: number;
+    };
+    response: { result: LspPrepareRenameResult | null };
+  };
+  lspRename: {
+    params: {
+      workspacePath: string;
+      uri: string;
+      languageId: string;
+      line: number;
+      character: number;
+      newName: string;
+    };
+    response: { edit: LspWorkspaceEdit | null };
   };
 }
 

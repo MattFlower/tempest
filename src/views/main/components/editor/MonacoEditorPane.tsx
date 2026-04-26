@@ -11,7 +11,15 @@ import type { editor, IDisposable } from "monaco-editor";
 // that resolves monaco-editor imports from window.monaco at runtime.
 // Loaded dynamically via import() to avoid Bun's bundler pulling in monaco-editor ESM.
 type VimMode = { dispose(): void };
-type VimApi = { Vim: { defineEx: (name: string, shortName: string, fn: (...args: any[]) => void) => void } };
+type VimApi = {
+  Vim: {
+    defineEx: (name: string, shortName: string, fn: (...args: any[]) => void) => void;
+    /** Map a key sequence to an ex-command or another key sequence. The
+     *  ctx string scopes the binding to a vim mode: 'normal', 'insert',
+     *  'visual', etc. */
+    map?: (lhs: string, rhs: string, ctx?: string) => void;
+  };
+};
 let initVimModeFn: ((ed: editor.IStandaloneCodeEditor, statusBar?: HTMLElement) => VimMode) | null = null;
 let vimApi: VimApi | null = null;
 
@@ -64,18 +72,21 @@ loader.init().then((monaco) => {
   for (const defaults of [ts.typescriptDefaults, ts.javascriptDefaults]) {
     defaults.setDiagnosticsOptions({ noSemanticValidation: true });
     defaults.setModeConfiguration({
-      // Keep the providers we don't yet implement via LSP; otherwise the
-      // editor would lose features (like signature help / completions) that
-      // Monaco's bundled service still provides usefully.
-      completionItems: true,
+      // Keep providers we still don't implement via LSP (signature help,
+      // formatting, code actions, inlay hints, document highlights).
+      // Monaco's bundled versions are project-blind but better than
+      // nothing — Phase 4 candidates.
       signatureHelp: true,
       onTypeFormattingEdits: true,
       documentRangeFormattingEdits: true,
       codeActions: true,
       inlayHints: true,
       documentHighlights: true,
-      // Disable the providers our LSP serves — these would otherwise produce
-      // duplicate hovers and "Definitions (2)" peek views.
+      // Disable the providers our LSP serves — these would otherwise
+      // produce duplicate hovers, "Definitions (2)" peek views, and
+      // a stack of project-blind completions ranked alongside the real
+      // ones from typescript-language-server.
+      completionItems: false,
       hovers: false,
       definitions: false,
       references: false,
@@ -91,13 +102,13 @@ loader.init().then((monaco) => {
   // monaco.languages.{json,html,css}.* with similar API shape, so we
   // reuse the same disable list.
   const disabledModeConfig = {
-    completionItems: true,
     signatureHelp: true,
     onTypeFormattingEdits: true,
     documentRangeFormattingEdits: true,
     codeActions: true,
     inlayHints: true,
     documentHighlights: true,
+    completionItems: false,
     hovers: false,
     definitions: false,
     references: false,
@@ -133,7 +144,11 @@ loader.init().then((monaco) => {
   // path the existing Cmd+click-on-import handler uses.
   try {
     monaco.editor.registerEditorOpener({
-      openCodeEditor: async (_source, resource, selectionOrPosition) => {
+      openCodeEditor: async (
+        _source: editor.ICodeEditor,
+        resource: { scheme: string; path: string; toString(): string },
+        selectionOrPosition?: { lineNumber?: number; startLineNumber?: number },
+      ) => {
         if (resource.scheme !== "file") return false;
 
         // Same-document navigation: let Monaco handle it (it'll just move
@@ -328,6 +343,16 @@ export function MonacoEditorPane({
         Vim.defineEx("wquit", "wq", () => {
           handleSaveRef.current().then(() => onCloseRef.current?.());
         });
+
+        // gO in normal mode → quick outline (symbol picker for the
+        // current file). Cmd+Shift+O is the conventional Monaco binding
+        // but conflicts with a Tempest-level shortcut, so vim users get
+        // an alternative through the gO mnemonic (matches Helix's
+        // jump-to-symbol binding).
+        Vim.defineEx("symbols", "symbols", () => {
+          ed.getAction("editor.action.quickOutline")?.run();
+        });
+        Vim.map?.("gO", ":symbols", "normal");
       }
     })();
 

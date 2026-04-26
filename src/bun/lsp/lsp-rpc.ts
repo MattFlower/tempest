@@ -14,11 +14,17 @@
 // ============================================================
 
 import type {
+  LspCompletionItem,
+  LspCompletionList,
   LspDiagnostic,
+  LspDocumentSymbol,
   LspHoverResult,
   LspLocation,
   LspMemorySample,
+  LspPrepareRenameResult,
+  LspRange,
   LspServerState,
+  LspWorkspaceEdit,
   RepoSettings,
 } from "../../shared/ipc-types";
 import { LspServerRegistry } from "./server-registry";
@@ -243,6 +249,268 @@ export class LspRpc {
       return { locations: [] };
     }
   }
+
+  async completion(params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    line: number;
+    character: number;
+    triggerCharacter?: string;
+  }): Promise<{ result: LspCompletionList | null }> {
+    if (!this.isAllowed(params.workspacePath)) return { result: null };
+    const entry = this.registry.find(params.workspacePath, params.languageId);
+    if (!entry || entry.status !== "ready" || !entry.process) return { result: null };
+
+    try {
+      // textDocument/completion accepts an optional CompletionContext that
+      // tells the server how the request was triggered (manual vs from a
+      // trigger character). Some servers (e.g. tsserver via
+      // typescript-language-server) tune their result list based on this.
+      const reqParams: Record<string, unknown> = {
+        textDocument: { uri: params.uri },
+        position: { line: params.line, character: params.character },
+      };
+      if (params.triggerCharacter) {
+        reqParams.context = {
+          triggerKind: 2, // TriggerCharacter
+          triggerCharacter: params.triggerCharacter,
+        };
+      } else {
+        reqParams.context = { triggerKind: 1 }; // Invoked
+      }
+
+      const raw = (await entry.process.request("textDocument/completion", reqParams)) as
+        | { isIncomplete?: boolean; items?: unknown[] }
+        | unknown[]
+        | null;
+
+      if (!raw) return { result: null };
+
+      // Server may return either a CompletionList (object with items) or
+      // a bare array of CompletionItems — normalize.
+      const isList = !Array.isArray(raw) && typeof raw === "object" && "items" in raw;
+      const items = (isList ? (raw as { items: unknown[] }).items : (raw as unknown[])) ?? [];
+      const isIncomplete =
+        isList && (raw as { isIncomplete?: boolean }).isIncomplete === true;
+
+      return {
+        result: {
+          isIncomplete,
+          items: items.map(normalizeCompletionItem).filter((x): x is LspCompletionItem => !!x),
+        },
+      };
+    } catch {
+      return { result: null };
+    }
+  }
+
+  async references(params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    line: number;
+    character: number;
+    includeDeclaration: boolean;
+  }): Promise<{ locations: LspLocation[] }> {
+    if (!this.isAllowed(params.workspacePath)) return { locations: [] };
+    const entry = this.registry.find(params.workspacePath, params.languageId);
+    if (!entry || entry.status !== "ready" || !entry.process) return { locations: [] };
+
+    try {
+      const raw = (await entry.process.request("textDocument/references", {
+        textDocument: { uri: params.uri },
+        position: { line: params.line, character: params.character },
+        context: { includeDeclaration: params.includeDeclaration },
+      })) as LspLocation[] | null;
+      return { locations: Array.isArray(raw) ? raw : [] };
+    } catch {
+      return { locations: [] };
+    }
+  }
+
+  async documentSymbols(params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+  }): Promise<{ symbols: LspDocumentSymbol[] }> {
+    if (!this.isAllowed(params.workspacePath)) return { symbols: [] };
+    const entry = this.registry.find(params.workspacePath, params.languageId);
+    if (!entry || entry.status !== "ready" || !entry.process) return { symbols: [] };
+
+    try {
+      const raw = (await entry.process.request("textDocument/documentSymbol", {
+        textDocument: { uri: params.uri },
+      })) as unknown[] | null;
+      if (!Array.isArray(raw)) return { symbols: [] };
+      return { symbols: raw.map(normalizeSymbol).filter((x): x is LspDocumentSymbol => !!x) };
+    } catch {
+      return { symbols: [] };
+    }
+  }
+
+  async prepareRename(params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    line: number;
+    character: number;
+  }): Promise<{ result: LspPrepareRenameResult | null }> {
+    if (!this.isAllowed(params.workspacePath)) return { result: null };
+    const entry = this.registry.find(params.workspacePath, params.languageId);
+    if (!entry || entry.status !== "ready" || !entry.process) return { result: null };
+
+    try {
+      const raw = (await entry.process.request("textDocument/prepareRename", {
+        textDocument: { uri: params.uri },
+        position: { line: params.line, character: params.character },
+      })) as
+        | LspRange
+        | { range: LspRange; placeholder?: string }
+        | { defaultBehavior: boolean }
+        | null;
+
+      if (!raw) return { result: null };
+      // Three result shapes per spec:
+      //   - Range: rename allowed, use this range
+      //   - { range, placeholder }: same plus suggested initial text
+      //   - { defaultBehavior: true }: server doesn't have a custom range,
+      //     editor should use the word at cursor
+      if ("defaultBehavior" in raw) {
+        return { result: null }; // signals Monaco to use its default range
+      }
+      if ("range" in raw) {
+        const placeholder = (raw as { placeholder?: string }).placeholder;
+        return {
+          result: {
+            range: raw.range,
+            ...(placeholder !== undefined ? { placeholder } : {}),
+          },
+        };
+      }
+      // Bare Range
+      return { result: { range: raw as LspRange } };
+    } catch {
+      return { result: null };
+    }
+  }
+
+  async rename(params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    line: number;
+    character: number;
+    newName: string;
+  }): Promise<{ edit: LspWorkspaceEdit | null }> {
+    if (!this.isAllowed(params.workspacePath)) return { edit: null };
+    const entry = this.registry.find(params.workspacePath, params.languageId);
+    if (!entry || entry.status !== "ready" || !entry.process) return { edit: null };
+
+    try {
+      const raw = (await entry.process.request("textDocument/rename", {
+        textDocument: { uri: params.uri },
+        position: { line: params.line, character: params.character },
+        newName: params.newName,
+      })) as
+        | { changes?: Record<string, unknown[]>; documentChanges?: unknown[] }
+        | null;
+
+      if (!raw) return { edit: null };
+
+      // The spec allows `documentChanges` (with versioning + create/rename
+      // file ops) instead of `changes`. We currently only handle plain
+      // text edits — flatten documentChanges to changes when present, drop
+      // any non-text ops. Most rename results don't use documentChanges.
+      const changes: Record<string, Array<{ range: LspRange; newText: string }>> = {};
+      if (raw.changes && typeof raw.changes === "object") {
+        for (const [uri, edits] of Object.entries(raw.changes)) {
+          if (!Array.isArray(edits)) continue;
+          changes[uri] = edits
+            .filter((e): e is { range: LspRange; newText: string } =>
+              !!e && typeof e === "object" && "range" in e && "newText" in e,
+            );
+        }
+      } else if (Array.isArray(raw.documentChanges)) {
+        for (const dc of raw.documentChanges) {
+          if (!dc || typeof dc !== "object") continue;
+          const tdc = dc as {
+            textDocument?: { uri?: string };
+            edits?: Array<{ range: LspRange; newText: string }>;
+          };
+          const uri = tdc.textDocument?.uri;
+          if (!uri || !Array.isArray(tdc.edits)) continue;
+          (changes[uri] ??= []).push(
+            ...tdc.edits.filter(
+              (e): e is { range: LspRange; newText: string } =>
+                !!e && "range" in e && "newText" in e,
+            ),
+          );
+        }
+      }
+
+      return { edit: { changes } };
+    } catch {
+      return { edit: null };
+    }
+  }
+}
+
+/**
+ * Normalize a raw completion item from the server. Strips fields the
+ * webview doesn't use (notably `data` for completionItem/resolve, which
+ * Phase 3 doesn't implement) and unwraps the various MarkupContent
+ * shapes for documentation. Returns null if the item is malformed.
+ */
+function normalizeCompletionItem(raw: unknown): LspCompletionItem | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.label !== "string") return null;
+
+  const item: LspCompletionItem = { label: r.label };
+  if (typeof r.kind === "number") item.kind = r.kind as LspCompletionItem["kind"];
+  if (typeof r.detail === "string") item.detail = r.detail;
+  if (typeof r.documentation === "string") {
+    item.documentation = r.documentation;
+  } else if (r.documentation && typeof r.documentation === "object") {
+    const d = r.documentation as { value?: string };
+    if (typeof d.value === "string") item.documentation = d.value;
+  }
+  if (typeof r.insertText === "string") item.insertText = r.insertText;
+  if (r.insertTextFormat === 1 || r.insertTextFormat === 2) {
+    item.insertTextFormat = r.insertTextFormat;
+  }
+  // textEdit, when present, takes precedence over insertText. We translate
+  // its range/newText into our shape so the provider can hand both fields
+  // to Monaco (Monaco picks insertText if no range is supplied, range
+  // if both).
+  const textEdit = r.textEdit as { range?: LspRange; newText?: string } | undefined;
+  if (textEdit?.range && typeof textEdit.newText === "string") {
+    item.range = textEdit.range;
+    item.insertText = textEdit.newText;
+  }
+  if (typeof r.sortText === "string") item.sortText = r.sortText;
+  if (typeof r.filterText === "string") item.filterText = r.filterText;
+  return item;
+}
+
+/** Recursively normalize a DocumentSymbol tree. Drops malformed nodes. */
+function normalizeSymbol(raw: unknown): LspDocumentSymbol | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.name !== "string" || typeof r.kind !== "number") return null;
+  if (!r.range || !r.selectionRange) return null;
+  const sym: LspDocumentSymbol = {
+    name: r.name,
+    kind: r.kind,
+    range: r.range as LspRange,
+    selectionRange: r.selectionRange as LspRange,
+  };
+  if (typeof r.detail === "string") sym.detail = r.detail;
+  if (Array.isArray(r.children)) {
+    sym.children = r.children.map(normalizeSymbol).filter((c): c is LspDocumentSymbol => !!c);
+  }
+  return sym;
 }
 
 /**

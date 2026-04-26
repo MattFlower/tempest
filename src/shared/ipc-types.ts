@@ -684,3 +684,108 @@ export interface LspMemorySample {
   rssBytes: number | null;
 }
 
+// --- LSP completion ---
+
+/** LSP CompletionItemKind values. Matches the spec's numeric enum so
+ *  the wire format passes through unchanged. */
+export const LspCompletionItemKind = {
+  Text: 1,
+  Method: 2,
+  Function: 3,
+  Constructor: 4,
+  Field: 5,
+  Variable: 6,
+  Class: 7,
+  Interface: 8,
+  Module: 9,
+  Property: 10,
+  Unit: 11,
+  Value: 12,
+  Enum: 13,
+  Keyword: 14,
+  Snippet: 15,
+  Color: 16,
+  File: 17,
+  Reference: 18,
+  Folder: 19,
+  EnumMember: 20,
+  Constant: 21,
+  Struct: 22,
+  Event: 23,
+  Operator: 24,
+  TypeParameter: 25,
+} as const;
+export type LspCompletionItemKindValue =
+  (typeof LspCompletionItemKind)[keyof typeof LspCompletionItemKind];
+
+/** A single completion item returned by textDocument/completion. We
+ *  forward only the fields Monaco actually consumes — the server's
+ *  opaque `data` for resolve isn't used in Phase 3 (we don't implement
+ *  completionItem/resolve yet). */
+export interface LspCompletionItem {
+  label: string;
+  kind?: LspCompletionItemKindValue;
+  /** Short detail line, usually the type signature. */
+  detail?: string;
+  /** Documentation block, possibly markdown. */
+  documentation?: string;
+  /** What to insert. May contain LSP snippet placeholders ($1, $2, etc.). */
+  insertText?: string;
+  /** 1 = plain text, 2 = snippet (the spec's InsertTextFormat enum). */
+  insertTextFormat?: 1 | 2;
+  /** Optional range to replace; absent means "use the word the cursor is on". */
+  range?: LspRange;
+  /** Hint to the editor's sort order. Lexicographic compare. */
+  sortText?: string;
+  /** Hint for fuzzy filtering; if absent, Monaco filters on `label`. */
+  filterText?: string;
+}
+
+export interface LspCompletionList {
+  /** True when the list is incomplete and the editor should re-query
+   *  on the next keystroke (for completion engines that stream). */
+  isIncomplete: boolean;
+  items: LspCompletionItem[];
+}
+
+// --- LSP document symbols ---
+
+export type LspSymbolKind = number; // 1..26 in the spec; we forward as-is
+
+/** Hierarchical symbol info for textDocument/documentSymbol. The
+ *  legacy SymbolInformation flat shape is also valid in the spec but
+ *  modern servers return DocumentSymbol; we normalize on the Bun side. */
+export interface LspDocumentSymbol {
+  name: string;
+  detail?: string;
+  kind: LspSymbolKind;
+  /** Whole-symbol range (including body). */
+  range: LspRange;
+  /** Highlighted-name range (where the editor places the cursor on click). */
+  selectionRange: LspRange;
+  children?: LspDocumentSymbol[];
+}
+
+// --- LSP workspace edit (used by rename) ---
+
+export interface LspTextEdit {
+  range: LspRange;
+  newText: string;
+}
+
+/** Subset of the spec's WorkspaceEdit we currently apply: a per-URI map
+ *  of text edits. The full spec also supports `documentChanges` (with
+ *  versioning + create/rename/delete file ops); rename of a symbol
+ *  rarely uses those, so Phase 3 sticks to plain text edits. */
+export interface LspWorkspaceEdit {
+  changes: Record<string, LspTextEdit[]>;
+}
+
+/** Result of textDocument/prepareRename. `null` from the server means
+ *  the cursor isn't on a renameable symbol. */
+export interface LspPrepareRenameResult {
+  range: LspRange;
+  /** Optional placeholder text shown in Monaco's rename input. */
+  placeholder?: string;
+}
+

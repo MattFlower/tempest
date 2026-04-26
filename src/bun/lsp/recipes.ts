@@ -327,6 +327,23 @@ const RECIPES: ServerRecipe[] = [
     },
     args: [],
   },
+
+  // --- Java (Eclipse JDT Language Server) ---
+  // jdtls doesn't fit our auto-install buckets cleanly: prebuilt
+  // distributions live on download.eclipse.org (not GitHub releases),
+  // the tarball is ~80 MB, and the launcher needs a JDK 17+ on PATH.
+  // We expect the user to install it themselves — `brew install jdtls`
+  // pulls in a Homebrew openjdk dependency and drops a `jdtls` wrapper
+  // on PATH that handles workspace-data-dir bookkeeping for us.
+  {
+    name: "jdtls",
+    languageIds: ["java"],
+    installer: {
+      kind: "system",
+      binary: "jdtls",
+    },
+    args: [],
+  },
 ];
 
 /**

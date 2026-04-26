@@ -130,6 +130,8 @@ const SUPPORTED_LANGUAGES = [
   "markdown",
   // Toolchain bucket
   "go",
+  // System bucket
+  "java",
 ];
 
 function install(monaco: Monaco): void {

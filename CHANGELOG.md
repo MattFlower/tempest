@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- LSP servers no longer fail to spawn in release builds launched from Finder. NPM-installed servers (typescript-language-server, pyright, vscode-html/css/json-language-server, bash-language-server, yaml-language-server, dockerfile-language-server) ship as Node scripts whose `#!/usr/bin/env node` shebang failed under the bare macOS default PATH (`/usr/bin:/bin:/usr/sbin:/sbin`) the .app inherits when not launched from a terminal — the footer briefly showed `LSP · 1 failed` before the popover surfaced `env: node: No such file or directory`. `LspServerProcess.start` now overrides `PATH` with `getResolvedPATH()` (the same login-shell PATH the rest of the codebase already uses for git/jj/rg/gh), so `env node` finds Homebrew/nvm/cargo node regardless of how Tempest was launched.
+
 ### Changed
 
 ### Removed

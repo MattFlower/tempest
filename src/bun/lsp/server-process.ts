@@ -21,6 +21,7 @@ import {
   type JsonRpcMessage,
   type JsonRpcNotification,
 } from "./jsonrpc";
+import { getResolvedPATH } from "../config/path-resolver";
 import type { LspDiagnostic, LspServerStatus } from "../../shared/ipc-types";
 
 export interface ServerSpawnConfig {
@@ -104,7 +105,10 @@ export class LspServerProcess {
         stdout: "pipe",
         stderr: "pipe",
         stdin: "pipe",
-        env: { ...process.env, ...(this.config.env ?? {}) },
+        // PATH override matters for npm-installed servers: their bin scripts
+        // shebang `#!/usr/bin/env node`, and a release .app launched from
+        // Finder inherits a bare macOS PATH with no node on it.
+        env: { ...process.env, PATH: getResolvedPATH(), ...(this.config.env ?? {}) },
         // The server should not inherit the parent's controlling terminal —
         // it'll send escape sequences that confuse the framing decoder.
       });

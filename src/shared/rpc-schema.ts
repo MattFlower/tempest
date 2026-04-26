@@ -47,14 +47,19 @@ import type {
   PRDraftSummary,
   PRDetailInfo,
   WorkspaceProgressInfo,
+  LspCodeAction,
+  LspCodeActionContext,
   LspCompletionList,
   LspDiagnostic,
   LspDocumentSymbol,
   LspHoverResult,
+  LspInlayHint,
   LspLocation,
   LspMemorySample,
   LspPrepareRenameResult,
+  LspRange,
   LspServerState,
+  LspSignatureHelp,
   LspWorkspaceEdit,
 } from "./ipc-types";
 
@@ -899,6 +904,58 @@ export interface BunRequests {
       newName: string;
     };
     response: { edit: LspWorkspaceEdit | null };
+  };
+  lspSignatureHelp: {
+    params: {
+      workspacePath: string;
+      uri: string;
+      languageId: string;
+      line: number;
+      character: number;
+      /** Trigger character that fired the signature help (`(`, `,`) or
+       *  null/undefined when invoked manually. */
+      triggerCharacter?: string;
+      /** Whether this is a re-trigger for an active signature help (e.g.
+       *  user typed another character while the popup was already open). */
+      isRetrigger: boolean;
+    };
+    response: { result: LspSignatureHelp | null };
+  };
+  lspInlayHints: {
+    params: {
+      workspacePath: string;
+      uri: string;
+      languageId: string;
+      /** Visible range Monaco wants hints for. We forward as-is so the
+       *  server can return only hints inside the viewport. */
+      range: LspRange;
+    };
+    response: { hints: LspInlayHint[] };
+  };
+  lspCodeActions: {
+    params: {
+      workspacePath: string;
+      uri: string;
+      languageId: string;
+      range: LspRange;
+      context: LspCodeActionContext;
+    };
+    response: { actions: LspCodeAction[] };
+  };
+  lspExecuteCommand: {
+    params: {
+      workspacePath: string;
+      languageId: string;
+      command: string;
+      arguments?: unknown[];
+    };
+    response: {
+      ok: boolean;
+      /** Some commands return a workspace edit (e.g. tsserver's "convert
+       *  to async function"). When set, the webview applies it the same
+       *  way it applies a rename's edit. */
+      edit: LspWorkspaceEdit | null;
+    };
   };
 }
 

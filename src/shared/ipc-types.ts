@@ -789,3 +789,99 @@ export interface LspPrepareRenameResult {
   placeholder?: string;
 }
 
+// --- LSP signature help ---
+
+/** A single parameter inside a function/method signature. The `label` is
+ *  either a string match against `signature.label` or a `[start, end]`
+ *  offset pair; we always normalize to the offset form on the Bun side
+ *  so the webview's renderer never has to do substring search. */
+export interface LspParameterInformation {
+  /** Offsets into the parent signature's label string, [start, end). */
+  label: [number, number];
+  /** Optional doc/help text shown when this parameter is the active one. */
+  documentation?: string;
+}
+
+export interface LspSignatureInformation {
+  /** Full signature label, e.g. "fetch(input: RequestInfo, init?: RequestInit): Promise<Response>". */
+  label: string;
+  documentation?: string;
+  parameters: LspParameterInformation[];
+  /** Index of the active parameter for *this* signature (overrides
+   *  SignatureHelp.activeParameter when set). */
+  activeParameter?: number;
+}
+
+export interface LspSignatureHelp {
+  signatures: LspSignatureInformation[];
+  /** Index of the currently-shown signature. */
+  activeSignature: number;
+  /** Index of the currently-active parameter within `activeSignature`. */
+  activeParameter: number;
+}
+
+// --- LSP inlay hints ---
+
+/** Hint kinds — matches the spec's numeric enum. */
+export type LspInlayHintKind = 1 | 2; // 1 = Type, 2 = Parameter
+
+/** Inlay hints can have either a plain string label or a list of label
+ *  parts (each part can carry its own tooltip / command). For Phase 4
+ *  v1 we only render the visual text — interaction (click → action) is
+ *  a future polish. */
+export interface LspInlayHintLabelPart {
+  value: string;
+  tooltip?: string;
+}
+
+export interface LspInlayHint {
+  position: LspPosition;
+  /** Either the rendered text (string) or a list of parts (array). */
+  label: string | LspInlayHintLabelPart[];
+  kind?: LspInlayHintKind;
+  /** Optional tooltip when hovering the hint. */
+  tooltip?: string;
+  /** Whether to add a leading/trailing space to the hint when rendered. */
+  paddingLeft?: boolean;
+  paddingRight?: boolean;
+}
+
+// --- LSP code actions ---
+
+/** Code action kinds — strings per the spec, hierarchical (`refactor.extract`).
+ *  We pass them through unchanged; Monaco accepts arbitrary kind strings. */
+export type LspCodeActionKind = string;
+
+/** Diagnostics passed to the server as context for the code action
+ *  request — Monaco's editor sends the diagnostics it has on the range,
+ *  the server uses them to decide which quickfixes apply. */
+export interface LspCodeActionContext {
+  diagnostics: LspDiagnostic[];
+  only?: LspCodeActionKind[];
+}
+
+/** A reference to a server-side command. The `arguments` are opaque
+ *  to us — we forward them back via workspace/executeCommand when the
+ *  user invokes the action. */
+export interface LspCommand {
+  title: string;
+  command: string;
+  arguments?: unknown[];
+}
+
+/** A code action returned by textDocument/codeAction. Either `edit` or
+ *  `command` (or both) drives what happens on apply: `edit` is applied
+ *  client-side via our existing applyWorkspaceEdit; `command` is sent
+ *  back to the server via workspace/executeCommand. */
+export interface LspCodeAction {
+  title: string;
+  kind?: LspCodeActionKind;
+  /** Diagnostics this action addresses (for "fix all" visualizations). */
+  diagnostics?: LspDiagnostic[];
+  /** Whether this is the preferred / canonical fix for the diagnostics
+   *  it addresses. Monaco uses this to bind keyboard shortcuts. */
+  isPreferred?: boolean;
+  edit?: LspWorkspaceEdit;
+  command?: LspCommand;
+}
+

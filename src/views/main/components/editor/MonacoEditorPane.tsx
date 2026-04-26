@@ -72,20 +72,15 @@ loader.init().then((monaco) => {
   for (const defaults of [ts.typescriptDefaults, ts.javascriptDefaults]) {
     defaults.setDiagnosticsOptions({ noSemanticValidation: true });
     defaults.setModeConfiguration({
-      // Keep providers we still don't implement via LSP (signature help,
-      // formatting, code actions, inlay hints, document highlights).
-      // Monaco's bundled versions are project-blind but better than
-      // nothing — Phase 4 candidates.
-      signatureHelp: true,
+      // Keep the bundled providers we genuinely don't implement via LSP.
+      // Phase 4 dropped signatureHelp / codeActions / inlayHints from
+      // this list now that LSP serves them. Formatting and document
+      // highlights remain bundled-only for now (Phase 5+).
       onTypeFormattingEdits: true,
       documentRangeFormattingEdits: true,
-      codeActions: true,
-      inlayHints: true,
       documentHighlights: true,
-      // Disable the providers our LSP serves — these would otherwise
-      // produce duplicate hovers, "Definitions (2)" peek views, and
-      // a stack of project-blind completions ranked alongside the real
-      // ones from typescript-language-server.
+      // Disable everything our LSP serves — duplicates are confusing
+      // and Monaco's bundled versions are project-blind.
       completionItems: false,
       hovers: false,
       definitions: false,
@@ -93,6 +88,9 @@ loader.init().then((monaco) => {
       rename: false,
       documentSymbols: false,
       diagnostics: false,
+      signatureHelp: false,
+      codeActions: false,
+      inlayHints: false,
     });
   }
   // Same treatment for Monaco's bundled JSON/HTML/CSS/SCSS/LESS language
@@ -102,11 +100,8 @@ loader.init().then((monaco) => {
   // monaco.languages.{json,html,css}.* with similar API shape, so we
   // reuse the same disable list.
   const disabledModeConfig = {
-    signatureHelp: true,
     onTypeFormattingEdits: true,
     documentRangeFormattingEdits: true,
-    codeActions: true,
-    inlayHints: true,
     documentHighlights: true,
     completionItems: false,
     hovers: false,
@@ -115,6 +110,9 @@ loader.init().then((monaco) => {
     rename: false,
     documentSymbols: false,
     diagnostics: false,
+    signatureHelp: false,
+    codeActions: false,
+    inlayHints: false,
   };
   for (const defaults of [
     monaco.languages.json?.jsonDefaults,
@@ -353,6 +351,17 @@ export function MonacoEditorPane({
           ed.getAction("editor.action.quickOutline")?.run();
         });
         Vim.map?.("gO", ":symbols", "normal");
+
+        // gK in normal mode → trigger parameter hints (signature help
+        // popup). Vim uses K for "lookup keyword help"; gK is a natural
+        // extension for "help on this call site". Also fires on `(` /
+        // `,` while typing — this gives an explicit way to re-open the
+        // popup after dismissing it with Esc, or invoke it on an
+        // already-typed call expression.
+        Vim.defineEx("sighelp", "sighelp", () => {
+          ed.getAction("editor.action.triggerParameterHints")?.run();
+        });
+        Vim.map?.("gK", ":sighelp", "normal");
       }
     })();
 

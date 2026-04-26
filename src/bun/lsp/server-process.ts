@@ -174,6 +174,20 @@ export class LspServerProcess {
           includeCompletionsWithInsertText: true,
           includeAutomaticOptionalChainCompletions: true,
           includeCompletionsWithSnippetText: true,
+          // Inlay hints: tsserver returns nothing unless these are
+          // explicitly enabled. We turn on the safe defaults — the
+          // ones that match what VS Code ships out of the box.
+          // Per-user preference for which hints to render lives in
+          // Monaco editor options later if we want it; for now,
+          // hints can be toggled globally via the editor's
+          // inlayHints.enabled option (defaults on).
+          includeInlayParameterNameHints: "literals",
+          includeInlayParameterNameHintsWhenArgumentMatchesName: false,
+          includeInlayFunctionParameterTypeHints: true,
+          includeInlayVariableTypeHints: false,
+          includeInlayPropertyDeclarationTypeHints: false,
+          includeInlayFunctionLikeReturnTypeHints: true,
+          includeInlayEnumMemberValueHints: true,
         },
       },
     };
@@ -223,9 +237,18 @@ export class LspServerProcess {
 
   /**
    * Send a request and await the typed response. Rejects if the server
-   * exits with the request still in flight.
+   * exits with the request still in flight, or if `signal` aborts.
+   *
+   * On abort we send an LSP `$/cancelRequest` notification with the
+   * original request id so the server can stop computing — useful for
+   * completions, where Monaco fires fresh requests on every keystroke
+   * and the server otherwise wastes CPU on stale ones.
    */
-  request<T = unknown>(method: string, params: unknown): Promise<T> {
+  request<T = unknown>(
+    method: string,
+    params: unknown,
+    signal?: AbortSignal,
+  ): Promise<T> {
     if (!this.writer) return Promise.reject(new Error("Server not started"));
     const id = this.nextId++;
     return new Promise<T>((resolve, reject) => {
@@ -234,6 +257,27 @@ export class LspServerProcess {
         reject,
         method,
       });
+
+      if (signal) {
+        const onAbort = () => {
+          // Race-safe: only act if the request is still pending. The
+          // response handler in dispatch() deletes the pending entry on
+          // resolve/reject — if it ran first, this abort is a no-op.
+          if (!this.pending.has(id)) return;
+          this.pending.delete(id);
+          // Notify the server to stop work. Notifications are
+          // fire-and-forget so we don't await; if the server is wedged
+          // it'll be killed via stop() anyway.
+          this.notify("$/cancelRequest", { id });
+          reject(new Error(`${method} cancelled`));
+        };
+        if (signal.aborted) {
+          onAbort();
+          return;
+        }
+        signal.addEventListener("abort", onAbort, { once: true });
+      }
+
       this.writeMessage({ jsonrpc: "2.0", id, method, params }).catch((err) => {
         this.pending.delete(id);
         reject(err);
@@ -447,6 +491,59 @@ function clientCapabilities(): Record<string, unknown> {
         // cursor as the rename range."
         prepareSupportDefaultBehavior: 1,
         honorsChangeAnnotations: false,
+      },
+      signatureHelp: {
+        dynamicRegistration: false,
+        signatureInformation: {
+          documentationFormat: ["markdown", "plaintext"],
+          // Lets us receive parameter labels as `[start, end]` offset
+          // pairs instead of substring matches against the signature
+          // label — clearer for highlighting the active parameter.
+          parameterInformation: { labelOffsetSupport: true },
+          activeParameterSupport: true,
+        },
+        contextSupport: true,
+      },
+      inlayHint: {
+        dynamicRegistration: false,
+        // Phase 4 v1 doesn't implement inlayHint/resolve — we render
+        // labels as plain text without click → action support. Servers
+        // that depend on resolve still send hints; they just won't have
+        // the resolved tooltip data we'd otherwise lazy-fetch.
+        resolveSupport: { properties: [] },
+      },
+      codeAction: {
+        dynamicRegistration: false,
+        // Tell the server which kinds we know how to surface in the UI.
+        // Monaco shows actions grouped by kind; the Refactor menu and
+        // the lightbulb both consult this list.
+        codeActionLiteralSupport: {
+          codeActionKind: {
+            valueSet: [
+              "",
+              "quickfix",
+              "refactor",
+              "refactor.extract",
+              "refactor.inline",
+              "refactor.rewrite",
+              "source",
+              "source.organizeImports",
+              "source.fixAll",
+            ],
+          },
+        },
+        isPreferredSupport: true,
+        disabledSupport: false,
+        dataSupport: false,
+        // Phase 4 v1 doesn't lazy-resolve actions; servers that return
+        // unresolved actions will still appear in the UI but their edits
+        // won't materialize. tsserver returns fully-resolved actions, so
+        // this is fine for our default config.
+        resolveSupport: { properties: [] },
+        honorsChangeAnnotations: false,
+      },
+      executeCommand: {
+        dynamicRegistration: false,
       },
     },
     workspace: {

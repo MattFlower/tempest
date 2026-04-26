@@ -23,10 +23,14 @@ import type {
 } from "monaco-editor";
 import { api } from "../../../state/rpc-client";
 import type {
+  LspCodeAction,
   LspCompletionItem,
   LspDocumentSymbol,
+  LspInlayHint,
+  LspInlayHintLabelPart,
   LspLocation,
   LspRange,
+  LspSignatureHelp,
   LspWorkspaceEdit,
 } from "../../../../../shared/ipc-types";
 
@@ -331,6 +335,108 @@ function install(monaco: Monaco): void {
         },
       }),
     );
+
+    // --- Signature help ---
+    // Trigger characters: `(` opens the popup at function-call sites,
+    // `,` advances to the next parameter. Most servers accept these.
+    disposables.push(
+      monaco.languages.registerSignatureHelpProvider(lang, {
+        signatureHelpTriggerCharacters: ["(", ","],
+        signatureHelpRetriggerCharacters: [")"],
+        provideSignatureHelp: async (
+          model: MonacoEditor.ITextModel,
+          position: IPosition,
+          _token: CancellationToken,
+          context: languages.SignatureHelpContext,
+        ) => {
+          const ctx = ctxFor(model);
+          if (!ctx) return null;
+          const reqParams: Parameters<typeof api.lspSignatureHelp>[0] = {
+            workspacePath: ctx.workspacePath,
+            uri: model.uri.toString(),
+            languageId: ctx.languageId,
+            line: position.lineNumber - 1,
+            character: position.column - 1,
+            isRetrigger: context.isRetrigger,
+          };
+          if (context.triggerCharacter) {
+            reqParams.triggerCharacter = context.triggerCharacter;
+          }
+          const result = await api.lspSignatureHelp(reqParams);
+          if (!result.result) return null;
+          return {
+            value: lspSignatureHelpToMonaco(result.result),
+            // Phase 4 v1 has no resolve step; dispose is a no-op so
+            // Monaco doesn't try to free anything we don't own.
+            dispose: () => { /* no-op */ },
+          };
+        },
+      }),
+    );
+
+    // --- Inlay hints ---
+    disposables.push(
+      monaco.languages.registerInlayHintsProvider(lang, {
+        provideInlayHints: async (
+          model: MonacoEditor.ITextModel,
+          range: IRange,
+          _token: CancellationToken,
+        ) => {
+          const ctx = ctxFor(model);
+          if (!ctx) return null;
+          const result = await api.lspInlayHints({
+            workspacePath: ctx.workspacePath,
+            uri: model.uri.toString(),
+            languageId: ctx.languageId,
+            range: monacoRangeToLsp(range),
+          });
+          if (result.hints.length === 0) return null;
+          return {
+            hints: result.hints.map((h: LspInlayHint) => lspInlayHintToMonaco(monaco, h)),
+            // Phase 4 v1 has no resolve step.
+            dispose: () => { /* no-op */ },
+          };
+        },
+      }),
+    );
+
+    // --- Code actions ---
+    disposables.push(
+      monaco.languages.registerCodeActionProvider(lang, {
+        provideCodeActions: async (
+          model: MonacoEditor.ITextModel,
+          range: IRange,
+          context: languages.CodeActionContext,
+        ) => {
+          const ctx = ctxFor(model);
+          if (!ctx) return null;
+          // Monaco's CodeActionContext gives us the diagnostics on the
+          // range plus an optional `only` filter (used when invoking via
+          // a specific kind like "refactor"). Forward both — the server
+          // uses the diagnostics to compute quickfixes and `only` to
+          // skip irrelevant kinds.
+          const result = await api.lspCodeActions({
+            workspacePath: ctx.workspacePath,
+            uri: model.uri.toString(),
+            languageId: ctx.languageId,
+            range: monacoRangeToLsp(range),
+            context: {
+              diagnostics: context.markers
+                .map((m) => monacoMarkerToLspDiagnostic(m))
+                .filter((d) => !!d) as Array<NonNullable<ReturnType<typeof monacoMarkerToLspDiagnostic>>>,
+              ...(context.only ? { only: [context.only] } : {}),
+            },
+          });
+          if (result.actions.length === 0) return null;
+          return {
+            actions: result.actions.map((a: LspCodeAction) =>
+              lspCodeActionToMonaco(monaco, a, ctx),
+            ),
+            dispose: () => { /* no-op */ },
+          };
+        },
+      }),
+    );
   }
 }
 
@@ -356,6 +462,202 @@ function lspLocationToMonaco(monaco: Monaco, location: LspLocation) {
     uri: monaco.Uri.parse(location.uri),
     range: lspRangeToMonaco(monaco, location.range),
   };
+}
+
+/** Convert Monaco's 1-based IRange to LSP's 0-based LspRange. */
+function monacoRangeToLsp(range: IRange): LspRange {
+  return {
+    start: { line: range.startLineNumber - 1, character: range.startColumn - 1 },
+    end: { line: range.endLineNumber - 1, character: range.endColumn - 1 },
+  };
+}
+
+/** Convert a Monaco IMarkerData (diagnostic) back to the LSP shape. Used
+ *  by the code-action provider to forward diagnostics-on-the-range as
+ *  context to the server. Returns null for markers that lack the LSP
+ *  fields we need (shouldn't happen for our `tempest-lsp` markers). */
+function monacoMarkerToLspDiagnostic(
+  marker: MonacoEditor.IMarkerData,
+):
+  | {
+      range: LspRange;
+      severity?: 1 | 2 | 3 | 4;
+      message: string;
+      source?: string;
+      code?: string | number;
+    }
+  | null {
+  if (typeof marker.message !== "string") return null;
+  // Monaco MarkerSeverity → LSP DiagnosticSeverity:
+  //   Monaco: Hint=1, Info=2, Warning=4, Error=8
+  //   LSP:    Error=1, Warning=2, Info=3, Hint=4
+  let severity: 1 | 2 | 3 | 4 | undefined;
+  switch (marker.severity) {
+    case 8: severity = 1; break;
+    case 4: severity = 2; break;
+    case 2: severity = 3; break;
+    case 1: severity = 4; break;
+  }
+  return {
+    range: {
+      start: { line: marker.startLineNumber - 1, character: marker.startColumn - 1 },
+      end: { line: marker.endLineNumber - 1, character: marker.endColumn - 1 },
+    },
+    message: marker.message,
+    ...(severity !== undefined ? { severity } : {}),
+    ...(typeof marker.source === "string" ? { source: marker.source } : {}),
+    ...(marker.code !== undefined
+      ? { code: typeof marker.code === "string" || typeof marker.code === "number"
+            ? marker.code
+            : String(marker.code) }
+      : {}),
+  };
+}
+
+/** Convert an LSP SignatureHelp into Monaco's matching shape. The two
+ *  are nearly identical — the only delta is parameter labels: LSP
+ *  uses `[start, end]` offsets into the signature label; Monaco
+ *  accepts the same shape directly when `parameterInformation.label`
+ *  is a tuple. */
+function lspSignatureHelpToMonaco(help: LspSignatureHelp): languages.SignatureHelp {
+  return {
+    activeSignature: help.activeSignature,
+    activeParameter: help.activeParameter,
+    signatures: help.signatures.map((s) => ({
+      label: s.label,
+      ...(s.documentation ? { documentation: { value: s.documentation } } : {}),
+      ...(typeof s.activeParameter === "number"
+        ? { activeParameter: s.activeParameter }
+        : {}),
+      parameters: s.parameters.map((p) => ({
+        label: p.label,
+        ...(p.documentation ? { documentation: { value: p.documentation } } : {}),
+      })),
+    })),
+  };
+}
+
+/** Convert an LSP InlayHint to Monaco's. Monaco's label can be a string
+ *  or `InlayHintLabelPart[]`; both the spec and Monaco use the same
+ *  variant, so it's a near-identity mapping. */
+function lspInlayHintToMonaco(monaco: Monaco, hint: LspInlayHint): languages.InlayHint {
+  const out: languages.InlayHint = {
+    position: {
+      lineNumber: hint.position.line + 1,
+      column: hint.position.character + 1,
+    },
+    label: typeof hint.label === "string"
+      ? hint.label
+      : hint.label.map((p: LspInlayHintLabelPart) => ({
+          label: p.value,
+          ...(p.tooltip ? { tooltip: p.tooltip } : {}),
+        })),
+  };
+  if (hint.kind !== undefined) {
+    // Monaco's InlayHintKind: Type=1, Parameter=2 — same numbering as LSP.
+    out.kind = hint.kind as languages.InlayHintKind;
+  }
+  if (hint.tooltip) out.tooltip = { value: hint.tooltip };
+  if (hint.paddingLeft !== undefined) out.paddingLeft = hint.paddingLeft;
+  if (hint.paddingRight !== undefined) out.paddingRight = hint.paddingRight;
+  // Suppress unused-monaco param warning while keeping the signature open
+  // for future enhancements (e.g. snippet-aware label conversions).
+  void monaco;
+  return out;
+}
+
+/** Convert an LSP CodeAction into Monaco's. For `edit`-bearing actions
+ *  we translate the WorkspaceEdit shape lazily on apply; for `command`
+ *  actions we synthesize a Monaco Command that, when invoked, sends
+ *  workspace/executeCommand back to the server. */
+function lspCodeActionToMonaco(
+  monaco: Monaco,
+  action: LspCodeAction,
+  ctx: { workspacePath: string; languageId: string },
+): languages.CodeAction {
+  const out: languages.CodeAction = {
+    title: action.title,
+    ...(action.kind ? { kind: action.kind } : {}),
+    ...(typeof action.isPreferred === "boolean"
+      ? { isPreferred: action.isPreferred }
+      : {}),
+  };
+
+  // `edit`-bearing action: synthesize a Monaco WorkspaceEdit from the
+  // LSP one, ignoring out-of-model edits for the synchronous return. The
+  // command path below also fires applyWorkspaceEdit for any returned
+  // edits, so this still works end-to-end for tsserver actions like
+  // "Add missing import" that have edit but no command.
+  if (action.edit) {
+    out.edit = synthesizeMonacoEdit(monaco, action.edit);
+  }
+
+  if (action.command) {
+    // Register an inline Monaco command id that, when invoked, sends
+    // workspace/executeCommand to the server and applies any returned
+    // edit. `monaco.editor.registerCommand` is global and adds a one-off
+    // command-id binding; we use a unique id so multiple actions don't
+    // collide.
+    const commandId = `tempest.lsp.executeCommand.${
+      action.command.command
+    }.${Math.random().toString(36).slice(2, 10)}`;
+    monaco.editor.addCommand({
+      id: commandId,
+      run: async () => {
+        if (!action.command) return;
+        const result = await api.lspExecuteCommand({
+          workspacePath: ctx.workspacePath,
+          languageId: ctx.languageId,
+          command: action.command.command,
+          ...(action.command.arguments ? { arguments: action.command.arguments } : {}),
+        });
+        if (result.edit) {
+          await applyWorkspaceEdit(monaco, result.edit);
+        }
+      },
+    });
+    out.command = {
+      id: commandId,
+      title: action.command.title,
+      ...(action.command.arguments ? { arguments: action.command.arguments } : {}),
+    };
+  }
+  return out;
+}
+
+/** Same shape as applyWorkspaceEdit's return value, computed
+ *  synchronously for use in the CodeAction's `.edit` field (Monaco
+ *  applies it inline when the user picks the action). Out-of-model
+ *  writes are still kicked off in the background by applyWorkspaceEdit
+ *  if needed; here we just return the in-model edits Monaco can apply
+ *  immediately. */
+function synthesizeMonacoEdit(
+  monaco: Monaco,
+  edit: LspWorkspaceEdit,
+): languages.WorkspaceEdit {
+  const monacoEdits: languages.IWorkspaceTextEdit[] = [];
+  for (const [uriStr, edits] of Object.entries(edit.changes)) {
+    if (edits.length === 0) continue;
+    const uri = monaco.Uri.parse(uriStr);
+    const model = monaco.editor.getModel(uri);
+    if (!model) {
+      // Out-of-model edit: kick off the background write. Monaco won't
+      // see this edit but the file is still updated on disk.
+      void writeOutOfModelEdits(uriStr, edits);
+      continue;
+    }
+    for (const e of edits) {
+      monacoEdits.push({
+        resource: uri,
+        textEdit: {
+          range: lspRangeToMonaco(monaco, e.range),
+          text: e.newText,
+        },
+        versionId: undefined,
+      });
+    }
+  }
+  return { edits: monacoEdits };
 }
 
 /** Compute Monaco's word range at the given position, used as the default

@@ -1071,4 +1071,32 @@ export const api = {
     character: number;
     newName: string;
   }) => rpcRequest.lspRename(params),
+  lspSignatureHelp: (params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    line: number;
+    character: number;
+    triggerCharacter?: string;
+    isRetrigger: boolean;
+  }) => rpcRequest.lspSignatureHelp(params),
+  lspInlayHints: (params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    range: import("../../../shared/ipc-types").LspRange;
+  }) => rpcRequest.lspInlayHints(params),
+  lspCodeActions: (params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    range: import("../../../shared/ipc-types").LspRange;
+    context: import("../../../shared/ipc-types").LspCodeActionContext;
+  }) => rpcRequest.lspCodeActions(params),
+  lspExecuteCommand: (params: {
+    workspacePath: string;
+    languageId: string;
+    command: string;
+    arguments?: unknown[];
+  }) => rpcRequest.lspExecuteCommand(params),
 };

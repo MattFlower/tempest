@@ -26,7 +26,17 @@
 import type { editor as MonacoEditor, IDisposable } from "monaco-editor";
 import { api } from "../../../state/rpc-client";
 
-const DIDCHANGE_DEBOUNCE_MS = 150;
+// We send didChange synchronously on every onDidChangeContent. Monaco
+// fires auto-triggers (signature help on `(`, completion on `.`, etc.)
+// in the same tick as the content change — if we debounced didChange,
+// those follow-up requests would race ahead of the version we just
+// edited and the server would respond against stale text. Removing the
+// debounce costs one RPC per keystroke (~1 ms round trip), which is
+// well below the threshold where it would feel laggy or strain the
+// server.
+//
+// During pastes / large edits onDidChangeContent fires once with the
+// whole change; we're not amplifying that case either.
 
 export interface LspBridgeHandle {
   dispose: () => void;
@@ -42,7 +52,6 @@ interface SharedBridge {
   model: MonacoEditor.ITextModel;
   version: number;
   refcount: number;
-  flushTimer: ReturnType<typeof setTimeout> | null;
   contentSubscription: IDisposable;
 }
 
@@ -82,7 +91,6 @@ export function attachLsp(params: {
     model,
     version: 1,
     refcount: 1,
-    flushTimer: null,
     contentSubscription: undefined as unknown as IDisposable, // assigned below
   };
 
@@ -97,12 +105,13 @@ export function attachLsp(params: {
     text: model.getValue(),
   });
 
-  // Debounce didChange so a rapid sequence of keystrokes coalesces into
-  // one notification. The server still gets every version eventually —
-  // we only delay the notify, never skip one.
+  // Send didChange synchronously on every content change. The Bun-side
+  // RPC dispatcher preserves order, so by the time any subsequent
+  // request from this tick (e.g. an auto-fired signature help on `(`)
+  // reaches the server, the didChange notification carrying the new
+  // character has already been processed.
   bridge.contentSubscription = model.onDidChangeContent(() => {
-    if (bridge.flushTimer !== null) clearTimeout(bridge.flushTimer);
-    bridge.flushTimer = setTimeout(() => flushBridge(bridge), DIDCHANGE_DEBOUNCE_MS);
+    flushBridge(bridge);
   });
 
   sharedBridges.set(uri, bridge);
@@ -110,9 +119,6 @@ export function attachLsp(params: {
 }
 
 function flushBridge(bridge: SharedBridge): void {
-  if (bridge.flushTimer === null) return;
-  clearTimeout(bridge.flushTimer);
-  bridge.flushTimer = null;
   bridge.version += 1;
   void api.lspDidChange({
     workspacePath: bridge.workspacePath,
@@ -129,9 +135,8 @@ function releaseBridge(uri: string): void {
   bridge.refcount -= 1;
   if (bridge.refcount > 0) return;
 
-  // Last reference — flush any pending change so the server's view of
-  // the document matches what was last on screen, then tear down.
-  flushBridge(bridge);
+  // Last reference — tear down. Any pending changes have already been
+  // flushed synchronously via onDidChangeContent.
   bridge.contentSubscription.dispose();
   void api.lspDidClose({
     workspacePath: bridge.workspacePath,

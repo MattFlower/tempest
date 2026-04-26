@@ -1481,6 +1481,10 @@ const rpc: any = (BrowserView.defineRPC as any)({
       lspDocumentSymbols: (params: any) => lspRpc.documentSymbols(params),
       lspPrepareRename: (params: any) => lspRpc.prepareRename(params),
       lspRename: (params: any) => lspRpc.rename(params),
+      lspSignatureHelp: (params: any) => lspRpc.signatureHelp(params),
+      lspInlayHints: (params: any) => lspRpc.inlayHints(params),
+      lspCodeActions: (params: any) => lspRpc.codeActions(params),
+      lspExecuteCommand: (params: any) => lspRpc.executeCommand(params),
     },
     messages: {
       // --- Terminal I/O (Stream A) ---

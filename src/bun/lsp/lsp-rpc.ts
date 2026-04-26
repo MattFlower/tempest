@@ -14,16 +14,21 @@
 // ============================================================
 
 import type {
+  LspCodeAction,
+  LspCodeActionContext,
   LspCompletionItem,
   LspCompletionList,
   LspDiagnostic,
   LspDocumentSymbol,
   LspHoverResult,
+  LspInlayHint,
   LspLocation,
   LspMemorySample,
+  LspParameterInformation,
   LspPrepareRenameResult,
   LspRange,
   LspServerState,
+  LspSignatureHelp,
   LspWorkspaceEdit,
   RepoSettings,
 } from "../../shared/ipc-types";
@@ -46,6 +51,16 @@ export class LspRpc {
   private registry: LspServerRegistry;
   private memorySampler: MemorySampler;
   private memoryUnsub: (() => void) | null = null;
+
+  /**
+   * Per-URI in-flight completion request controllers. When a fresh
+   * completion request arrives for a URI, the prior in-flight one is
+   * aborted via the AbortSignal — the LspServerProcess sees the abort,
+   * sends LSP `$/cancelRequest`, and the server stops computing the
+   * stale result. Without this, fast typing can backlog the server with
+   * obsolete completion work.
+   */
+  private inflightCompletion = new Map<string, AbortController>();
 
   constructor(private readonly deps: LspRpcDeps) {
     this.registry = new LspServerRegistry({
@@ -262,6 +277,16 @@ export class LspRpc {
     const entry = this.registry.find(params.workspacePath, params.languageId);
     if (!entry || entry.status !== "ready" || !entry.process) return { result: null };
 
+    // Cancel any prior in-flight completion for this URI: the user
+    // pressed another key, so the previous result is already stale.
+    // Server sees `$/cancelRequest` and stops work. We swallow the
+    // resulting "cancelled" rejection on the prior caller's promise
+    // because they're no longer interested either.
+    const key = `${params.workspacePath}::${params.uri}`;
+    this.inflightCompletion.get(key)?.abort();
+    const ctrl = new AbortController();
+    this.inflightCompletion.set(key, ctrl);
+
     try {
       // textDocument/completion accepts an optional CompletionContext that
       // tells the server how the request was triggered (manual vs from a
@@ -280,7 +305,11 @@ export class LspRpc {
         reqParams.context = { triggerKind: 1 }; // Invoked
       }
 
-      const raw = (await entry.process.request("textDocument/completion", reqParams)) as
+      const raw = (await entry.process.request(
+        "textDocument/completion",
+        reqParams,
+        ctrl.signal,
+      )) as
         | { isIncomplete?: boolean; items?: unknown[] }
         | unknown[]
         | null;
@@ -301,7 +330,16 @@ export class LspRpc {
         },
       };
     } catch {
+      // Includes the "$method cancelled" rejection from a superseding
+      // completion call — that's expected; the new caller is now in
+      // flight and the user sees its result, not ours.
       return { result: null };
+    } finally {
+      // Only clear the map entry if we're still the latest controller —
+      // a newer call may have already replaced us.
+      if (this.inflightCompletion.get(key) === ctrl) {
+        this.inflightCompletion.delete(key);
+      }
     }
   }
 
@@ -454,6 +492,174 @@ export class LspRpc {
       return { edit: null };
     }
   }
+
+  async signatureHelp(params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    line: number;
+    character: number;
+    triggerCharacter?: string;
+    isRetrigger: boolean;
+  }): Promise<{ result: LspSignatureHelp | null }> {
+    if (!this.isAllowed(params.workspacePath)) return { result: null };
+    const entry = this.registry.find(params.workspacePath, params.languageId);
+    if (!entry || entry.status !== "ready" || !entry.process) return { result: null };
+
+    try {
+      const reqParams: Record<string, unknown> = {
+        textDocument: { uri: params.uri },
+        position: { line: params.line, character: params.character },
+      };
+      // SignatureHelpContext is optional but signatures of fixed kinds:
+      // 1 = Invoked (manual), 2 = TriggerCharacter, 3 = ContentChange.
+      reqParams.context = {
+        triggerKind: params.triggerCharacter ? 2 : params.isRetrigger ? 3 : 1,
+        isRetrigger: params.isRetrigger,
+        ...(params.triggerCharacter ? { triggerCharacter: params.triggerCharacter } : {}),
+      };
+
+      const raw = (await entry.process.request(
+        "textDocument/signatureHelp",
+        reqParams,
+      )) as
+        | {
+            signatures?: unknown[];
+            activeSignature?: number;
+            activeParameter?: number;
+          }
+        | null;
+
+      if (!raw || !Array.isArray(raw.signatures) || raw.signatures.length === 0) {
+        return { result: null };
+      }
+      const signatures = raw.signatures
+        .map(normalizeSignature)
+        .filter((s) => !!s) as LspSignatureHelp["signatures"];
+      if (signatures.length === 0) return { result: null };
+
+      return {
+        result: {
+          signatures,
+          activeSignature: typeof raw.activeSignature === "number" ? raw.activeSignature : 0,
+          activeParameter: typeof raw.activeParameter === "number" ? raw.activeParameter : 0,
+        },
+      };
+    } catch {
+      return { result: null };
+    }
+  }
+
+  async inlayHints(params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    range: LspRange;
+  }): Promise<{ hints: LspInlayHint[] }> {
+    if (!this.isAllowed(params.workspacePath)) return { hints: [] };
+    const entry = this.registry.find(params.workspacePath, params.languageId);
+    if (!entry || entry.status !== "ready" || !entry.process) return { hints: [] };
+
+    try {
+      const raw = (await entry.process.request("textDocument/inlayHint", {
+        textDocument: { uri: params.uri },
+        range: params.range,
+      })) as unknown[] | null;
+      if (!Array.isArray(raw)) return { hints: [] };
+      return { hints: raw.map(normalizeInlayHint).filter((h): h is LspInlayHint => !!h) };
+    } catch {
+      return { hints: [] };
+    }
+  }
+
+  async codeActions(params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    range: LspRange;
+    context: LspCodeActionContext;
+  }): Promise<{ actions: LspCodeAction[] }> {
+    if (!this.isAllowed(params.workspacePath)) return { actions: [] };
+    const entry = this.registry.find(params.workspacePath, params.languageId);
+    if (!entry || entry.status !== "ready" || !entry.process) return { actions: [] };
+
+    try {
+      const raw = (await entry.process.request("textDocument/codeAction", {
+        textDocument: { uri: params.uri },
+        range: params.range,
+        context: params.context,
+      })) as unknown[] | null;
+      if (!Array.isArray(raw)) return { actions: [] };
+      return {
+        actions: raw
+          .map(normalizeCodeAction)
+          .filter((a): a is LspCodeAction => !!a),
+      };
+    } catch {
+      return { actions: [] };
+    }
+  }
+
+  async executeCommand(params: {
+    workspacePath: string;
+    languageId: string;
+    command: string;
+    arguments?: unknown[];
+  }): Promise<{ ok: boolean; edit: LspWorkspaceEdit | null }> {
+    if (!this.isAllowed(params.workspacePath)) return { ok: false, edit: null };
+    const entry = this.registry.find(params.workspacePath, params.languageId);
+    if (!entry || entry.status !== "ready" || !entry.process) return { ok: false, edit: null };
+
+    try {
+      // Some servers (notably tsserver) return the resulting WorkspaceEdit
+      // directly from executeCommand instead of via a workspace/applyEdit
+      // server→client request. We look for that shape and forward; if it
+      // returns something else we just acknowledge success.
+      const raw = (await entry.process.request("workspace/executeCommand", {
+        command: params.command,
+        arguments: params.arguments ?? [],
+      })) as
+        | { changes?: Record<string, unknown[]>; documentChanges?: unknown[] }
+        | unknown
+        | null;
+      if (!raw || typeof raw !== "object") return { ok: true, edit: null };
+      const edit = (raw as { changes?: unknown; documentChanges?: unknown });
+      if (!edit.changes && !edit.documentChanges) return { ok: true, edit: null };
+
+      // Reuse the rename WorkspaceEdit normalizer for the changes/documentChanges shape.
+      // Inline duplicate of the logic in `rename()` to avoid extracting a helper that
+      // would only have one other caller.
+      const changes: Record<string, Array<{ range: LspRange; newText: string }>> = {};
+      if (edit.changes && typeof edit.changes === "object") {
+        for (const [uri, edits] of Object.entries(edit.changes as Record<string, unknown>)) {
+          if (!Array.isArray(edits)) continue;
+          changes[uri] = edits.filter(
+            (e): e is { range: LspRange; newText: string } =>
+              !!e && typeof e === "object" && "range" in e && "newText" in e,
+          );
+        }
+      } else if (Array.isArray(edit.documentChanges)) {
+        for (const dc of edit.documentChanges) {
+          if (!dc || typeof dc !== "object") continue;
+          const tdc = dc as {
+            textDocument?: { uri?: string };
+            edits?: Array<{ range: LspRange; newText: string }>;
+          };
+          const uri = tdc.textDocument?.uri;
+          if (!uri || !Array.isArray(tdc.edits)) continue;
+          (changes[uri] ??= []).push(
+            ...tdc.edits.filter(
+              (e): e is { range: LspRange; newText: string } =>
+                !!e && "range" in e && "newText" in e,
+            ),
+          );
+        }
+      }
+      return { ok: true, edit: { changes } };
+    } catch {
+      return { ok: false, edit: null };
+    }
+  }
 }
 
 /**
@@ -492,6 +698,146 @@ function normalizeCompletionItem(raw: unknown): LspCompletionItem | null {
   if (typeof r.sortText === "string") item.sortText = r.sortText;
   if (typeof r.filterText === "string") item.filterText = r.filterText;
   return item;
+}
+
+/**
+ * Normalize a SignatureInformation. The spec lets `parameter.label` be
+ * either a string (substring match against signature.label) or
+ * `[start, end]` offsets — we resolve string labels to offset pairs on
+ * the Bun side so the webview always sees the same shape.
+ */
+function normalizeSignature(raw: unknown): LspSignatureHelp["signatures"][number] | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.label !== "string") return null;
+  const label = r.label;
+
+  const parameters: LspParameterInformation[] = [];
+  if (Array.isArray(r.parameters)) {
+    for (const p of r.parameters) {
+      if (!p || typeof p !== "object") continue;
+      const pr = p as Record<string, unknown>;
+      let offsets: [number, number] | null = null;
+      if (Array.isArray(pr.label) && pr.label.length === 2 &&
+          typeof pr.label[0] === "number" && typeof pr.label[1] === "number") {
+        offsets = [pr.label[0], pr.label[1]];
+      } else if (typeof pr.label === "string") {
+        // Resolve string-form label to offset pair via substring search.
+        // Servers sometimes return the parameter label as a literal
+        // substring of the signature label.
+        const idx = label.indexOf(pr.label);
+        if (idx !== -1) offsets = [idx, idx + pr.label.length];
+      }
+      if (!offsets) continue;
+      const param: LspParameterInformation = { label: offsets };
+      if (typeof pr.documentation === "string") {
+        param.documentation = pr.documentation;
+      } else if (pr.documentation && typeof pr.documentation === "object") {
+        const d = pr.documentation as { value?: string };
+        if (typeof d.value === "string") param.documentation = d.value;
+      }
+      parameters.push(param);
+    }
+  }
+
+  const sig: LspSignatureHelp["signatures"][number] = { label, parameters };
+  if (typeof r.documentation === "string") {
+    sig.documentation = r.documentation;
+  } else if (r.documentation && typeof r.documentation === "object") {
+    const d = r.documentation as { value?: string };
+    if (typeof d.value === "string") sig.documentation = d.value;
+  }
+  if (typeof r.activeParameter === "number") sig.activeParameter = r.activeParameter;
+  return sig;
+}
+
+function normalizeInlayHint(raw: unknown): LspInlayHint | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  if (!r.position || typeof r.position !== "object") return null;
+  const pos = r.position as { line?: unknown; character?: unknown };
+  if (typeof pos.line !== "number" || typeof pos.character !== "number") return null;
+
+  // label may be a string or InlayHintLabelPart[].
+  let label: LspInlayHint["label"];
+  if (typeof r.label === "string") {
+    label = r.label;
+  } else if (Array.isArray(r.label)) {
+    const parts = r.label
+      .map((p): { value: string; tooltip?: string } | null => {
+        if (!p || typeof p !== "object") return null;
+        const pr = p as { value?: unknown; tooltip?: unknown };
+        if (typeof pr.value !== "string") return null;
+        const part: { value: string; tooltip?: string } = { value: pr.value };
+        if (typeof pr.tooltip === "string") part.tooltip = pr.tooltip;
+        return part;
+      })
+      .filter((p): p is { value: string; tooltip?: string } => !!p);
+    if (parts.length === 0) return null;
+    label = parts;
+  } else {
+    return null;
+  }
+
+  const hint: LspInlayHint = {
+    position: { line: pos.line, character: pos.character },
+    label,
+  };
+  if (r.kind === 1 || r.kind === 2) hint.kind = r.kind;
+  if (typeof r.tooltip === "string") {
+    hint.tooltip = r.tooltip;
+  } else if (r.tooltip && typeof r.tooltip === "object") {
+    const t = r.tooltip as { value?: string };
+    if (typeof t.value === "string") hint.tooltip = t.value;
+  }
+  if (typeof r.paddingLeft === "boolean") hint.paddingLeft = r.paddingLeft;
+  if (typeof r.paddingRight === "boolean") hint.paddingRight = r.paddingRight;
+  return hint;
+}
+
+function normalizeCodeAction(raw: unknown): LspCodeAction | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  // Spec allows the legacy `Command` shape directly in the array. Promote
+  // it to a CodeAction with `command` set so the webview only deals with
+  // one shape.
+  if (typeof r.command === "string" && typeof r.title === "string") {
+    return {
+      title: r.title,
+      command: {
+        title: r.title,
+        command: r.command,
+        ...(Array.isArray(r.arguments) ? { arguments: r.arguments } : {}),
+      },
+    };
+  }
+
+  if (typeof r.title !== "string") return null;
+  const action: LspCodeAction = { title: r.title };
+  if (typeof r.kind === "string") action.kind = r.kind;
+  if (Array.isArray(r.diagnostics)) {
+    action.diagnostics = r.diagnostics.filter(
+      (d): d is LspDiagnostic => !!d && typeof d === "object" && "range" in d && "message" in d,
+    );
+  }
+  if (typeof r.isPreferred === "boolean") action.isPreferred = r.isPreferred;
+  if (r.edit && typeof r.edit === "object") {
+    // Reuse the same WorkspaceEdit normalization shape as rename.
+    // We keep the raw object — the webview's applyWorkspaceEdit handles
+    // both `changes` and (later) `documentChanges` shapes.
+    action.edit = r.edit as LspWorkspaceEdit;
+  }
+  if (r.command && typeof r.command === "object") {
+    const c = r.command as Record<string, unknown>;
+    if (typeof c.title === "string" && typeof c.command === "string") {
+      action.command = {
+        title: c.title,
+        command: c.command,
+        ...(Array.isArray(c.arguments) ? { arguments: c.arguments } : {}),
+      };
+    }
+  }
+  return action;
 }
 
 /** Recursively normalize a DocumentSymbol tree. Drops malformed nodes. */

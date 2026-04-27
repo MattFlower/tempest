@@ -4,6 +4,7 @@
 // ============================================================
 
 import { PaneTabKind, ProgressState } from "../../../shared/ipc-types";
+import { isImageFile } from "../../../shared/file-types";
 import {
   type PaneNode,
   type Pane,
@@ -521,7 +522,11 @@ function findOpenTabForFile(
   for (const [wsPath, tree] of Object.entries(paneTrees)) {
     for (const pane of allPanes(tree)) {
       for (const tab of pane.tabs) {
-        if (tab.editorFilePath === filePath || tab.markdownFilePath === filePath) {
+        if (
+          tab.editorFilePath === filePath ||
+          tab.markdownFilePath === filePath ||
+          tab.imageFilePath === filePath
+        ) {
           return { workspacePath: wsPath, paneId: pane.id, tabId: tab.id };
         }
       }
@@ -558,11 +563,18 @@ export function openFileInWorkspace(
   }
 
   const isMarkdown = /\.(?:md|markdown)$/i.test(filePath);
-  const kind = isMarkdown ? PaneTabKind.MarkdownViewer : PaneTabKind.Editor;
+  const isImage = isImageFile(filePath);
+  const kind = isMarkdown
+    ? PaneTabKind.MarkdownViewer
+    : isImage
+      ? PaneTabKind.ImageViewer
+      : PaneTabKind.Editor;
   const label = filePath.split("/").pop() ?? "File";
   const overrides = isMarkdown
     ? { markdownFilePath: filePath }
-    : { editorFilePath: filePath };
+    : isImage
+      ? { imageFilePath: filePath }
+      : { editorFilePath: filePath };
 
   const tryOpen = (): boolean => {
     const s = useStore.getState();
@@ -633,11 +645,18 @@ export function openFileInSplit(
   filePath: string,
 ): void {
   const isMarkdown = /\.(?:md|markdown)$/i.test(filePath);
-  const kind = isMarkdown ? PaneTabKind.MarkdownViewer : PaneTabKind.Editor;
+  const isImage = isImageFile(filePath);
+  const kind = isMarkdown
+    ? PaneTabKind.MarkdownViewer
+    : isImage
+      ? PaneTabKind.ImageViewer
+      : PaneTabKind.Editor;
   const label = filePath.split("/").pop() ?? "File";
   const overrides = isMarkdown
     ? { markdownFilePath: filePath }
-    : { editorFilePath: filePath };
+    : isImage
+      ? { imageFilePath: filePath }
+      : { editorFilePath: filePath };
 
   const trySplit = (): boolean => {
     const s = useStore.getState();

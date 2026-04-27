@@ -50,6 +50,7 @@ import { buildEditorCommand } from "./editor/editor-command";
 import { LspRpc } from "./lsp/lsp-rpc";
 import { getInstalledEditors, openInEditor } from "./editor/open-in";
 import { readFileForEditor, writeFileForEditor, resolveModulePath } from "./editor/file-service";
+import { readImageFile } from "./editor/image-service";
 import { FindInFilesSearcher } from "./find-in-files/searcher";
 import { AIContextProvider } from "./ai-context/ai-context-provider";
 import { PRMonitor } from "./pr/pr-monitor";
@@ -1020,6 +1021,9 @@ const rpc: any = (BrowserView.defineRPC as any)({
       // --- File operations (for Monaco editor) ---
       readFileForEditor: async (params: any) => {
         return await readFileForEditor(params.filePath);
+      },
+      readImageFile: async (params: any) => {
+        return await readImageFile(params.filePath);
       },
       writeFileForEditor: async (params: any) => {
         await writeFileForEditor(params.filePath, params.content);

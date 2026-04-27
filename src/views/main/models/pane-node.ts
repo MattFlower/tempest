@@ -22,6 +22,7 @@ export interface PaneTab {
   editorFilePath?: string;
   editorLineNumber?: number;
   editorType?: EditorType;
+  imageFilePath?: string;
   diffScope?: DiffScope;
   resume?: boolean; // Transient: continue most recent session (Claude `-c`, Pi `--continue`, Codex `resume --last`). Not persisted.
   progressState?: ProgressState;
@@ -109,6 +110,7 @@ export function toNodeState(node: PaneNode): PaneNodeState {
           editorFilePath: tab.editorFilePath,
           editorLineNumber: tab.editorLineNumber,
           editorType: tab.editorType,
+          imageFilePath: tab.imageFilePath,
           diffScope: tab.diffScope,
           shellCwd: tab.shellCwd,
         })),
@@ -147,6 +149,7 @@ export function fromNodeState(state: PaneNodeState): PaneNode {
         editorFilePath: ts.editorFilePath,
         editorLineNumber: ts.editorLineNumber,
         editorType: ts.editorType,
+        imageFilePath: ts.imageFilePath,
         diffScope: ts.diffScope,
         // Terminal/Claude/Shell tabs get fresh terminalIds so new PTYs are created.
         // Editor tabs only need a terminalId for terminal-based editors (not Monaco).

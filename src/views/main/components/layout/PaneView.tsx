@@ -10,6 +10,7 @@ import { HistoryViewer } from "../history/HistoryViewer";
 import { MarkdownViewer } from "../markdown/MarkdownViewer";
 import { PRDashboard } from "../pr/PRDashboard";
 import { EditorPane } from "../editor/EditorPane";
+import { ImageViewerPane } from "../image/ImageViewerPane";
 import { KeymapHelp } from "../help/KeymapHelp";
 import { closeTab } from "../../state/actions";
 
@@ -74,6 +75,8 @@ function TabContent({ tab, paneId, isFocused, isVisible, workspacePath }: { tab:
       return <HistoryViewer />;
     case PaneTabKind.MarkdownViewer:
       return <MarkdownViewer filePath={tab.markdownFilePath} paneId={paneId} isFocused={isFocused} />;
+    case PaneTabKind.ImageViewer:
+      return <ImageViewerPane filePath={tab.imageFilePath} />;
     case PaneTabKind.PRDashboard:
       return <PRDashboard />;
     case PaneTabKind.KeymapHelp:

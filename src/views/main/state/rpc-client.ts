@@ -829,6 +829,8 @@ export const api = {
   // File operations (for Monaco editor)
   readFileForEditor: (filePath: string) =>
     rpcRequest.readFileForEditor({ filePath }),
+  readImageFile: (filePath: string) =>
+    rpcRequest.readImageFile({ filePath }),
   writeFileForEditor: (filePath: string, content: string) =>
     rpcRequest.writeFileForEditor({ filePath, content }),
   resolveModulePath: (specifier: string, fromFilePath: string) =>

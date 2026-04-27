@@ -469,6 +469,10 @@ export interface BunRequests {
     params: { filePath: string };
     response: { content: string; language: string };
   };
+  readImageFile: {
+    params: { filePath: string };
+    response: { base64: string; mime: string; fileName: string; byteSize: number };
+  };
   writeFileForEditor: {
     params: { filePath: string; content: string };
     response: void;

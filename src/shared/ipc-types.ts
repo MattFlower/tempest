@@ -45,6 +45,7 @@ export enum PaneTabKind {
   HistoryViewer = "historyViewer",
   MarkdownViewer = "markdownViewer",
   Editor = "editor",
+  ImageViewer = "imageViewer",
   PRDashboard = "prDashboard",
   KeymapHelp = "keymapHelp",
 }
@@ -316,6 +317,7 @@ export interface PaneTabState {
   editorFilePath?: string;
   editorLineNumber?: number;
   editorType?: EditorType;
+  imageFilePath?: string;
   diffScope?: DiffScope;
   shellCwd?: string; // Last known CWD for shell terminals (tracked via OSC 7)
   scrollbackContent?: string; // Serialized terminal scrollback for session restore

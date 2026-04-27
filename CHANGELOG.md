@@ -217,6 +217,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Fixed
+
+### Changed
+
+### Removed
+
+## [0.21.0] - 2026-04-26
+
+### Added
+
 - Image viewer: opening an image file (PNG, JPEG, GIF, WebP, BMP, TIFF, ICO, HEIC/HEIF, AVIF) from the file tree, command palette, or split now opens it in a new `ImageViewer` tab kind instead of the Monaco editor (which previously rendered binary bytes as garbled text). The pane shows the image fitted to the available space on a checkerboard background with filename, dimensions, byte size, a 1:1 / Fit toggle, and a reload button. Bytes are read via a new `readImageFile` RPC and rendered as a base64 data URL. SVG continues to open in Monaco for editing. New component at `src/views/main/components/image/ImageViewerPane.tsx`; new shared helpers in `src/shared/file-types.ts`.
 - "Pi (Continue)" and "Codex (Continue)" entries in the New / Split / + dropdowns, mirroring the existing Claude (Continue). They launch `pi --continue` and `codex resume --last` respectively to pick up the most recent session for the current cwd.
 - Recent Files selector: a new palette (default `Cmd+E`, command `Open Recent File`) for reopening files you've recently *closed* in the current workspace. Files currently open in any pane are filtered out — the list reactively repopulates when you close a tab. Supports fuzzy filtering, arrow-key navigation, and `←` / `→` to open in a split pane. Recents are tracked per-workspace at the `addTab` chokepoint (so palette, file tree, find-in-files, go-to-definition, etc. all feed the list), capped at 50, and persisted to `session-state.json`. Component at `src/views/main/components/palette/RecentFilesPalette.tsx`; results preserve recency order rather than re-sorting by fuzzy score.

@@ -5,7 +5,7 @@
 // ============================================================
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { PaneTabKind } from "../../../../shared/ipc-types";
+import { PaneTabKind, EditorType } from "../../../../shared/ipc-types";
 import { createTab } from "../../models/pane-node";
 import { addTab } from "../../state/actions";
 import { api, onMarkdownFileChanged } from "../../state/rpc-client";
@@ -290,10 +290,15 @@ export function MarkdownViewer({ filePath, paneId, isFocused }: MarkdownViewerPr
               color: "var(--ctp-subtext1)",
             }}
             onClick={() => {
-              const config = useStore.getState().config;
-              const isMonaco = config?.editor === "monaco";
+              const editorType =
+                useStore.getState().config?.editor === "monaco"
+                  ? EditorType.Monaco
+                  : EditorType.Neovim;
               const tab = createTab(PaneTabKind.Editor, fileName, {
-                ...(isMonaco ? {} : { terminalId: crypto.randomUUID() }),
+                editorType,
+                ...(editorType === EditorType.Monaco
+                  ? {}
+                  : { terminalId: crypto.randomUUID() }),
                 editorFilePath: filePath,
               });
               addTab(paneId, tab);

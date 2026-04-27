@@ -23,7 +23,7 @@ export interface PaneTab {
   editorLineNumber?: number;
   editorType?: EditorType;
   diffScope?: DiffScope;
-  resume?: boolean; // Transient: launch Claude with -c (continue). Not persisted.
+  resume?: boolean; // Transient: continue most recent session (Claude `-c`, Pi `--continue`, Codex `resume --last`). Not persisted.
   progressState?: ProgressState;
   progressValue?: number; // 0-100
   shellCwd?: string; // Current working directory (tracked via OSC 7)

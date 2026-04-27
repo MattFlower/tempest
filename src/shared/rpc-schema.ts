@@ -117,11 +117,11 @@ export interface BunRequests {
     response: { command: string[] };
   };
   buildPiCommand: {
-    params: { workspacePath: string; sessionPath?: string };
+    params: { workspacePath: string; sessionPath?: string; resume?: boolean };
     response: { command: string[] };
   };
   buildCodexCommand: {
-    params: { workspacePath: string; sessionId?: string };
+    params: { workspacePath: string; sessionId?: string; resume?: boolean };
     response: { command: string[] };
   };
   buildEditorCommand: {

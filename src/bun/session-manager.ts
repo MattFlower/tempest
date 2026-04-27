@@ -110,6 +110,7 @@ export class SessionManager {
   async buildPiCommand(params: {
     workspacePath: string;
     sessionPath?: string;
+    resume?: boolean;
   }): Promise<{ command: string[] }> {
     const piPath = this.resolveBinary("pi", this.config.piPath);
     const parts = [piPath, "-e", HookSettingsBuilder.piExtensionPath];
@@ -122,6 +123,8 @@ export class SessionManager {
           `[session] Pi session ${params.sessionPath} not found, starting new session`,
         );
       }
+    } else if (params.resume) {
+      parts.push("--continue");
     }
 
     parts.push(...(this.config.piArgs ?? []));
@@ -141,12 +144,15 @@ export class SessionManager {
   async buildCodexCommand(params: {
     workspacePath: string;
     sessionId?: string;
+    resume?: boolean;
   }): Promise<{ command: string[] }> {
     const codexPath = this.resolveBinary("codex", this.config.codexPath);
     const parts: string[] = [codexPath];
 
     if (params.sessionId) {
       parts.push("resume", params.sessionId);
+    } else if (params.resume) {
+      parts.push("resume", "--last");
     }
 
     parts.push(...(this.config.codexArgs ?? []));

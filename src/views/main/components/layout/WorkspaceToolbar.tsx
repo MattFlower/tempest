@@ -475,7 +475,9 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
     { label: "Claude", action: () => addTabToFocusedPane(PaneTabKind.Claude, "Claude") },
     { label: "Claude (Continue)", action: () => addTabToFocusedPane(PaneTabKind.Claude, "Claude", { resume: true }) },
     { label: "Pi", action: () => addTabToFocusedPane(PaneTabKind.Pi, "Pi") },
+    { label: "Pi (Continue)", action: () => addTabToFocusedPane(PaneTabKind.Pi, "Pi", { resume: true }) },
     { label: "Codex", action: () => addTabToFocusedPane(PaneTabKind.Codex, "Codex") },
+    { label: "Codex (Continue)", action: () => addTabToFocusedPane(PaneTabKind.Codex, "Codex", { resume: true }) },
     { label: "Browser", action: () => addTabToFocusedPane(PaneTabKind.Browser, "Browser") },
     { label: "Chat History", action: () => addTabToFocusedPane(PaneTabKind.HistoryViewer, "History") },
   ];
@@ -485,7 +487,9 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
     { label: "Claude", action: () => splitWithTab(PaneTabKind.Claude, "Claude") },
     { label: "Claude (Continue)", action: () => splitWithTab(PaneTabKind.Claude, "Claude", { resume: true }) },
     { label: "Pi", action: () => splitWithTab(PaneTabKind.Pi, "Pi") },
+    { label: "Pi (Continue)", action: () => splitWithTab(PaneTabKind.Pi, "Pi", { resume: true }) },
     { label: "Codex", action: () => splitWithTab(PaneTabKind.Codex, "Codex") },
+    { label: "Codex (Continue)", action: () => splitWithTab(PaneTabKind.Codex, "Codex", { resume: true }) },
     { label: "Browser", action: () => splitWithTab(PaneTabKind.Browser, "Browser") },
     { label: "Chat History", action: () => splitWithTab(PaneTabKind.HistoryViewer, "History") },
   ];

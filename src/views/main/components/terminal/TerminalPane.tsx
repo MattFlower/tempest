@@ -156,6 +156,7 @@ export function TerminalPane({
           const result = await api.buildPiCommand({
             workspacePath: cwdRef.current,
             sessionPath: sessionIdRef.current,
+            resume: resumeRef.current,
           });
           command = result.command;
         } catch (e) {
@@ -167,6 +168,7 @@ export function TerminalPane({
           const result = await api.buildCodexCommand({
             workspacePath: cwdRef.current,
             sessionId: sessionIdRef.current,
+            resume: resumeRef.current,
           });
           command = result.command;
         } catch (e) {

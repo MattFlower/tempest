@@ -631,9 +631,9 @@ export const api = {
 
   buildShellCommand: (params: { workspacePath: string }) =>
     rpcRequest.buildShellCommand(params),
-  buildPiCommand: (params: { workspacePath: string; sessionPath?: string }) =>
+  buildPiCommand: (params: { workspacePath: string; sessionPath?: string; resume?: boolean }) =>
     rpcRequest.buildPiCommand(params),
-  buildCodexCommand: (params: { workspacePath: string; sessionId?: string }) =>
+  buildCodexCommand: (params: { workspacePath: string; sessionId?: string; resume?: boolean }) =>
     rpcRequest.buildCodexCommand(params),
   buildEditorCommand: (filePath: string, lineNumber?: number) =>
     rpcRequest.buildEditorCommand({ filePath, lineNumber }),

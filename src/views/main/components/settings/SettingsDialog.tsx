@@ -5,14 +5,20 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import QRCode from "qrcode";
-import type { AppConfig, NetworkInterface } from "../../../../shared/ipc-types";
+import type {
+  AppConfig,
+  EditorSaveActionsConfig,
+  FormattingConfig,
+  NetworkInterface,
+} from "../../../../shared/ipc-types";
 import { api } from "../../state/rpc-client";
 import { useStore } from "../../state/store";
 import { useOverlay } from "../../state/useOverlay";
 import { applyTheme } from "../../state/theme";
 import { KeybindingsTab } from "./KeybindingsTab";
+import { FormattingTab } from "./FormattingTab";
 
-type Tab = "general" | "remote" | "tools" | "appearance" | "pi" | "codex" | "lsp" | "keybindings";
+type Tab = "general" | "remote" | "tools" | "appearance" | "pi" | "codex" | "lsp" | "formatting" | "keybindings";
 
 function isSameKeybindings(
   a: Record<string, string | null> | undefined,
@@ -51,6 +57,11 @@ export function SettingsDialog() {
   // LSP tab state
   const [lspDisabled, setLspDisabled] = useState(false);
 
+  // Formatting tab state — kept as the same shapes that go to disk so
+  // load/save are a direct round-trip with no flattening.
+  const [formatting, setFormatting] = useState<FormattingConfig | undefined>(undefined);
+  const [editorSaveActions, setEditorSaveActions] = useState<EditorSaveActionsConfig | undefined>(undefined);
+
   // Keybindings tab state — map of commandId → override (string or null for unbound).
   // Missing entries fall back to the command's default keybinding.
   const [keybindings, setKeybindings] = useState<Record<string, string | null>>({});
@@ -82,6 +93,8 @@ export function SettingsDialog() {
       setShowMermaidDiagram(cfg.mcpTools?.showMermaidDiagram !== false);
       setShowMarkdown(cfg.mcpTools?.showMarkdown !== false);
       setLspDisabled(cfg.lspDisabled ?? false);
+      setFormatting(cfg.formatting);
+      setEditorSaveActions(cfg.editorSaveActions);
       setKeybindings(cfg.keybindings ?? {});
       if (cfg.httpServer) {
         setHttpEnabled(cfg.httpServer.enabled);
@@ -118,6 +131,8 @@ export function SettingsDialog() {
       httpAllowTerminalWrite,
       mcpTools: { showWebpage, showMermaidDiagram, showMarkdown },
       lspDisabled,
+      formatting,
+      editorSaveActions,
       httpServer: {
         enabled: httpEnabled,
         port: httpPort,
@@ -205,6 +220,8 @@ export function SettingsDialog() {
       (config.mcpTools?.showMermaidDiagram !== false) !== showMermaidDiagram ||
       (config.mcpTools?.showMarkdown !== false) !== showMarkdown ||
       (config.lspDisabled ?? false) !== lspDisabled ||
+      JSON.stringify(config.formatting ?? null) !== JSON.stringify(formatting ?? null) ||
+      JSON.stringify(config.editorSaveActions ?? null) !== JSON.stringify(editorSaveActions ?? null) ||
       (config.httpServer?.enabled ?? false) !== httpEnabled ||
       (config.httpServer?.port ?? 7778) !== httpPort ||
       (config.httpServer?.hostname ?? "127.0.0.1") !== httpHostname ||
@@ -307,6 +324,11 @@ export function SettingsDialog() {
             onClick={() => setActiveTab("lsp")}
           />
           <TabButton
+            label="Formatting"
+            active={activeTab === "formatting"}
+            onClick={() => setActiveTab("formatting")}
+          />
+          <TabButton
             label="Keybindings"
             active={activeTab === "keybindings"}
             onClick={() => setActiveTab("keybindings")}
@@ -347,6 +369,14 @@ export function SettingsDialog() {
             {activeTab === "codex" && <AgentEnvVarsTab agent="codex" />}
             {activeTab === "lsp" && (
               <LspTab disabled={lspDisabled} setDisabled={setLspDisabled} />
+            )}
+            {activeTab === "formatting" && (
+              <FormattingTab
+                formatting={formatting}
+                setFormatting={setFormatting}
+                saveActions={editorSaveActions}
+                setSaveActions={setEditorSaveActions}
+              />
             )}
             {activeTab === "keybindings" && (
               <KeybindingsTab

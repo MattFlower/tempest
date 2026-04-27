@@ -47,11 +47,13 @@ import type {
   PRDraftSummary,
   PRDetailInfo,
   WorkspaceProgressInfo,
+  EditorconfigSettings,
   LspCodeAction,
   LspCodeActionContext,
   LspCompletionList,
   LspDiagnostic,
   LspDocumentSymbol,
+  LspFormattingOptions,
   LspHoverResult,
   LspInlayHint,
   LspLocation,
@@ -60,6 +62,7 @@ import type {
   LspRange,
   LspServerState,
   LspSignatureHelp,
+  LspTextEdit,
   LspWorkspaceEdit,
 } from "./ipc-types";
 
@@ -968,6 +971,84 @@ export interface BunRequests {
        *  way it applies a rename's edit. */
       edit: LspWorkspaceEdit | null;
     };
+  };
+  lspFormatting: {
+    params: {
+      workspacePath: string;
+      uri: string;
+      languageId: string;
+      options: LspFormattingOptions;
+    };
+    response: { edits: LspTextEdit[] };
+  };
+  lspRangeFormatting: {
+    params: {
+      workspacePath: string;
+      uri: string;
+      languageId: string;
+      range: LspRange;
+      options: LspFormattingOptions;
+    };
+    response: { edits: LspTextEdit[] };
+  };
+  formatBuffer: {
+    params: {
+      filePath: string;
+      workspacePath?: string;
+      languageId: string;
+      content: string;
+      options: { tabSize: number; insertSpaces: boolean };
+      /** When set, format only this range. */
+      range?: LspRange;
+    };
+    response: {
+      result:
+        | {
+            kind: "fullText";
+            newText: string;
+            chosenFormatter: { id: string; displayName: string };
+          }
+        | {
+            kind: "edits";
+            edits: LspTextEdit[];
+            chosenFormatter: { id: string; displayName: string };
+          }
+        | {
+            kind: "noop";
+            chosenFormatter: { id: string; displayName: string };
+          }
+        | { kind: "error"; message: string };
+    };
+  };
+  listFormattersForLanguage: {
+    params: {
+      languageId: string;
+      filePath?: string;
+      workspacePath?: string;
+    };
+    response: {
+      formatters: Array<{
+        id: string;
+        displayName: string;
+        applies: boolean;
+        reason: string;
+        installHint?: string;
+      }>;
+    };
+  };
+  resolveSaveConfig: {
+    params: { workspacePath?: string; languageId: string; filePath?: string };
+    response: {
+      formatOnSave: boolean;
+      formatOnPaste: boolean;
+      trimTrailingWhitespace: boolean;
+      insertFinalNewline: boolean;
+      timeoutMs: number;
+    };
+  };
+  getEditorconfig: {
+    params: { filePath: string; workspacePath?: string };
+    response: EditorconfigSettings;
   };
 }
 

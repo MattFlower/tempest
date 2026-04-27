@@ -1105,4 +1105,39 @@ export const api = {
     command: string;
     arguments?: unknown[];
   }) => rpcRequest.lspExecuteCommand(params),
+  lspFormatting: (params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    options: import("../../../shared/ipc-types").LspFormattingOptions;
+  }) => rpcRequest.lspFormatting(params),
+  lspRangeFormatting: (params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    range: import("../../../shared/ipc-types").LspRange;
+    options: import("../../../shared/ipc-types").LspFormattingOptions;
+  }) => rpcRequest.lspRangeFormatting(params),
+  formatBuffer: (params: {
+    filePath: string;
+    workspacePath?: string;
+    languageId: string;
+    content: string;
+    options: { tabSize: number; insertSpaces: boolean };
+    range?: import("../../../shared/ipc-types").LspRange;
+  }) => rpcRequest.formatBuffer(params),
+  listFormattersForLanguage: (params: {
+    languageId: string;
+    filePath?: string;
+    workspacePath?: string;
+  }) => rpcRequest.listFormattersForLanguage(params),
+  resolveSaveConfig: (params: {
+    workspacePath?: string;
+    languageId: string;
+    filePath?: string;
+  }) => rpcRequest.resolveSaveConfig(params),
+  getEditorconfig: (params: {
+    filePath: string;
+    workspacePath?: string;
+  }) => rpcRequest.getEditorconfig(params),
 };

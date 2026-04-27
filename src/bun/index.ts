@@ -48,6 +48,7 @@ import {
 } from "./file-tree/file-tree-service";
 import { buildEditorCommand } from "./editor/editor-command";
 import { LspRpc } from "./lsp/lsp-rpc";
+import { FormatterService } from "./formatters/formatter-service";
 import { getInstalledEditors, openInEditor } from "./editor/open-in";
 import { readFileForEditor, writeFileForEditor, resolveModulePath } from "./editor/file-service";
 import { readImageFile } from "./editor/image-service";
@@ -557,6 +558,20 @@ const lspRpc = new LspRpc({
   pushDiagnostics: (uri, diagnostics) => lspPush.diagnostics(uri, diagnostics),
   pushServerState: (state) => lspPush.serverState(state),
   pushMemorySamples: (samples) => lspPush.memorySamples(samples),
+});
+const formatterService = new FormatterService({
+  rpc: lspRpc,
+  hasFormattingCapability: (workspacePath, languageId, range) =>
+    lspRpc.hasFormattingCapability(workspacePath, languageId, range),
+  anyRunningServerAdvertisesFormatting: (languageId) =>
+    lspRpc.anyRunningServerAdvertisesFormatting(languageId),
+  getConfig: () => workspaceManager.getConfig(),
+  getRepoSettingsFor: (workspacePath) => {
+    if (!workspacePath) return undefined;
+    const ws = workspaceManager.findWorkspaceByPath(workspacePath);
+    if (!ws?.repoPath) return undefined;
+    return workspaceManager.getRepoSettings(ws.repoPath);
+  },
 });
 
 // Define RPC — all streams' handlers combined
@@ -1123,7 +1138,7 @@ const rpc: any = (BrowserView.defineRPC as any)({
             const activity = allActivityStates[ws.path];
             const hasDiffChanges =
               (sidebarInfo.diffStats?.additions ?? 0) +
-                (sidebarInfo.diffStats?.deletions ?? 0) >
+              (sidebarInfo.diffStats?.deletions ?? 0) >
               0;
 
             // Determine stage
@@ -1158,7 +1173,7 @@ const rpc: any = (BrowserView.defineRPC as any)({
                 } else if (branch) {
                   stage = "pullRequest";
                   backgroundRefreshes.push(
-                    getPRDetail(ws.repoPath, branch).then(() => {}),
+                    getPRDetail(ws.repoPath, branch).then(() => { }),
                   );
                 } else {
                   stage = "pullRequest";
@@ -1167,7 +1182,7 @@ const rpc: any = (BrowserView.defineRPC as any)({
                 stage = "inDevelopment";
                 if (branch) {
                   backgroundRefreshes.push(
-                    getPRDetail(ws.repoPath, branch).then(() => {}),
+                    getPRDetail(ws.repoPath, branch).then(() => { }),
                   );
                 }
               } else {
@@ -1210,7 +1225,7 @@ const rpc: any = (BrowserView.defineRPC as any)({
 
         // Let background fetches run without blocking the response
         if (backgroundRefreshes.length > 0) {
-          Promise.all(backgroundRefreshes).catch(() => {});
+          Promise.all(backgroundRefreshes).catch(() => { });
         }
 
         return results;
@@ -1497,6 +1512,14 @@ const rpc: any = (BrowserView.defineRPC as any)({
       lspInlayHints: (params: any) => lspRpc.inlayHints(params),
       lspCodeActions: (params: any) => lspRpc.codeActions(params),
       lspExecuteCommand: (params: any) => lspRpc.executeCommand(params),
+      lspFormatting: (params: any) => lspRpc.formatting(params),
+      lspRangeFormatting: (params: any) => lspRpc.rangeFormatting(params),
+
+      // --- Formatters (Phase 2: provider-tier formatBuffer) ---
+      formatBuffer: async (params: any) => ({ result: await formatterService.formatBuffer(params) }),
+      listFormattersForLanguage: (params: any) => formatterService.listFormattersForLanguage(params),
+      resolveSaveConfig: (params: any) => formatterService.resolveSaveConfig(params),
+      getEditorconfig: (params: any) => formatterService.getEditorconfig(params),
     },
     messages: {
       // --- Terminal I/O (Stream A) ---
@@ -1561,7 +1584,7 @@ const rpc: any = (BrowserView.defineRPC as any)({
       },
 
       // --- Stats (optional) ---
-      saveLatencyStats: (_msg: any) => {},
+      saveLatencyStats: (_msg: any) => { },
     },
   },
 });

@@ -20,6 +20,7 @@ import type {
   LspCompletionList,
   LspDiagnostic,
   LspDocumentSymbol,
+  LspFormattingOptions,
   LspHoverResult,
   LspInlayHint,
   LspLocation,
@@ -29,6 +30,7 @@ import type {
   LspRange,
   LspServerState,
   LspSignatureHelp,
+  LspTextEdit,
   LspWorkspaceEdit,
   RepoSettings,
 } from "../../shared/ipc-types";
@@ -102,6 +104,48 @@ export class LspRpc {
   }
 
   // --- Request handlers (called from index.ts rpc registration) ---
+
+  /** Return whether the server for (workspacePath, languageId) announced
+   *  the requested formatting capability in `initialize`. Used by the
+   *  formatter service to decide whether to route through LSP. */
+  hasFormattingCapability(
+    workspacePath: string | undefined,
+    languageId: string,
+    range: boolean,
+  ): boolean {
+    if (!workspacePath) return false;
+    const entry = this.registry.find(workspacePath, languageId);
+    if (!entry || entry.status !== "ready" || !entry.process) return false;
+    return capsAdvertiseFormatting(entry.process.getCapabilities(), range);
+  }
+
+  /** Settings-time question: across every running LSP server matching
+   *  this language, do any advertise formatting? Returns:
+   *   - "yes": ≥1 ready server announces documentFormattingProvider
+   *   - "no":  ≥1 ready server matches the language but none format
+   *   - "unknown": no ready server matches yet — caller should be
+   *     optimistic since the answer depends on what spawns later.
+   *
+   *  Used by FormatterService.listFormattersForLanguage to decide
+   *  whether to surface the LSP tier in Settings → Formatting pickers.
+   *  We can't tell from a placeholder filePath whether LSP applies, so
+   *  we use this whole-process snapshot instead. */
+  anyRunningServerAdvertisesFormatting(
+    languageId: string,
+  ): "yes" | "no" | "unknown" {
+    let sawAny = false;
+    for (const state of this.registry.listStates()) {
+      if (state.languageId !== languageId) continue;
+      if (state.status !== "ready") continue;
+      const entry = this.registry.get(state.id);
+      if (!entry?.process) continue;
+      sawAny = true;
+      if (capsAdvertiseFormatting(entry.process.getCapabilities(), false)) {
+        return "yes";
+      }
+    }
+    return sawAny ? "no" : "unknown";
+  }
 
   listServers(): { servers: LspServerState[] } {
     return { servers: this.registry.listStates() };
@@ -660,6 +704,50 @@ export class LspRpc {
       return { ok: false, edit: null };
     }
   }
+
+  async formatting(params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    options: LspFormattingOptions;
+  }): Promise<{ edits: LspTextEdit[] }> {
+    if (!this.isAllowed(params.workspacePath)) return { edits: [] };
+    const entry = this.registry.find(params.workspacePath, params.languageId);
+    if (!entry || entry.status !== "ready" || !entry.process) return { edits: [] };
+
+    try {
+      const raw = (await entry.process.request("textDocument/formatting", {
+        textDocument: { uri: params.uri },
+        options: params.options,
+      })) as unknown[] | null;
+      return { edits: normalizeTextEdits(raw) };
+    } catch {
+      return { edits: [] };
+    }
+  }
+
+  async rangeFormatting(params: {
+    workspacePath: string;
+    uri: string;
+    languageId: string;
+    range: LspRange;
+    options: LspFormattingOptions;
+  }): Promise<{ edits: LspTextEdit[] }> {
+    if (!this.isAllowed(params.workspacePath)) return { edits: [] };
+    const entry = this.registry.find(params.workspacePath, params.languageId);
+    if (!entry || entry.status !== "ready" || !entry.process) return { edits: [] };
+
+    try {
+      const raw = (await entry.process.request("textDocument/rangeFormatting", {
+        textDocument: { uri: params.uri },
+        range: params.range,
+        options: params.options,
+      })) as unknown[] | null;
+      return { edits: normalizeTextEdits(raw) };
+    } catch {
+      return { edits: [] };
+    }
+  }
 }
 
 /**
@@ -838,6 +926,34 @@ function normalizeCodeAction(raw: unknown): LspCodeAction | null {
     }
   }
   return action;
+}
+
+/** Inspect raw server capabilities for the formatting-related entries.
+ *  The spec lets servers announce either a boolean (true/false) or an
+ *  options object. Missing or `false` → no formatting. */
+function capsAdvertiseFormatting(
+  caps: Record<string, unknown> | null,
+  range: boolean,
+): boolean {
+  if (!caps) return false;
+  const key = range ? "documentRangeFormattingProvider" : "documentFormattingProvider";
+  const v = caps[key];
+  return v === true || (typeof v === "object" && v !== null);
+}
+
+/** Normalize a server-returned TextEdit[] into our shared shape, dropping
+ *  malformed entries. textDocument/formatting and /rangeFormatting both
+ *  return the same shape; null/undefined → empty array. */
+function normalizeTextEdits(raw: unknown): LspTextEdit[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (e): e is LspTextEdit =>
+      !!e
+      && typeof e === "object"
+      && "range" in e
+      && "newText" in e
+      && typeof (e as { newText: unknown }).newText === "string",
+  );
 }
 
 /** Recursively normalize a DocumentSymbol tree. Drops malformed nodes. */

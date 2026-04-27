@@ -31,6 +31,7 @@ import type {
   LspLocation,
   LspRange,
   LspSignatureHelp,
+  LspTextEdit,
   LspWorkspaceEdit,
 } from "../../../../../shared/ipc-types";
 
@@ -402,6 +403,65 @@ function install(monaco: Monaco): void {
       }),
     );
 
+    // --- Document formatting ---
+    // Monaco invokes these for editor.action.formatDocument /
+    // formatSelection. We route through the bun-side formatter service
+    // (`api.formatBuffer`), which picks the highest-priority applicable
+    // backend (Prettier / gofmt / rustfmt / LSP / ...) and returns its
+    // edits or full-text replacement. When no provider applies, we
+    // return null so Monaco can fall through to other registered
+    // providers (e.g. its bundled TS formatter) instead of doing
+    // nothing silently.
+    disposables.push(
+      monaco.languages.registerDocumentFormattingEditProvider(lang, {
+        displayName: "Tempest",
+        provideDocumentFormattingEdits: async (
+          model: MonacoEditor.ITextModel,
+          options: languages.FormattingOptions,
+        ) => {
+          const ctx = ctxFor(model);
+          // We need a model URI we can map to a filePath. ctx is missing
+          // for free-standing files (no workspace context). Pass through
+          // anyway — `formatBuffer` will run language-gated providers
+          // (gofmt, etc.) without a workspacePath.
+          const filePath = filePathFromModel(model);
+          if (!filePath) return null;
+          const r = await api.formatBuffer({
+            filePath,
+            workspacePath: ctx?.workspacePath,
+            languageId: ctx?.languageId ?? model.getLanguageId(),
+            content: model.getValue(),
+            options: { tabSize: options.tabSize, insertSpaces: options.insertSpaces },
+          });
+          return formatBufferResultToMonacoEdits(monaco, model, r.result);
+        },
+      }),
+    );
+
+    disposables.push(
+      monaco.languages.registerDocumentRangeFormattingEditProvider(lang, {
+        displayName: "Tempest",
+        provideDocumentRangeFormattingEdits: async (
+          model: MonacoEditor.ITextModel,
+          range: IRange,
+          options: languages.FormattingOptions,
+        ) => {
+          const ctx = ctxFor(model);
+          const filePath = filePathFromModel(model);
+          if (!filePath) return null;
+          const r = await api.formatBuffer({
+            filePath,
+            workspacePath: ctx?.workspacePath,
+            languageId: ctx?.languageId ?? model.getLanguageId(),
+            content: model.getValue(),
+            options: { tabSize: options.tabSize, insertSpaces: options.insertSpaces },
+            range: monacoRangeToLsp(range),
+          });
+          return formatBufferResultToMonacoEdits(monaco, model, r.result);
+        },
+      }),
+    );
+
     // --- Code actions ---
     disposables.push(
       monaco.languages.registerCodeActionProvider(lang, {
@@ -464,6 +524,53 @@ function lspLocationToMonaco(monaco: Monaco, location: LspLocation) {
     uri: monaco.Uri.parse(location.uri),
     range: lspRangeToMonaco(monaco, location.range),
   };
+}
+
+/** Convert an LSP TextEdit (0-based) to Monaco's ISingleEditOperation
+ *  shape (1-based range). Used by the document/range formatting providers. */
+function lspTextEditToMonaco(monaco: Monaco, edit: LspTextEdit): languages.TextEdit {
+  return {
+    range: lspRangeToMonaco(monaco, edit.range),
+    text: edit.newText,
+  };
+}
+
+/** Pull the filesystem path out of a Monaco model URI. We always open
+ *  files with `path={`file://${filePath}`}` (see MonacoEditorPane), so
+ *  the URI is `file:///abs/path` and `model.uri.path` gives us back
+ *  `/abs/path`. Returns null for synthetic schemes (`inmemory://...`)
+ *  the formatter can't act on. */
+function filePathFromModel(model: MonacoEditor.ITextModel): string | null {
+  const uri = model.uri;
+  if (uri.scheme !== "file") return null;
+  return uri.path;
+}
+
+/** Map a `formatBuffer` RPC result back to the shape Monaco's
+ *  formatting providers expect: an array of TextEdits, or null to fall
+ *  through. `fullText` is converted to a single edit covering the whole
+ *  buffer; `edits` map directly; `noop` and `error` return null. */
+function formatBufferResultToMonacoEdits(
+  monaco: Monaco,
+  model: MonacoEditor.ITextModel,
+  result:
+    | { kind: "fullText"; newText: string; chosenFormatter: { id: string; displayName: string } }
+    | { kind: "edits"; edits: LspTextEdit[]; chosenFormatter: { id: string; displayName: string } }
+    | { kind: "noop"; chosenFormatter: { id: string; displayName: string } }
+    | { kind: "error"; message: string },
+): languages.TextEdit[] | null {
+  if (result.kind === "noop") return null;
+  if (result.kind === "error") {
+    console.warn("[formatter] failed:", result.message);
+    return null;
+  }
+  if (result.kind === "edits") {
+    if (result.edits.length === 0) return null;
+    return result.edits.map((e) => lspTextEditToMonaco(monaco, e));
+  }
+  // fullText: a single edit replacing the whole buffer.
+  const fullRange = model.getFullModelRange();
+  return [{ range: fullRange, text: result.newText }];
 }
 
 /** Convert Monaco's 1-based IRange to LSP's 0-based LspRange. */

@@ -1,7 +1,14 @@
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { AppConfig, HttpServerConfig, McpToolConfig } from "../../shared/ipc-types";
+import type {
+  AppConfig,
+  EditorSaveActionsConfig,
+  FormattingConfig,
+  HttpServerConfig,
+  LanguageFormattingConfig,
+  McpToolConfig,
+} from "../../shared/ipc-types";
 import { TEMPEST_DIR, CONFIG_FILE, REPOS_FILE } from "./paths";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -30,6 +37,56 @@ function isMcpToolConfig(value: unknown): value is McpToolConfig {
   return keys.every(
     (k) => value[k] === undefined || typeof value[k] === "boolean",
   );
+}
+
+/** Normalize a single LanguageFormattingConfig from disk. Skips
+ *  unknown / malformed fields rather than rejecting the whole entry,
+ *  so a future field added by a newer version doesn't blow up the
+ *  config on the older version. Returns undefined when no field was
+ *  recognized — keeps the parent's `languages` map clean. */
+function normalizeLanguageFormatting(value: unknown): LanguageFormattingConfig | undefined {
+  if (!isRecord(value)) return undefined;
+  const out: LanguageFormattingConfig = {};
+  if (typeof value.formatOnSave === "boolean") out.formatOnSave = value.formatOnSave;
+  if (typeof value.defaultFormatter === "string" && value.defaultFormatter.length > 0) {
+    out.defaultFormatter = value.defaultFormatter;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+export function normalizeFormatting(value: unknown): FormattingConfig | undefined {
+  if (!isRecord(value)) return undefined;
+  const out: FormattingConfig = {};
+  if (typeof value.formatOnSave === "boolean") out.formatOnSave = value.formatOnSave;
+  if (typeof value.formatOnPaste === "boolean") out.formatOnPaste = value.formatOnPaste;
+  if (typeof value.formatOnType === "boolean") out.formatOnType = value.formatOnType;
+  if (typeof value.defaultFormatter === "string" && value.defaultFormatter.length > 0) {
+    out.defaultFormatter = value.defaultFormatter;
+  }
+  if (typeof value.timeoutMs === "number" && Number.isFinite(value.timeoutMs) && value.timeoutMs > 0) {
+    out.timeoutMs = value.timeoutMs;
+  }
+  if (isRecord(value.languages)) {
+    const langs: Record<string, LanguageFormattingConfig> = {};
+    for (const [lang, raw] of Object.entries(value.languages)) {
+      const normalized = normalizeLanguageFormatting(raw);
+      if (normalized) langs[lang] = normalized;
+    }
+    if (Object.keys(langs).length > 0) out.languages = langs;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+export function normalizeEditorSaveActions(value: unknown): EditorSaveActionsConfig | undefined {
+  if (!isRecord(value)) return undefined;
+  const out: EditorSaveActionsConfig = {};
+  if (typeof value.trimTrailingWhitespace === "boolean") {
+    out.trimTrailingWhitespace = value.trimTrailingWhitespace;
+  }
+  if (typeof value.insertFinalNewline === "boolean") {
+    out.insertFinalNewline = value.insertFinalNewline;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 function normalizeKeybindings(value: unknown): Record<string, string | null> | undefined {
@@ -111,6 +168,11 @@ export function normalizeConfig(raw: unknown): AppConfig {
   if (kb) normalized.keybindings = kb;
 
   if (typeof raw.lspDisabled === "boolean") normalized.lspDisabled = raw.lspDisabled;
+
+  const formatting = normalizeFormatting(raw.formatting);
+  if (formatting) normalized.formatting = formatting;
+  const saveActions = normalizeEditorSaveActions(raw.editorSaveActions);
+  if (saveActions) normalized.editorSaveActions = saveActions;
 
   return normalized;
 }

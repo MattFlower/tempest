@@ -135,6 +135,57 @@ export interface McpToolConfig {
   showMarkdown?: boolean;
 }
 
+/** Per-language overrides for the formatter system. Any field left
+ *  undefined inherits from the surrounding scope (global → repo →
+ *  per-language). */
+export interface LanguageFormattingConfig {
+  formatOnSave?: boolean;
+  /** Provider id to force (e.g. "prettier", "lsp"). When set, skips
+   *  the resolution order and uses this provider unconditionally —
+   *  if it doesn't apply, formatting fails with an error. */
+  defaultFormatter?: string;
+}
+
+/** Top-level formatter config; lives on AppConfig and (optionally
+ *  again) on each RepoSettings entry to allow per-repo overrides. */
+export interface FormattingConfig {
+  /** Run *Format Document* before writing on save. */
+  formatOnSave?: boolean;
+  /** Reserved for Phase 4. */
+  formatOnPaste?: boolean;
+  /** Reserved for Phase 4. */
+  formatOnType?: boolean;
+  /** Provider id forced for every language unless a per-language
+   *  override exists. */
+  defaultFormatter?: string;
+  /** Soft timeout for any single formatter run, in ms. Default 2000. */
+  timeoutMs?: number;
+  /** Per-language overrides keyed by Monaco language id. */
+  languages?: Record<string, LanguageFormattingConfig>;
+}
+
+/** Save-time cleanup independent of the formatter pipeline. Both
+ *  fields run renderer-side on the buffer before writeFileForEditor. */
+export interface EditorSaveActionsConfig {
+  trimTrailingWhitespace?: boolean;
+  insertFinalNewline?: boolean;
+}
+
+/** Result of resolving .editorconfig for a single file. Every field
+ *  is optional: an empty object means no .editorconfig was found
+ *  anywhere up the tree (or the matched sections didn't specify the
+ *  field). The renderer applies the indent fields to Monaco's model
+ *  options on file open; trim/insertFinalNewline merge into the save
+ *  pipeline (with editorconfig overriding user config for the file). */
+export interface EditorconfigSettings {
+  indentStyle?: "space" | "tab";
+  indentSize?: number;
+  tabWidth?: number;
+  endOfLine?: "lf" | "crlf" | "cr";
+  trimTrailingWhitespace?: boolean;
+  insertFinalNewline?: boolean;
+}
+
 export interface AppConfig {
   workspaceRoot: string;
   jjPath?: string;
@@ -162,6 +213,12 @@ export interface AppConfig {
   // Master switch for LSP integration. When true, no language servers spawn
   // anywhere; running servers are torn down and Monaco markers cleared.
   lspDisabled?: boolean;
+  /** Formatter system configuration. */
+  formatting?: FormattingConfig;
+  /** Save-time cleanup (trim trailing whitespace, ensure final newline).
+   *  Runs independently of the formatter pipeline so users can opt into
+   *  cleanup without committing to format-on-save. */
+  editorSaveActions?: EditorSaveActionsConfig;
 }
 
 // --- Hook Events ---
@@ -449,6 +506,12 @@ export interface RepoSettings {
   // Per-repo override: when true, no LSP servers spawn for workspaces under
   // this repo, regardless of the global setting.
   disableLsp?: boolean;
+  /** Per-repo formatter overrides. Merged on top of the global
+   *  AppConfig.formatting at format time. */
+  formatting?: FormattingConfig;
+  /** Per-repo save-action overrides. Merged on top of the global
+   *  AppConfig.editorSaveActions. */
+  editorSaveActions?: EditorSaveActionsConfig;
 }
 
 // --- Assigned PRs ---
@@ -778,6 +841,18 @@ export interface LspDocumentSymbol {
 export interface LspTextEdit {
   range: LspRange;
   newText: string;
+}
+
+/** Options sent to the server with textDocument/formatting and
+ *  textDocument/rangeFormatting requests. The two required fields mirror
+ *  Monaco's IFormattingOptions; the extras are spec-optional and we
+ *  populate them from the user's save-actions config when available. */
+export interface LspFormattingOptions {
+  tabSize: number;
+  insertSpaces: boolean;
+  trimTrailingWhitespace?: boolean;
+  insertFinalNewline?: boolean;
+  trimFinalNewlines?: boolean;
 }
 
 /** Subset of the spec's WorkspaceEdit we currently apply: a per-URI map

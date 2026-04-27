@@ -59,6 +59,64 @@ describe("normalizeConfig", () => {
   });
 });
 
+describe("normalizeConfig — formatting", () => {
+  it("preserves a well-formed formatting block", () => {
+    const normalized = normalizeConfig({
+      workspaceRoot: "/tmp",
+      claudeArgs: [],
+      formatting: {
+        formatOnSave: true,
+        defaultFormatter: "prettier",
+        timeoutMs: 4000,
+        languages: { python: { defaultFormatter: "ruff" } },
+      },
+    });
+    expect(normalized.formatting).toEqual({
+      formatOnSave: true,
+      defaultFormatter: "prettier",
+      timeoutMs: 4000,
+      languages: { python: { defaultFormatter: "ruff" } },
+    });
+  });
+
+  it("drops malformed fields and empty language entries", () => {
+    const normalized = normalizeConfig({
+      workspaceRoot: "/tmp",
+      claudeArgs: [],
+      formatting: {
+        formatOnSave: "yes",          // wrong type → dropped
+        timeoutMs: -1,                // non-positive → dropped
+        defaultFormatter: "",         // empty string → dropped
+        languages: {
+          typescript: { formatOnSave: 5 }, // wrong type → entry empty → dropped
+          python: { defaultFormatter: "ruff" },
+        },
+      },
+    });
+    expect(normalized.formatting).toEqual({
+      languages: { python: { defaultFormatter: "ruff" } },
+    });
+  });
+
+  it("returns undefined when nothing valid is present", () => {
+    const normalized = normalizeConfig({
+      workspaceRoot: "/tmp",
+      claudeArgs: [],
+      formatting: { junk: 123 },
+    });
+    expect(normalized.formatting).toBeUndefined();
+  });
+
+  it("normalizes editorSaveActions independently", () => {
+    const normalized = normalizeConfig({
+      workspaceRoot: "/tmp",
+      claudeArgs: [],
+      editorSaveActions: { trimTrailingWhitespace: true, insertFinalNewline: "x" },
+    });
+    expect(normalized.editorSaveActions).toEqual({ trimTrailingWhitespace: true });
+  });
+});
+
 describe("normalizeRepoPaths", () => {
   it("returns empty array for non-array input", () => {
     expect(normalizeRepoPaths({})).toEqual([]);

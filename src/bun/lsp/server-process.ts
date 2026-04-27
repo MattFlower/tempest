@@ -549,6 +549,12 @@ function clientCapabilities(): Record<string, unknown> {
       executeCommand: {
         dynamicRegistration: false,
       },
+      formatting: {
+        dynamicRegistration: false,
+      },
+      rangeFormatting: {
+        dynamicRegistration: false,
+      },
     },
     workspace: {
       workspaceFolders: true,

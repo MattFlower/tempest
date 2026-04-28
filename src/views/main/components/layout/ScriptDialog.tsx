@@ -17,6 +17,10 @@ interface Props {
   mavenScripts: Array<{ name: string; command: string }>;
   hiddenMavenScripts: string[];
   mavenScriptRunMode: Record<string, ScriptRunMode>;
+  disableGradleScripts: boolean;
+  gradleScripts: Array<{ name: string; command: string }>;
+  hiddenGradleScripts: string[];
+  gradleScriptRunMode: Record<string, ScriptRunMode>;
   onChanged: (scripts: CustomScript[]) => void;
   onDisablePackageScriptsChanged: (disabled: boolean) => void;
   onHiddenPackageScriptsChanged: (hidden: string[]) => void;
@@ -24,6 +28,9 @@ interface Props {
   onDisableMavenScriptsChanged: (disabled: boolean) => void;
   onHiddenMavenScriptsChanged: (hidden: string[]) => void;
   onMavenScriptRunModeChanged: (modes: Record<string, ScriptRunMode>) => void;
+  onDisableGradleScriptsChanged: (disabled: boolean) => void;
+  onHiddenGradleScriptsChanged: (hidden: string[]) => void;
+  onGradleScriptRunModeChanged: (modes: Record<string, ScriptRunMode>) => void;
   onDismiss: () => void;
 }
 
@@ -40,6 +47,10 @@ export function ScriptDialog({
   mavenScripts,
   hiddenMavenScripts,
   mavenScriptRunMode,
+  disableGradleScripts,
+  gradleScripts,
+  hiddenGradleScripts,
+  gradleScriptRunMode,
   onChanged,
   onDisablePackageScriptsChanged,
   onHiddenPackageScriptsChanged,
@@ -47,6 +58,9 @@ export function ScriptDialog({
   onDisableMavenScriptsChanged,
   onHiddenMavenScriptsChanged,
   onMavenScriptRunModeChanged,
+  onDisableGradleScriptsChanged,
+  onHiddenGradleScriptsChanged,
+  onGradleScriptRunModeChanged,
   onDismiss,
 }: Props) {
   useOverlay();
@@ -124,6 +138,24 @@ export function ScriptDialog({
       hiddenMavenScripts: hidden,
     });
     onHiddenMavenScriptsChanged(hidden);
+  };
+
+  const persistGradleRunModes = async (modes: Record<string, ScriptRunMode>) => {
+    const settings = await api.getRepoSettings(repoPath);
+    await api.saveRepoSettings(repoPath, {
+      ...settings,
+      gradleScriptRunMode: modes,
+    });
+    onGradleScriptRunModeChanged(modes);
+  };
+
+  const persistHiddenGradleScripts = async (hidden: string[]) => {
+    const settings = await api.getRepoSettings(repoPath);
+    await api.saveRepoSettings(repoPath, {
+      ...settings,
+      hiddenGradleScripts: hidden,
+    });
+    onHiddenGradleScriptsChanged(hidden);
   };
 
   const handleDelete = async (id: string) => {
@@ -450,6 +482,107 @@ export function ScriptDialog({
                         if (inPane) delete next[ms.name];
                         else next[ms.name] = "bottomPane";
                         persistMavenRunModes(next);
+                      }}
+                      className="text-[10px] px-1.5 py-0.5 rounded shrink-0 transition-colors"
+                      style={{
+                        backgroundColor: inPane ? "var(--ctp-green)" : "var(--ctp-surface1)",
+                        color: inPane ? "var(--ctp-base)" : "var(--ctp-subtext0)",
+                      }}
+                      title={
+                        inPane
+                          ? "Runs in the bottom Run pane. Click to switch to modal."
+                          : "Runs in a modal dialog. Click to switch to the Run pane."
+                      }
+                    >
+                      {inPane ? "Pane" : "Modal"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Gradle auto-detect toggle */}
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!disableGradleScripts}
+            onChange={async (e) => {
+              const disabled = !e.target.checked;
+              const settings = await api.getRepoSettings(repoPath);
+              await api.saveRepoSettings(repoPath, { ...settings, disableGradleScripts: disabled });
+              onDisableGradleScriptsChanged(disabled);
+            }}
+            className="accent-[var(--ctp-blue)]"
+          />
+          <span className="text-xs" style={{ color: "var(--ctp-text)" }}>
+            Auto-detect scripts from build.gradle
+          </span>
+        </label>
+
+        {/* Gradle scripts visibility */}
+        {!disableGradleScripts && gradleScripts.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold" style={{ color: "var(--ctp-subtext0)" }}>
+                Gradle Scripts ({gradleScripts.length})
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => persistHiddenGradleScripts([])}
+                  className="text-[11px] font-semibold transition-colors"
+                  style={{ color: "var(--ctp-blue)" }}
+                >
+                  Select All
+                </button>
+                <button
+                  onClick={() => persistHiddenGradleScripts(gradleScripts.map((gs) => gs.name))}
+                  className="text-[11px] font-semibold transition-colors"
+                  style={{ color: "var(--ctp-blue)" }}
+                >
+                  Deselect All
+                </button>
+              </div>
+            </div>
+            <div
+              className="flex flex-col gap-0.5 overflow-y-auto rounded"
+              style={{ maxHeight: 200, backgroundColor: "var(--ctp-surface0)", border: "1px solid var(--ctp-surface1)" }}
+            >
+              {gradleScripts.map((gs) => {
+                const isVisible = !hiddenGradleScripts.includes(gs.name);
+                const mode = gradleScriptRunMode[gs.name] ?? "modal";
+                const inPane = mode === "bottomPane";
+                return (
+                  <div
+                    key={gs.name}
+                    className="flex items-center gap-2 px-3 py-1 hover:bg-[var(--ctp-surface1)] transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isVisible}
+                      onChange={() => {
+                        const updated = isVisible
+                          ? [...hiddenGradleScripts, gs.name]
+                          : hiddenGradleScripts.filter((n) => n !== gs.name);
+                        persistHiddenGradleScripts(updated);
+                      }}
+                      className="accent-[var(--ctp-blue)] shrink-0 cursor-pointer"
+                      title={isVisible ? "Hide from menu" : "Show in menu"}
+                    />
+                    <span className="text-xs font-semibold truncate" style={{ color: "var(--ctp-text)" }}>
+                      {gs.name}
+                    </span>
+                    <span className="text-[11px] font-mono truncate ml-auto" style={{ color: "var(--ctp-overlay0)" }}>
+                      {gs.command}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = { ...gradleScriptRunMode };
+                        if (inPane) delete next[gs.name];
+                        else next[gs.name] = "bottomPane";
+                        persistGradleRunModes(next);
                       }}
                       className="text-[10px] px-1.5 py-0.5 rounded shrink-0 transition-colors"
                       style={{

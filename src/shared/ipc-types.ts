@@ -503,6 +503,9 @@ export interface RepoSettings {
   disableMavenScripts?: boolean;
   hiddenMavenScripts?: string[];
   mavenScriptRunMode?: Record<string, ScriptRunMode>;
+  disableGradleScripts?: boolean;
+  hiddenGradleScripts?: string[];
+  gradleScriptRunMode?: Record<string, ScriptRunMode>;
   // Per-repo override: when true, no LSP servers spawn for workspaces under
   // this repo, regardless of the global setting.
   disableLsp?: boolean;

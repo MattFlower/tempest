@@ -696,6 +696,129 @@ export class WorkspaceManager {
     }
   }
 
+  async getGradleScripts(workspacePath: string): Promise<{ scripts: Array<{ name: string; command: string }> }> {
+    try {
+      const groovyPath = join(workspacePath, "build.gradle");
+      const ktsPath = join(workspacePath, "build.gradle.kts");
+      const buildPath = existsSync(groovyPath) ? groovyPath : existsSync(ktsPath) ? ktsPath : null;
+      if (!buildPath) return { scripts: [] };
+
+      const raw = await Bun.file(buildPath).text();
+
+      // Prefer the Gradle wrapper if it's checked into the repo.
+      const runner = existsSync(join(workspacePath, "gradlew")) ? "./gradlew" : "gradle";
+
+      // Strip line and block comments so commented-out plugins/tasks aren't picked up.
+      const noComments = raw
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/(^|[^:])\/\/.*$/gm, "$1");
+
+      // Lifecycle tasks provided by the base/Java/JVM plugins. We always
+      // surface these — they're effectively no-ops on builds that don't apply
+      // the corresponding plugin, and the dropdown is filterable from the
+      // dialog if a particular project doesn't want them.
+      const lifecycle = [
+        "clean",
+        "build",
+        "assemble",
+        "check",
+        "test",
+        "jar",
+        "javadoc",
+        "tasks",
+        "dependencies",
+      ];
+
+      // Plugin id (or short alias) -> tasks a developer typically invokes
+      // directly. Lifecycle tasks above already cover the common build/test
+      // goals, so we only surface plugin-specific entry points here.
+      const PLUGIN_TASKS: Record<string, string[]> = {
+        "org.springframework.boot": ["bootRun", "bootJar"],
+        "spring-boot": ["bootRun", "bootJar"],
+        "application": ["run", "installDist", "distZip"],
+        "io.quarkus": ["quarkusDev", "quarkusBuild"],
+        "quarkus": ["quarkusDev", "quarkusBuild"],
+        "com.android.application": ["installDebug", "assembleDebug", "assembleRelease"],
+        "com.android.library": ["assembleDebug", "assembleRelease"],
+        "org.jetbrains.kotlin.jvm": ["compileKotlin", "compileTestKotlin"],
+        "kotlin": ["compileKotlin", "compileTestKotlin"],
+        "org.flywaydb.flyway": ["flywayMigrate", "flywayInfo"],
+        "org.liquibase.gradle": ["update"],
+        "com.github.johnrengelman.shadow": ["shadowJar"],
+        "com.gradleup.shadow": ["shadowJar"],
+        "com.diffplug.spotless": ["spotlessApply", "spotlessCheck"],
+        "spotless": ["spotlessApply", "spotlessCheck"],
+        "com.bmuschko.docker-remote-api": ["dockerBuildImage"],
+        "com.google.cloud.tools.jib": ["jib", "jibDockerBuild"],
+        "io.micronaut.application": ["run"],
+      };
+
+      // Collect plugin ids from both `plugins { id 'foo' }` style and
+      // legacy `apply plugin: 'foo'` style. The plugins {} block is
+      // matched whole so we don't pick up `id(...)` calls elsewhere.
+      const pluginIds = new Set<string>();
+      const pluginsBlocks = noComments.match(/plugins\s*\{[\s\S]*?\}/g) ?? [];
+      for (const block of pluginsBlocks) {
+        for (const m of block.matchAll(/id\s*[(\s]\s*['"]([^'"]+)['"]/g)) {
+          if (m[1]) pluginIds.add(m[1]);
+        }
+        for (const m of block.matchAll(/['"]([^'"]+)['"]\s*(?:version|apply)?/g)) {
+          // Best-effort: capture the alias before kotlin("jvm") style calls.
+          if (m[1]) pluginIds.add(m[1]);
+        }
+        for (const m of block.matchAll(/kotlin\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) {
+          if (m[1]) pluginIds.add(`org.jetbrains.kotlin.${m[1]}`);
+        }
+      }
+      for (const m of noComments.matchAll(/apply\s+plugin\s*:\s*['"]([^'"]+)['"]/g)) {
+        if (m[1]) pluginIds.add(m[1]);
+      }
+
+      const pluginTasks: string[] = [];
+      for (const id of pluginIds) {
+        const mapped = PLUGIN_TASKS[id];
+        if (mapped) pluginTasks.push(...mapped);
+      }
+
+      // User-defined tasks. We catch the two most common forms:
+      //   tasks.register("foo") { ... }    (Kotlin & modern Groovy)
+      //   task foo { ... }                  (legacy Groovy)
+      // Anything dynamically generated at configuration time is out of scope.
+      const userTasks: string[] = [];
+      const seenUser = new Set<string>();
+      for (const m of noComments.matchAll(/tasks\.register\s*[(<]\s*['"]([A-Za-z_][\w]*)['"]/g)) {
+        const name = m[1];
+        if (name && !seenUser.has(name)) {
+          seenUser.add(name);
+          userTasks.push(name);
+        }
+      }
+      for (const m of noComments.matchAll(/(?:^|\n)\s*task\s+([A-Za-z_][\w]*)\b/g)) {
+        const name = m[1];
+        if (name && !seenUser.has(name)) {
+          seenUser.add(name);
+          userTasks.push(name);
+        }
+      }
+
+      // Dedupe across the three sources while preserving order.
+      const all: string[] = [];
+      const seen = new Set<string>();
+      for (const t of [...lifecycle, ...pluginTasks, ...userTasks]) {
+        if (!seen.has(t)) {
+          seen.add(t);
+          all.push(t);
+        }
+      }
+
+      return {
+        scripts: all.map((t) => ({ name: t, command: `${runner} ${t}` })),
+      };
+    } catch {
+      return { scripts: [] };
+    }
+  }
+
   async getPackageScripts(workspacePath: string): Promise<{ scripts: Array<{ name: string; command: string }> }> {
     try {
       const pkgPath = join(workspacePath, "package.json");

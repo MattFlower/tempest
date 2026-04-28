@@ -85,6 +85,10 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
   const [disableMavenScripts, setDisableMavenScripts] = useState(false);
   const [hiddenMavenScripts, setHiddenMavenScripts] = useState<string[]>([]);
   const [mavenScriptRunMode, setMavenScriptRunMode] = useState<Record<string, ScriptRunMode>>({});
+  const [gradleScripts, setGradleScripts] = useState<Array<{ name: string; command: string }>>([]);
+  const [disableGradleScripts, setDisableGradleScripts] = useState(false);
+  const [hiddenGradleScripts, setHiddenGradleScripts] = useState<string[]>([]);
+  const [gradleScriptRunMode, setGradleScriptRunMode] = useState<Record<string, ScriptRunMode>>({});
   const [installedEditors, setInstalledEditors] = useState<Array<{ id: string; name: string; category: "editor" | "terminal" | "file-manager" }>>([]);
 
   // Find workspace object to get name and status
@@ -114,6 +118,9 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
       disableMavenScripts?: boolean;
       hiddenMavenScripts?: string[];
       mavenScriptRunMode?: Record<string, ScriptRunMode>;
+      disableGradleScripts?: boolean;
+      hiddenGradleScripts?: string[];
+      gradleScriptRunMode?: Record<string, ScriptRunMode>;
     }) => {
       setCustomScripts(settings.customScripts ?? []);
       setDisablePackageScripts(settings.disablePackageScripts ?? false);
@@ -122,6 +129,9 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
       setDisableMavenScripts(settings.disableMavenScripts ?? false);
       setHiddenMavenScripts(settings.hiddenMavenScripts ?? []);
       setMavenScriptRunMode(settings.mavenScriptRunMode ?? {});
+      setDisableGradleScripts(settings.disableGradleScripts ?? false);
+      setHiddenGradleScripts(settings.hiddenGradleScripts ?? []);
+      setGradleScriptRunMode(settings.gradleScriptRunMode ?? {});
     });
   }, [workspace?.repoPath]);
 
@@ -130,6 +140,7 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
     if (!workspacePath) {
       setPackageScripts([]);
       setMavenScripts([]);
+      setGradleScripts([]);
       return;
     }
     if (disablePackageScripts) {
@@ -146,7 +157,14 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
         setMavenScripts(result.scripts);
       });
     }
-  }, [workspacePath, disablePackageScripts, disableMavenScripts]);
+    if (disableGradleScripts) {
+      setGradleScripts([]);
+    } else {
+      api.getGradleScripts(workspacePath).then((result: { scripts: Array<{ name: string; command: string }> }) => {
+        setGradleScripts(result.scripts);
+      });
+    }
+  }, [workspacePath, disablePackageScripts, disableMavenScripts, disableGradleScripts]);
 
   useEffect(() => {
     refreshAutoDetectedScripts();
@@ -189,7 +207,8 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
       source:
         | { kind: "custom"; scriptId: string; paramValues?: Record<string, string> }
         | { kind: "package"; scriptName: string }
-        | { kind: "maven"; scriptName: string },
+        | { kind: "maven"; scriptName: string }
+        | { kind: "gradle"; scriptName: string },
       label: string,
       script: string | undefined,
       scriptPath: string | undefined,
@@ -307,6 +326,30 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
       });
     },
     [workspace, mavenScriptRunMode, spawnInRunPane],
+  );
+
+  const handleRunGradleScript = useCallback(
+    (gs: { name: string; command: string }) => {
+      if (!workspace) return;
+      const mode = gradleScriptRunMode[gs.name] ?? "modal";
+      if (mode === "bottomPane") {
+        spawnInRunPane(
+          { kind: "gradle", scriptName: gs.name },
+          gs.name,
+          gs.command,
+          undefined,
+          undefined,
+        );
+        return;
+      }
+      setRunningScript({
+        id: `gradle-${gs.name}`,
+        name: gs.name,
+        script: gs.command,
+        showOutput: true,
+      });
+    },
+    [workspace, gradleScriptRunMode, spawnInRunPane],
   );
 
 
@@ -513,6 +556,9 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
   const visibleMavenScripts = mavenScripts.filter(
     (ms) => !hiddenMavenScripts.includes(ms.name)
   );
+  const visibleGradleScripts = gradleScripts.filter(
+    (gs) => !hiddenGradleScripts.includes(gs.name)
+  );
 
   const scriptsItems: DropdownItem[] = [
     ...customScripts.map((cs) => ({
@@ -533,7 +579,18 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
       label: ms.command,
       action: () => handleRunMavenScript(ms),
     })),
-    ...(customScripts.length > 0 || visiblePackageScripts.length > 0 || visibleMavenScripts.length > 0
+    ...((customScripts.length > 0 || visiblePackageScripts.length > 0 || visibleMavenScripts.length > 0)
+      && visibleGradleScripts.length > 0
+      ? [{ separator: true } as const]
+      : []),
+    ...visibleGradleScripts.map((gs) => ({
+      label: gs.command,
+      action: () => handleRunGradleScript(gs),
+    })),
+    ...(customScripts.length > 0
+      || visiblePackageScripts.length > 0
+      || visibleMavenScripts.length > 0
+      || visibleGradleScripts.length > 0
       ? [{ separator: true } as const]
       : []),
     { label: "Manage Scripts", action: () => setShowScriptDialog(true) },
@@ -657,6 +714,10 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
           mavenScripts={mavenScripts}
           hiddenMavenScripts={hiddenMavenScripts}
           mavenScriptRunMode={mavenScriptRunMode}
+          disableGradleScripts={disableGradleScripts}
+          gradleScripts={gradleScripts}
+          hiddenGradleScripts={hiddenGradleScripts}
+          gradleScriptRunMode={gradleScriptRunMode}
           onChanged={setCustomScripts}
           onDisablePackageScriptsChanged={(disabled) => {
             setDisablePackageScripts(disabled);
@@ -666,6 +727,9 @@ export function WorkspaceToolbar({ workspacePath }: WorkspaceToolbarProps) {
           onDisableMavenScriptsChanged={setDisableMavenScripts}
           onHiddenMavenScriptsChanged={setHiddenMavenScripts}
           onMavenScriptRunModeChanged={setMavenScriptRunMode}
+          onDisableGradleScriptsChanged={setDisableGradleScripts}
+          onHiddenGradleScriptsChanged={setHiddenGradleScripts}
+          onGradleScriptRunModeChanged={setGradleScriptRunMode}
           onDismiss={() => setShowScriptDialog(false)}
         />
       )}

@@ -715,6 +715,8 @@ export const api = {
     rpcRequest.getPackageScripts({ workspacePath }),
   getMavenScripts: (workspacePath: string) =>
     rpcRequest.getMavenScripts({ workspacePath }),
+  getGradleScripts: (workspacePath: string) =>
+    rpcRequest.getGradleScripts({ workspacePath }),
   browseFile: (startingFolder?: string) =>
     rpcRequest.browseFile({ startingFolder }),
   getRemoteRepos: (repoPath: string) =>

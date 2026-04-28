@@ -825,6 +825,9 @@ const rpc: any = (BrowserView.defineRPC as any)({
       getMavenScripts: async (_params: any) => {
         return await workspaceManager.getMavenScripts(_params.workspacePath);
       },
+      getGradleScripts: async (_params: any) => {
+        return await workspaceManager.getGradleScripts(_params.workspacePath);
+      },
       browseFile: async (_params: any) => {
         const { startingFolder } = (_params ?? {}) as { startingFolder?: string };
         const home = Bun.env.HOME ?? "/";

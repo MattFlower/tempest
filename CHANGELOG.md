@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Fixed
+
+### Changed
+
+### Removed
+
+## [0.22.0] - 2026-05-04
+
+### Added
+
 - Phase 1 of formatter support: LSP-routed `Format Document` and `Format Selection` in the Monaco editor. Adds `lspFormatting` / `lspRangeFormatting` RPC, advertises `formatting` / `rangeFormatting` client capabilities in `initialize`, and registers `DocumentFormattingEditProvider` + `DocumentRangeFormattingEditProvider` for every LSP-backed Monaco language. Servers that don't advertise the capability return null/empty and Monaco quietly does nothing — keeping the bundled formatter as the fallback for languages whose server doesn't format (notably typescript-language-server).
 - Phase 2 of formatter support: `FormatterProvider` abstraction at `src/bun/formatters/` with a tiered registry that resolves *Format Document* through Prettier (project-config-gated), Ruff / Black (pyproject.toml-gated), clang-format (.clang-format-gated), gofmt / rustfmt / dart-format / terraform-fmt / shfmt (language-gated), or LSP — first match wins. Monaco's document/range formatting providers now route through a new `formatBuffer` RPC, so resolution is centralized on the bun side. Prettier binary lookup prefers `<workspacePath>/node_modules/.bin/prettier` so the project's pinned version wins. New `listFormattersForLanguage` RPC supplies the data the Phase 3 Settings UI will surface ("what would run for this file?"). The chosen formatter's display name is returned with every result so the editor can later show "Formatted with Prettier" in the footer.
 - Phase 3 of formatter support: save pipeline + config schema + Settings UI. New `formatting` and `editorSaveActions` blocks on both `AppConfig` and `RepoSettings`, with a four-scope merge (app-global → app-per-language → repo-global → repo-per-language) implemented in `src/bun/formatters/config-resolver.ts`. The Monaco editor's save handler (Cmd+S, vim `:w`, Monaco's command-palette save) now resolves config bun-side, runs format-on-save, then trim-trailing-whitespace, then ensure-final-newline before writing — failures log + show in the editor header but never block the actual write. Settings dialog gains a *Formatting* tab with toggles for the three save actions, a global default-formatter picker, and a per-language overrides list populated from `listFormattersForLanguage`. The header now shows "Formatted with X" for ~3 seconds after each successful format.

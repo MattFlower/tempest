@@ -100,6 +100,11 @@ function dnsErrorPage(url: string, hostname: string, error: string): string {
 </html>`;
 }
 
+// Clamp to a finite number so it's safe to inline as a JS numeric literal.
+function safeZoom(value: number): number {
+  return Number.isFinite(value) ? Math.min(5, Math.max(0.25, value)) : 1;
+}
+
 export interface BrowserPaneProps {
   paneId: string;
   tab: PaneTab;
@@ -214,7 +219,7 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
       // and install a Cmd+F listener so find works even when the native
       // WKWebView overlay has focus (keyboard events don't reach React).
       try {
-        const z = zoomLevelRef.current;
+        const z = safeZoom(zoomLevelRef.current);
         el.executeJavascript(
           `if(window.__electrobunSendToHost){` +
             `window.__electrobunSendToHost({type:"page-title",title:document.title});` +
@@ -229,7 +234,7 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
                 `else if(m&&e.shiftKey&&e.code==="Minus"){e.preventDefault();window.__electrobunSendToHost({type:"zoom-out"})}` +
               `},true)` +
             `}` +
-            `(function(){var b=document.body;if(b){b.style.zoom=${JSON.stringify(String(z))}}})();` +
+            `(function(){var b=document.body;if(b){b.style.zoom=${z}}})();` +
           `}`
         );
       } catch {}
@@ -439,10 +444,9 @@ export function BrowserPane({ paneId, tab, repoPath, isFocused, isVisible }: Bro
     const el = webviewRef.current;
     if (!el) return;
     try {
+      const z = safeZoom(zoomLevelRef.current);
       el.executeJavascript(
-        `(function(){var b=document.body;if(b){b.style.zoom=${JSON.stringify(
-          String(zoomLevelRef.current),
-        )}}})();`,
+        `(function(){var b=document.body;if(b){b.style.zoom=${z}}})();`,
       );
     } catch {}
   }, []);

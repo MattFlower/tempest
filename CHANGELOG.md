@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- `BrowserPane` now interpolates the page-zoom level into `executeJavascript` payloads as a clamped numeric literal via a new `safeZoom()` helper, instead of stringifying and JSON-quoting the ref value. Closes the CodeQL `js/bad-code-sanitization` alert at `src/views/main/components/browser/BrowserPane.tsx:443`.
 - `getMavenScripts` now strips XML comments in a loop until the output stabilizes, so nested or interleaved comment markers (e.g. `<!--<!-- … -->-->`) can't leave stray `<!--` substrings behind. Closes the CodeQL `js/incomplete-multi-character-sanitization` alert at `src/bun/workspace-manager.ts:656`.
 - Added a `uuid: 14.0.0` override to force `mermaid`'s transitive `uuid` dependency past the vulnerable `< 14.0.0` range, addressing GHSA-w5hq-g745-h8pq (missing buffer bounds check in `v3`/`v5`/`v6` when a `buf` argument is provided).
 - Bumped `postcss` dev dependency from `^8.5.8` to `^8.5.10` to address GHSA-qx2v-qp2m-jg93 (XSS via unescaped `</style>` in CSS stringify output).

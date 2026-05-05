@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+### Security
+
+- Bumped `dompurify` override from `3.3.3` to `3.4.2` to pick up fixes for four medium-severity advisories: GHSA-39q2-94rc-95cp (ADD_TAGS bypassing FORBID_TAGS via short-circuit eval), GHSA-v9jr-rg53-9pgp (prototype pollution → XSS via CUSTOM_ELEMENT_HANDLING fallback), GHSA-h7mw-gpvr-xq4m (FORBID_TAGS bypass via function-based ADD_TAGS predicate), and GHSA-crv5-9vww-q3g8 (SAFE_FOR_TEMPLATES bypass in RETURN_DOM mode).
+
 ## [0.21.0] - 2026-04-26
 
 ### Added

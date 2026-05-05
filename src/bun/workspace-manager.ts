@@ -652,8 +652,13 @@ export class WorkspaceManager {
         "clean install",
       ];
 
-      // Strip XML comments so commented-out plugins aren't picked up.
-      const noComments = raw.replace(/<!--[\s\S]*?-->/g, "");
+      // Strip XML comments. Loop until stable so nested/interleaved
+      // markers like `<!--<!-- x -->-->` don't leave stray `<!--` behind.
+      let noComments = raw;
+      for (let prev = ""; prev !== noComments; ) {
+        prev = noComments;
+        noComments = noComments.replace(/<!--[\s\S]*?-->/g, "");
+      }
 
       const artifactIds = new Set<string>();
       for (const block of noComments.matchAll(/<plugin\b[^>]*>([\s\S]*?)<\/plugin>/g)) {

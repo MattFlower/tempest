@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Added a `uuid: 14.0.0` override to force `mermaid`'s transitive `uuid` dependency past the vulnerable `< 14.0.0` range, addressing GHSA-w5hq-g745-h8pq (missing buffer bounds check in `v3`/`v5`/`v6` when a `buf` argument is provided).
 - Bumped `postcss` dev dependency from `^8.5.8` to `^8.5.10` to address GHSA-qx2v-qp2m-jg93 (XSS via unescaped `</style>` in CSS stringify output).
 - Bumped `dompurify` override from `3.3.3` to `3.4.2` to pick up fixes for four medium-severity advisories: GHSA-39q2-94rc-95cp (ADD_TAGS bypassing FORBID_TAGS via short-circuit eval), GHSA-v9jr-rg53-9pgp (prototype pollution → XSS via CUSTOM_ELEMENT_HANDLING fallback), GHSA-h7mw-gpvr-xq4m (FORBID_TAGS bypass via function-based ADD_TAGS predicate), and GHSA-crv5-9vww-q3g8 (SAFE_FOR_TEMPLATES bypass in RETURN_DOM mode).
 

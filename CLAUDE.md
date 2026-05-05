@@ -7,10 +7,26 @@ Two-process architecture: Bun backend + React webview frontend, communicating vi
 
 ## Tech Stack
 
-- **Framework:** Electrobun 1.16.0 (Bun + native WebView)
+- **Framework:** Electrobun (private fork, see below) — Bun + native WebView.
 - **UI:** React 19 + Tailwind CSS 4 + Zustand
 - **Terminal:** xterm.js 6 with WebGL renderer + Bun.Terminal PTY
 - **Browser:** System webview (WKWebView on macOS) via `<electrobun-webview>`
+
+## Forked Electrobun
+
+The `electrobun` dependency in `package.json` is **not** the published
+npm package. It's a tarball URL pointing at a release on
+`MattFlower/electrobun` (branch `auto-mask-overlays`, local checkout
+at `~/code/electrobun`). The fork adds three things Tempest relies on:
+`setWindowButtonPosition` for traffic-light placement, an `auto-mask`
+attribute on `<electrobun-webview>` for popups over native browser
+panes, and a re-sync bugfix in `OverlaySyncController`.
+
+Read `AI_DOCS/electrobun-fork.md` before changing anything that
+touches `<electrobun-webview>`, the bun-side electrobun APIs, or the
+native window chrome — and before answering questions about how the
+electrobun dependency is wired. Cutting a new fork release uses the
+runbook at `~/code/electrobun/RELEASING-TEMPEST-FORK.md`.
 
 ## Key Architectural Rules
 

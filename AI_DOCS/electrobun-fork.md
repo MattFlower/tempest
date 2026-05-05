@@ -9,46 +9,29 @@ changes that need to land in users' builds.
 - Repo: <https://github.com/MattFlower/electrobun>
 - Working branch: `auto-mask-overlays`
 - Local checkout: `~/code/electrobun`
+- The fork's `main` branch tracks upstream `blackboardsh/electrobun:main`
+  exactly. Customizations live only on `auto-mask-overlays`.
 - Tempest pulls a specific release tarball directly from GitHub. As of
-  this writing the pinned version is
-  `v1.17.3-beta.11-tempest.1`.
+  this writing the pinned version is `v1.18.1-tempest.1`, rebased on
+  upstream `v1.18.1`.
 
 The dependency in `package.json` is a fully-qualified URL, e.g.
 
 ```
-"electrobun": "https://github.com/MattFlower/electrobun/releases/download/v1.17.3-beta.11-tempest.1/electrobun-1.17.3-beta.11-tempest.1.tgz"
+"electrobun": "https://github.com/MattFlower/electrobun/releases/download/v1.18.1-tempest.1/electrobun-1.18.1-tempest.1.tgz"
 ```
 
 `bun install` resolves this exactly like an npm tarball. CI on GitHub
 Actions does the same — no postinstall scripts, no vendored binaries
 in this repo, no npm publication.
 
-## What the fork adds (relative to upstream `electrobun@^1.16.0`)
+## What the fork adds (relative to upstream `electrobun@v1.18.1`)
 
-Three changes, on top of upstream's `1.17.3-beta.11`:
+Two changes, both preload-only TypeScript. No native (`.mm`/`.cpp`)
+patches: traffic-light positioning via `setWindowButtonPosition` is
+now upstream-native and Tempest consumes it directly.
 
-### 1. `setWindowButtonPosition` API for macOS traffic lights
-
-Upstream PR <https://github.com/blackboardsh/electrobun/pull/294> by
-chrisdadev13. Native and TypeScript surface for repositioning the
-macOS close/minimise/zoom buttons inside a custom title bar.
-
-- Native: `package/src/native/macos/nativeWrapper.mm` adds a
-  `setWindowButtonPosition()` C function plus `applyWindowButtonPosition`
-  helper, hooked into resize / fullscreen delegate methods so the
-  position survives layout resets.
-- TypeScript: `package/src/bun/core/BrowserWindow.ts` and `GpuWindow.ts`
-  expose a `setWindowButtonPosition(x, y)` method.
-- FFI binding registered in `package/src/bun/proc/native.ts`.
-
-Tempest call site: `src/bun/index.ts` — invokes
-`win.setWindowButtonPosition(16, 17)` after `BrowserWindow` creation
-to vertically centre the buttons inside the 40px (`h-10`) top bar.
-
-The PR is still open upstream. If/when it merges and ships in a real
-release, Tempest can stop carrying this part of the patch.
-
-### 2. Auto-mask feature on `<electrobun-webview>`
+### 1. Auto-mask feature on `<electrobun-webview>`
 
 Implemented entirely in the preload. New opt-in `auto-mask=""`
 attribute: when present, the framework automatically punches mask
@@ -61,7 +44,7 @@ Key files:
 
 - `package/src/bun/preload/webviewTag.ts` — the bulk of the logic.
 - `package/src/bun/preload/overlaySync.ts` — the related re-sync fix
-  (see #3 below).
+  (see #2 below).
 
 Behaviour summary:
 
@@ -91,7 +74,7 @@ in `BrowserPane.tsx`'s `isTrulyVisible` calculation — the comment
 there explains why. The pieces of that machinery that remain in the
 zustand store are dead code, kept for a follow-up cleanup.
 
-### 3. `OverlaySyncController` re-sync bugfix
+### 2. `OverlaySyncController` re-sync bugfix
 
 Standalone fix to `package/src/bun/preload/overlaySync.ts`. The sync
 loop only pushed updates to the native side when the webview's own
@@ -111,8 +94,12 @@ auto-mask if any consumer adds mask selectors at runtime.
   inside the tarball) and skips the runtime download. The CLI then
   finds `dist-macos-arm64/` already populated and skips the runtime
   download for those binaries too.
-- The patched `libNativeWrapper.dylib` is shipped pre-installed in
-  `dist-macos-arm64/` and ad-hoc-signed.
+- `dist-macos-arm64/` ships blackboardsh's unmodified prebuilt
+  binaries from the matching upstream release. As of v1.18.1-tempest.1
+  there is no patched `libNativeWrapper.dylib` — fork patches are
+  preload-only. If a future fork patch ever needs to touch the native
+  wrapper, the dylib would need to be rebuilt from the patched .mm
+  and re-ad-hoc-signed before packing.
 
 No additional scripts run during `bun install` to make this work.
 
@@ -126,13 +113,14 @@ runtime. In practice this means changes under any of:
 - `package/src/bun/core/**`, `package/src/bun/proc/**`, etc. — the
   TypeScript Tempest imports via `electrobun/bun` and
   `electrobun/view`.
-- `package/src/native/macos/nativeWrapper.mm` — recompiled into
-  `libNativeWrapper.dylib`.
+- `package/src/native/macos/nativeWrapper.mm` — would require
+  recompiling `libNativeWrapper.dylib` (currently no fork patches
+  touch this file).
 
 You do **not** need a new fork release for changes that only affect
 the CLI source, the Zig launcher, or fork-internal tooling — Tempest
-is using the prebuilt v1.16.0 CLI binary that's bundled into the
-tarball, and the runtime never recompiles from the fork's CLI source.
+uses a prebuilt CLI binary bundled into the tarball, and the runtime
+never recompiles from the fork's CLI source.
 
 When you do need a release, follow `RELEASING-TEMPEST-FORK.md` in the
 fork repo (`~/code/electrobun/RELEASING-TEMPEST-FORK.md`). The runbook
@@ -158,11 +146,13 @@ These are deliberate scope limits, not blockers:
   tree to keep the auto-mask commit focused. Safe to delete in a
   follow-up — search for `pushOverlay` / `popOverlay` callers and
   remove them, then drop the store fields.
-- **Fork's full upstream build is broken.** The Zig launcher and
-  `bun build --compile` of the CLI both fail in the fork's source
-  tree. We sidestep this by shipping blackboardsh's prebuilt v1.16.0
-  CLI binary inside our tarball. Fixing the upstream build would let
-  us produce CLI/launcher binaries from fork source instead.
+- **Fork's full upstream build hasn't been re-validated since the
+  rebase to v1.18.1.** The Zig launcher and `bun build --compile` of
+  the CLI failed back when we were on v1.17.3-beta.11; upstream may
+  or may not have fixed those since. We sidestep this by shipping
+  blackboardsh's prebuilt CLI/core binaries from the matching
+  upstream release inside our tarball. Fixing the full source build
+  would let us produce all binaries from fork source.
 - **Only `dist-macos-arm64` is shipped.** Adding `dist-darwin-x64` /
   `dist-win-x64` / `dist-linux-x64` would mean populating those
   directories before `bun pm pack`.
@@ -170,11 +160,11 @@ These are deliberate scope limits, not blockers:
 ## Cross-references
 
 - Fork commits: `auto-mask-overlays` branch in
-  `~/code/electrobun`, three commits — see `git log auto-mask-overlays
-  ^main`.
+  `~/code/electrobun`, four commits — see `git log auto-mask-overlays
+  ^main` (overlaySync fix, auto-mask feature, distribution tooling,
+  CLAUDE.md note).
 - Release runbook: `~/code/electrobun/RELEASING-TEMPEST-FORK.md`.
-- Tempest commits adopting the fork: branch `fix-button-position`,
-  three commits stacked on `main`.
-- User-facing notes: `CHANGELOG.md` Unreleased entries.
-- Upstream PR for the traffic-light feature:
-  <https://github.com/blackboardsh/electrobun/pull/294>.
+- Upstream Electrobun: <https://github.com/blackboardsh/electrobun>.
+  Fork's `main` mirrors upstream's `main` — the customizations only
+  live on `auto-mask-overlays`. To pull in upstream changes, sync
+  fork `main` then rebase the branch.

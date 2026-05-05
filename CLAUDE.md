@@ -17,10 +17,12 @@ Two-process architecture: Bun backend + React webview frontend, communicating vi
 The `electrobun` dependency in `package.json` is **not** the published
 npm package. It's a tarball URL pointing at a release on
 `MattFlower/electrobun` (branch `auto-mask-overlays`, local checkout
-at `~/code/electrobun`). The fork adds three things Tempest relies on:
-`setWindowButtonPosition` for traffic-light placement, an `auto-mask`
-attribute on `<electrobun-webview>` for popups over native browser
-panes, and a re-sync bugfix in `OverlaySyncController`.
+at `~/code/electrobun`). The fork is rebased on upstream `v1.18.1` and
+adds two things Tempest relies on: an `auto-mask` attribute on
+`<electrobun-webview>` for popups over native browser panes, and a
+re-sync bugfix in `OverlaySyncController`. (Traffic-light positioning
+via `setWindowButtonPosition` was previously a fork patch but has
+since landed in upstream — Tempest now consumes it directly.)
 
 Read `AI_DOCS/electrobun-fork.md` before changing anything that
 touches `<electrobun-webview>`, the bun-side electrobun APIs, or the

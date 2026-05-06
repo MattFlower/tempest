@@ -15,10 +15,12 @@ export function Sidebar() {
   const repos = useStore((s) => s.repos);
   const workspacesByRepo = useStore((s) => s.workspacesByRepo);
   const sidebarInfo = useStore((s) => s.sidebarInfo);
+  const hiddenWorkspacePaths = useStore((s) => s.hiddenWorkspacePaths);
   const selectedWorkspacePath = useStore((s) => s.selectedWorkspacePath);
   const selectWorkspace = useStore((s) => s.selectWorkspace);
   const setRepos = useStore((s) => s.setRepos);
   const setWorkspaces = useStore((s) => s.setWorkspaces);
+  const setWorkspaceHidden = useStore((s) => s.setWorkspaceHidden);
   const cloneRepoDialogVisible = useStore((s) => s.cloneRepoDialogVisible);
   const showCloneRepoDialog = useStore((s) => s.showCloneRepoDialog);
   const hideCloneRepoDialog = useStore((s) => s.hideCloneRepoDialog);
@@ -87,10 +89,10 @@ export function Sidebar() {
     // Resolve the default workspace *before* archiving — the archive RPC
     // removes the workspace from the store before it returns.
     const repoId = Object.keys(workspacesByRepo).find((id) =>
-      workspacesByRepo[id].some((w) => w.path === workspace.path)
+      (workspacesByRepo[id] ?? []).some((w) => w.path === workspace.path)
     );
     const defaultWs = repoId
-      ? workspacesByRepo[repoId].find((w) => w.name === "default")
+      ? (workspacesByRepo[repoId] ?? []).find((w) => w.name === "default")
       : undefined;
 
     // Kill all terminals in this workspace's pane tree
@@ -107,12 +109,14 @@ export function Sidebar() {
 
     // Archive via backend (VCS-level operation)
     await api.archiveWorkspace(workspace.id);
+    setWorkspaceHidden(workspace.path, false);
+    api.setWorkspaceHidden(workspace.path, false).catch(() => {});
 
     // If the archived workspace was focused, switch to the default workspace
     if (selectedWorkspacePath === workspace.path) {
       select(defaultWs?.path ?? null);
     }
-  }, []);
+  }, [setWorkspaceHidden]);
 
   const handleToggleExpanded = (repoIndex: number) => {
     const target = repos[repoIndex];
@@ -124,6 +128,13 @@ export function Sidebar() {
     setRepos(updated);
     api.setRepoExpanded(target.id, nextExpanded);
   };
+
+  const handleSetWorkspaceHidden = useCallback((workspace: TempestWorkspace, hidden: boolean) => {
+    setWorkspaceHidden(workspace.path, hidden);
+    api.setWorkspaceHidden(workspace.path, hidden).catch(() => {
+      setWorkspaceHidden(workspace.path, !hidden);
+    });
+  }, [setWorkspaceHidden]);
 
   return (
     <div className="flex flex-col h-full bg-[var(--ctp-mantle)]">
@@ -156,6 +167,7 @@ export function Sidebar() {
                   onSelectWorkspace={selectWorkspace}
                   onArchiveWorkspace={handleArchiveWorkspace}
                   onRenameWorkspace={(workspace) => setRenameTarget({ workspace, repo })}
+                  onSetWorkspaceHidden={handleSetWorkspaceHidden}
                   onToggleExpanded={() => handleToggleExpanded(index)}
                   onNewWorkspace={() => setNewWorkspaceRepo(repo)}
                   onRefreshWorkspaces={() => {
@@ -167,6 +179,7 @@ export function Sidebar() {
                     setRepos(loadedRepos);
                   }}
                   onOpenSettings={() => setSettingsRepo(repo)}
+                  hiddenWorkspacePaths={hiddenWorkspacePaths}
                   onRefreshSidebarInfo={(workspacePath) => {
                     api.getSidebarInfo(workspacePath).then((info: any) => {
                       if (info) setSidebarInfo(workspacePath, info);

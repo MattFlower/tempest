@@ -341,6 +341,10 @@ export interface BunRequests {
     params: { repoId: string; isExpanded: boolean };
     response: void;
   };
+  setWorkspaceHidden: {
+    params: { workspacePath: string; hidden: boolean };
+    response: void;
+  };
   saveFileTreeState: {
     params: FileTreeSessionState;
     response: void;

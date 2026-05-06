@@ -19,7 +19,9 @@ interface Props {
   onSelect: () => void;
   onArchive: () => void;
   onRename: () => void;
+  onSetHidden: (hidden: boolean) => void;
   onRefreshDiffStats: () => void;
+  isHidden?: boolean;
 }
 
 function statusLabel(workspace: TempestWorkspace): string {
@@ -51,7 +53,17 @@ function DiffStatsPill({ stats, onRefresh }: { stats: DiffStats; onRefresh: () =
   );
 }
 
-export function WorkspaceRow({ workspace, sidebarInfo, isSelected, onSelect, onArchive, onRename, onRefreshDiffStats }: Props) {
+export function WorkspaceRow({
+  workspace,
+  sidebarInfo,
+  isSelected,
+  onSelect,
+  onArchive,
+  onRename,
+  onSetHidden,
+  onRefreshDiffStats,
+  isHidden = false,
+}: Props) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   // Hook-driven activity state overrides the workspace status for display
@@ -75,7 +87,7 @@ export function WorkspaceRow({ workspace, sidebarInfo, isSelected, onSelect, onA
         isSelected
           ? "bg-[var(--ctp-surface0)]"
           : "hover:bg-[var(--ctp-surface0)]/50"
-      }`}
+      } ${isHidden ? "opacity-75" : ""}`}
     >
       {/* Context menu */}
       {contextMenu && (
@@ -99,6 +111,16 @@ export function WorkspaceRow({ workspace, sidebarInfo, isSelected, onSelect, onA
                 >
                   Rename...
                 </button>
+              </>
+            )}
+            <button
+              onClick={() => { setContextMenu(null); onSetHidden(!isHidden); }}
+              className="w-full text-left px-3 py-1.5 text-[12px] text-[var(--ctp-text)] hover:bg-[var(--ctp-surface1)]"
+            >
+              {isHidden ? "Show Workspace" : "Hide Workspace"}
+            </button>
+            {workspace.name !== "default" && (
+              <>
                 <div className="h-px bg-[var(--ctp-surface1)] mx-2 my-1" />
                 <button
                   onClick={() => { setContextMenu(null); onArchive(); }}

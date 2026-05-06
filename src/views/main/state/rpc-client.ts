@@ -740,6 +740,8 @@ export const api = {
     rpcRequest.savePaneState({ workspacePath, paneTree }),
   setRepoExpanded: (repoId: string, isExpanded: boolean) =>
     rpcRequest.setRepoExpanded({ repoId, isExpanded }),
+  setWorkspaceHidden: (workspacePath: string, hidden: boolean) =>
+    rpcRequest.setWorkspaceHidden({ workspacePath, hidden }),
   saveFileTreeState: (state: {
     activeSidebarView?: "workspaces" | "files";
     expandedRepoIds?: string[];

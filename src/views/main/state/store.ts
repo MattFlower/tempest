@@ -26,6 +26,7 @@ export interface TempestStore {
   selectedWorkspacePath: string | null;
   sidebarInfo: Record<string, WorkspaceSidebarInfo>; // keyed by workspace path
   config: AppConfig | null;
+  hiddenWorkspacePaths: Record<string, true>;
 
   // --- Pane state (per workspace) ---
   paneTrees: Record<string, PaneNode>; // keyed by workspace path
@@ -113,6 +114,8 @@ export interface TempestStore {
   selectWorkspace: (path: string | null) => void;
   setSidebarInfo: (path: string, info: WorkspaceSidebarInfo) => void;
   setConfig: (config: AppConfig) => void;
+  setHiddenWorkspacePaths: (paths: string[]) => void;
+  setWorkspaceHidden: (workspacePath: string, hidden: boolean) => void;
 
   setPaneTree: (workspacePath: string, tree: PaneNode) => void;
   setFocusedPaneId: (id: string | null) => void;
@@ -178,6 +181,7 @@ export const useStore = create<TempestStore>((set) => ({
   selectedWorkspacePath: null,
   sidebarInfo: {},
   config: null,
+  hiddenWorkspacePaths: {},
 
   paneTrees: {},
   focusedPaneId: null,
@@ -280,6 +284,23 @@ export const useStore = create<TempestStore>((set) => ({
   setSidebarInfo: (path, info) =>
     set((s) => ({ sidebarInfo: { ...s.sidebarInfo, [path]: info } })),
   setConfig: (config) => set({ config }),
+  setHiddenWorkspacePaths: (paths) =>
+    set({ hiddenWorkspacePaths: Object.fromEntries(paths.map((p) => [p, true as const])) }),
+  setWorkspaceHidden: (workspacePath, hidden) =>
+    set((s) => {
+      if (hidden) {
+        if (s.hiddenWorkspacePaths[workspacePath]) return {};
+        return {
+          hiddenWorkspacePaths: {
+            ...s.hiddenWorkspacePaths,
+            [workspacePath]: true as const,
+          },
+        };
+      }
+      if (!s.hiddenWorkspacePaths[workspacePath]) return {};
+      const { [workspacePath]: _removed, ...rest } = s.hiddenWorkspacePaths;
+      return { hiddenWorkspacePaths: rest };
+    }),
 
   setPaneTree: (workspacePath, tree) =>
     set((s) => ({ paneTrees: { ...s.paneTrees, [workspacePath]: tree } })),
@@ -460,6 +481,10 @@ export const useStore = create<TempestStore>((set) => ({
       if (s.workspaceActivity[oldPath] !== undefined) {
         const { [oldPath]: activity, ...rest } = s.workspaceActivity;
         result.workspaceActivity = { ...rest, [newPath]: activity! };
+      }
+      if (s.hiddenWorkspacePaths[oldPath]) {
+        const { [oldPath]: _hidden, ...rest } = s.hiddenWorkspacePaths;
+        result.hiddenWorkspacePaths = { ...rest, [newPath]: true };
       }
       if (s.focusedPaneIds[oldPath] !== undefined) {
         const { [oldPath]: focusId, ...rest } = s.focusedPaneIds;

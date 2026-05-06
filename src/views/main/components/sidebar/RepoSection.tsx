@@ -12,12 +12,14 @@ interface Props {
   onSelectWorkspace: (path: string) => void;
   onArchiveWorkspace: (workspace: TempestWorkspace) => void;
   onRenameWorkspace: (workspace: TempestWorkspace) => void;
+  onSetWorkspaceHidden: (workspace: TempestWorkspace, hidden: boolean) => void;
   onToggleExpanded: () => void;
   onNewWorkspace: () => void;
   onRefreshWorkspaces: () => void;
   onRemoveRepo: () => void;
   onRefreshSidebarInfo: (workspacePath: string) => void;
   onOpenSettings: () => void;
+  hiddenWorkspacePaths: Record<string, true>;
 }
 
 export function RepoSection({
@@ -29,14 +31,19 @@ export function RepoSection({
   onSelectWorkspace,
   onArchiveWorkspace,
   onRenameWorkspace,
+  onSetWorkspaceHidden,
   onToggleExpanded,
   onNewWorkspace,
   onRefreshWorkspaces,
   onRemoveRepo,
   onRefreshSidebarInfo,
   onOpenSettings,
+  hiddenWorkspacePaths,
 }: Props) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [hiddenExpanded, setHiddenExpanded] = useState(false);
+  const visibleWorkspaces = workspaces.filter((ws) => !hiddenWorkspacePaths[ws.path]);
+  const hiddenWorkspaces = workspaces.filter((ws) => hiddenWorkspacePaths[ws.path]);
 
   return (
     <div>
@@ -113,7 +120,7 @@ export function RepoSection({
             New workspace
           </button>
 
-          {workspaces.map((ws, i) => (
+          {visibleWorkspaces.map((ws) => (
             <WorkspaceRow
               key={ws.id}
               workspace={ws}
@@ -123,9 +130,47 @@ export function RepoSection({
               onSelect={() => onSelectWorkspace(ws.path)}
               onArchive={() => onArchiveWorkspace(ws)}
               onRename={() => onRenameWorkspace(ws)}
+              onSetHidden={(hidden) => onSetWorkspaceHidden(ws, hidden)}
               onRefreshDiffStats={() => onRefreshSidebarInfo(ws.path)}
             />
           ))}
+
+          {hiddenWorkspaces.length > 0 && (
+            <>
+              <button
+                onClick={() => setHiddenExpanded((expanded) => !expanded)}
+                className="flex items-center gap-1.5 rounded-md px-3 pl-4 py-2 text-[12px] text-[var(--ctp-overlay1)] hover:bg-[var(--ctp-surface0)]/50 hover:text-[var(--ctp-text)]"
+              >
+                <svg
+                  className="w-3.5 h-3.5 flex-shrink-0 transition-transform duration-150"
+                  style={{ transform: hiddenExpanded ? "rotate(90deg)" : "rotate(0deg)" }}
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                >
+                  <path d="M6.427 4.427l3.396 3.396a.25.25 0 0 1 0 .354l-3.396 3.396A.25.25 0 0 1 6 11.396V4.604a.25.25 0 0 1 .427-.177Z" />
+                </svg>
+                <span className="truncate">Hidden</span>
+                <span className="ml-auto rounded px-1.5 py-0.5 text-[10px] text-[var(--ctp-overlay0)] bg-[var(--ctp-surface0)]">
+                  {hiddenWorkspaces.length}
+                </span>
+              </button>
+
+              {hiddenExpanded && hiddenWorkspaces.map((ws) => (
+                <WorkspaceRow
+                  key={ws.id}
+                  workspace={ws}
+                  sidebarInfo={sidebarInfo[ws.path]}
+                  isSelected={ws.path === selectedWorkspacePath}
+                  isHidden
+                  onSelect={() => onSelectWorkspace(ws.path)}
+                  onArchive={() => onArchiveWorkspace(ws)}
+                  onRename={() => onRenameWorkspace(ws)}
+                  onSetHidden={(hidden) => onSetWorkspaceHidden(ws, hidden)}
+                  onRefreshDiffStats={() => onRefreshSidebarInfo(ws.path)}
+                />
+              ))}
+            </>
+          )}
         </div>
       )}
     </div>

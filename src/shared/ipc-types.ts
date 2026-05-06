@@ -340,6 +340,7 @@ export interface SessionState {
   selectedWorkspacePath?: string;
   workspaces: Record<string, WorkspacePaneState>;
   collapsedRepoIds?: string[];
+  hiddenWorkspacePaths?: string[];
   fileTree?: FileTreeSessionState;
   /** MRU file paths opened as editor / markdown tabs, keyed by workspace path.
    *  Index 0 is the most recently opened. Lives outside `workspaces` so it
@@ -969,4 +970,3 @@ export interface LspCodeAction {
   edit?: LspWorkspaceEdit;
   command?: LspCommand;
 }
-

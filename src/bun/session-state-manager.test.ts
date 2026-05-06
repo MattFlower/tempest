@@ -45,6 +45,44 @@ describe("SessionStateManager repo collapse persistence", () => {
     expect(third.isRepoCollapsed("repo-a")).toBe(false);
   });
 
+  it("persists hidden workspace paths and migrates them on rename", async () => {
+    const oldPath = join(tmpRoot, "old-workspace");
+    const newPath = join(tmpRoot, "new-workspace");
+    mkdirSync(oldPath, { recursive: true });
+
+    const first = new SessionStateManager(tmpRoot);
+    first.setWorkspaceHidden(oldPath, true);
+    await first.flush();
+
+    const second = new SessionStateManager(tmpRoot);
+    const loaded = await second.load();
+    expect(loaded?.hiddenWorkspacePaths).toEqual([oldPath]);
+
+    second.migrateWorkspacePath(oldPath, newPath);
+    mkdirSync(newPath, { recursive: true });
+    await second.flush();
+
+    const third = new SessionStateManager(tmpRoot);
+    const migrated = await third.load();
+    expect(migrated?.hiddenWorkspacePaths).toEqual([newPath]);
+  });
+
+  it("drops hidden workspace paths whose directories are gone", async () => {
+    const existingPath = join(tmpRoot, "existing-workspace");
+    const missingPath = join(tmpRoot, "missing-workspace");
+    mkdirSync(existingPath, { recursive: true });
+
+    const first = new SessionStateManager(tmpRoot);
+    first.setWorkspaceHidden(existingPath, true);
+    first.setWorkspaceHidden(missingPath, true);
+    await first.flush();
+
+    const second = new SessionStateManager(tmpRoot);
+    const loaded = await second.load();
+
+    expect(loaded?.hiddenWorkspacePaths).toEqual([existingPath]);
+  });
+
   it("extractInlineScrollback pulls legacy inline scrollback out of the tree", async () => {
     // load() prunes workspaces whose directories no longer exist, so the test
     // workspace path must really exist for the state to survive reload.

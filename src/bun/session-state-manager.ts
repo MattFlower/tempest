@@ -70,6 +70,14 @@ export class SessionStateManager {
         cleaned = true;
       }
 
+      if (state.hiddenWorkspacePaths) {
+        const existingHidden = state.hiddenWorkspacePaths.filter((wsPath) => existsSync(wsPath));
+        if (existingHidden.length !== state.hiddenWorkspacePaths.length) {
+          state.hiddenWorkspacePaths = existingHidden;
+          cleaned = true;
+        }
+      }
+
       this.state = state;
       if (cleaned) {
         this.dirty = true;
@@ -170,6 +178,20 @@ export class SessionStateManager {
       current.delete(repoId);
     }
     this.state!.collapsedRepoIds = Array.from(current);
+    this.dirty = true;
+  }
+
+  setWorkspaceHidden(workspacePath: string, hidden: boolean): void {
+    this.ensureState();
+    const current = new Set(this.state!.hiddenWorkspacePaths ?? []);
+    if (hidden) {
+      if (current.has(workspacePath)) return;
+      current.add(workspacePath);
+    } else {
+      if (!current.has(workspacePath)) return;
+      current.delete(workspacePath);
+    }
+    this.state!.hiddenWorkspacePaths = Array.from(current);
     this.dirty = true;
   }
 
@@ -300,6 +322,12 @@ export class SessionStateManager {
 
     if (this.state.selectedWorkspacePath === oldPath) {
       this.state.selectedWorkspacePath = newPath;
+    }
+
+    if (this.state.hiddenWorkspacePaths?.includes(oldPath)) {
+      this.state.hiddenWorkspacePaths = this.state.hiddenWorkspacePaths.map((p) =>
+        p === oldPath ? newPath : p,
+      );
     }
 
     this.dirty = true;

@@ -879,6 +879,11 @@ const rpc: any = (BrowserView.defineRPC as any)({
         sessionStateManager.setRepoCollapsed(repoId, !isExpanded);
         await sessionStateManager.flush();
       },
+      setWorkspaceHidden: async (_params: any) => {
+        const { workspacePath, hidden } = _params as { workspacePath: string; hidden: boolean };
+        sessionStateManager.setWorkspaceHidden(workspacePath, hidden);
+        await sessionStateManager.flush();
+      },
       saveFileTreeState: (_params: any) => {
         sessionStateManager.saveFileTreeState(_params);
       },

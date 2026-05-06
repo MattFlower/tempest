@@ -90,6 +90,10 @@ export function App() {
         store.selectWorkspace(state.selectedWorkspacePath);
       }
 
+      if (Array.isArray(state.hiddenWorkspacePaths)) {
+        store.setHiddenWorkspacePaths(state.hiddenWorkspacePaths);
+      }
+
       // Restore file tree state (activeSidebarView, expanded sets, cursor).
       if (state.fileTree) {
         store.hydrateFileTree(state.fileTree);

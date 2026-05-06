@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Plain-clicking HTTP(S) links in any `TerminalInstance` pane now opens the URL in the operating system's default browser, while Cmd-click still opens the URL in a Tempest browser pane. This makes detected terminal URLs and OSC 8 hyperlinks behave consistently across Claude, Codex, Pi, shell, and run panes.
 - Previously, Codex sessions were not restoring correctly on Tempest restarts
 - App icon at small sizes (16×16, 32×32 used in Finder list view) had visible padding around the dark squircle because the bundled iconset PNGs were straight downscales of the 1024 source — the SVG's outer white tile reduced the dark icon to ~68% of the canvas. Replaced these small sizes with the punched-up versions Tempest 1's Xcode build (`actool`) produced, where the dark icon fills the canvas. Larger sizes (≥128) are unchanged.
+- Monaco vim `:w` / `:wq` now save the editor pane that issued the command, even when multiple hidden Monaco tabs are mounted. Saves also compare against the last written buffer snapshot instead of relying only on React dirty state, avoiding stale-state no-ops.
 
 ### Changed
 

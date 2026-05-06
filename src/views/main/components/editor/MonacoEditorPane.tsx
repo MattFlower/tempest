@@ -14,12 +14,13 @@ import type { LspTextEdit } from "../../../../shared/ipc-types";
 // that resolves monaco-editor imports from window.monaco at runtime.
 // Loaded dynamically via import() to avoid Bun's bundler pulling in monaco-editor ESM.
 type VimMode = { dispose(): void };
+type VimCodeMirrorAdapter = { editor?: editor.IStandaloneCodeEditor };
 type VimApi = {
 	Vim: {
 		defineEx: (
 			name: string,
 			shortName: string,
-			fn: (...args: any[]) => void,
+			fn: (cm: VimCodeMirrorAdapter, ...args: any[]) => void,
 		) => void;
 		/** Map a key sequence to an ex-command or another key sequence. The
 		 *  ctx string scopes the binding to a vim mode: 'normal', 'insert',
@@ -31,20 +32,122 @@ let initVimModeFn:
 	| ((ed: editor.IStandaloneCodeEditor, statusBar?: HTMLElement) => VimMode)
 	| null = null;
 let vimApi: VimApi | null = null;
+let loadMonacoVimPromise: Promise<void> | null = null;
+type SaveOptions = { force?: boolean };
+type VimEditorHandlers = {
+	save: (options?: SaveOptions) => Promise<boolean>;
+	close: () => void;
+	jumpToMarker: (which: "first" | "last") => void;
+};
+const vimEditorHandlers = new WeakMap<
+	editor.IStandaloneCodeEditor,
+	VimEditorHandlers
+>();
+let vimExCommandsRegistered = false;
+
+function handlerForVimEditor(
+	cm: VimCodeMirrorAdapter,
+): VimEditorHandlers | undefined {
+	const ed = cm?.editor;
+	return ed ? vimEditorHandlers.get(ed) : undefined;
+}
+
+function registerVimExCommands(Vim: VimApi["Vim"]) {
+	if (vimExCommandsRegistered) return;
+	vimExCommandsRegistered = true;
+
+	// monaco-vim stores ex commands globally, while Tempest keeps inactive
+	// Monaco tabs mounted. Always route through the editor instance that
+	// invoked the ex command instead of closing over whichever pane registered
+	// the command last.
+	Vim.defineEx("write", "w", (cm) => {
+		void handlerForVimEditor(cm)?.save({ force: true });
+	});
+	Vim.defineEx("quit", "q", (cm) => {
+		handlerForVimEditor(cm)?.close();
+	});
+	Vim.defineEx("wquit", "wq", (cm) => {
+		const handler = handlerForVimEditor(cm);
+		if (!handler) return;
+		void handler.save({ force: true }).then((saved) => {
+			if (saved) handler.close();
+		});
+	});
+
+	Vim.defineEx("symbols", "symbols", (cm) => {
+		cm.editor?.getAction("editor.action.quickOutline")?.run();
+	});
+	Vim.map?.("gO", ":symbols", "normal");
+
+	Vim.defineEx("sighelp", "sighelp", (cm) => {
+		cm.editor?.getAction("editor.action.triggerParameterHints")?.run();
+	});
+	Vim.map?.("gK", ":sighelp", "normal");
+
+	Vim.defineEx("def", "def", (cm) => {
+		cm.editor?.getAction("editor.action.revealDefinition")?.run();
+	});
+	Vim.map?.("gd", ":def", "normal");
+
+	Vim.defineEx("refs", "refs", (cm) => {
+		cm.editor?.getAction("editor.action.goToReferences")?.run();
+	});
+	Vim.map?.("gr", ":refs", "normal");
+
+	Vim.defineEx("hover", "hover", (cm) => {
+		cm.editor?.getAction("editor.action.showHover")?.run();
+	});
+	Vim.map?.("K", ":hover", "normal");
+
+	Vim.defineEx("diagnext", "diagnext", (cm) => {
+		cm.editor?.getAction("editor.action.marker.next")?.run();
+	});
+	Vim.map?.("]d", ":diagnext", "normal");
+
+	Vim.defineEx("diagprev", "diagprev", (cm) => {
+		cm.editor?.getAction("editor.action.marker.prev")?.run();
+	});
+	Vim.map?.("[d", ":diagprev", "normal");
+
+	Vim.defineEx("diagfirst", "diagfirst", (cm) => {
+		handlerForVimEditor(cm)?.jumpToMarker("first");
+	});
+	Vim.map?.("[D", ":diagfirst", "normal");
+	Vim.defineEx("diaglast", "diaglast", (cm) => {
+		handlerForVimEditor(cm)?.jumpToMarker("last");
+	});
+	Vim.map?.("]D", ":diaglast", "normal");
+
+	Vim.defineEx("rename", "rename", (cm) => {
+		cm.editor?.getAction("editor.action.rename")?.run();
+	});
+	Vim.map?.("<leader>cr", ":rename", "normal");
+
+	Vim.defineEx("codeaction", "codeaction", (cm) => {
+		cm.editor?.getAction("editor.action.quickFix")?.run();
+	});
+	Vim.map?.("<leader>ca", ":codeaction", "normal");
+}
 
 const loadMonacoVim = async (): Promise<void> => {
 	if (initVimModeFn) return;
-	// Fetch the pre-built bundle and evaluate it as a blob URL module.
-	// Native import() doesn't work with Electrobun's views:// protocol,
-	// so we fetch + create an object URL to load the ESM bundle.
-	const resp = await fetch("monaco-vim.bundle.js");
-	const text = await resp.text();
-	const blob = new Blob([text], { type: "application/javascript" });
-	const url = URL.createObjectURL(blob);
-	const mod = await import(/* @vite-ignore */ url);
-	URL.revokeObjectURL(url);
-	initVimModeFn = mod.initVimMode;
-	vimApi = mod.VimMode as VimApi;
+	if (loadMonacoVimPromise) return loadMonacoVimPromise;
+	loadMonacoVimPromise = (async () => {
+		// Fetch the pre-built bundle and evaluate it as a blob URL module.
+		// Native import() doesn't work with Electrobun's views:// protocol,
+		// so we fetch + create an object URL to load the ESM bundle.
+		const resp = await fetch("monaco-vim.bundle.js");
+		const text = await resp.text();
+		const blob = new Blob([text], { type: "application/javascript" });
+		const url = URL.createObjectURL(blob);
+		const mod = await import(/* @vite-ignore */ url);
+		URL.revokeObjectURL(url);
+		initVimModeFn = mod.initVimMode;
+		vimApi = mod.VimMode as VimApi;
+	})().finally(() => {
+		loadMonacoVimPromise = null;
+	});
+	return loadMonacoVimPromise;
 };
 
 import { PaneTabKind } from "../../../../shared/ipc-types";
@@ -294,6 +397,8 @@ export function MonacoEditorPane({
 	// monaco.editor.getModelMarkers isn't reachable from the editor instance.
 	const monacoNsRef = useRef<typeof MonacoNs | null>(null);
 	const currentContentRef = useRef<string>("");
+	const lastSavedContentRef = useRef<string>("");
+	const isSavingRef = useRef(false);
 	const themeRegistered = useRef(false);
 	const vimModeRef = useRef<VimMode | null>(null);
 	const statusBarRef = useRef<HTMLDivElement>(null);
@@ -324,6 +429,8 @@ export function MonacoEditorPane({
 					setContent(result.content);
 					setLanguage(result.language);
 					currentContentRef.current = result.content;
+					lastSavedContentRef.current = result.content;
+					setIsDirty(false);
 				}
 			} catch (err: any) {
 				if (!cancelled) setError(err.message ?? String(err));
@@ -347,14 +454,23 @@ export function MonacoEditorPane({
 	// Errors at any stage are logged + surfaced in the header status
 	// string ("Formatted with Prettier", "Formatter failed: ...", etc.)
 	// but never block the actual write.
-	const handleSave = useCallback(async () => {
-		if (!isDirty || isSaving) return;
+	const handleSave = useCallback(async (options: SaveOptions = {}) => {
+		if (isSavingRef.current) return false;
+		const editor = editorRef.current;
+		const model = editor?.getModel() ?? null;
+		const initialContent = model?.getValue() ?? currentContentRef.current;
+		if (
+			!options.force &&
+			!isDirty &&
+			initialContent === lastSavedContentRef.current
+		) {
+			return true;
+		}
+		isSavingRef.current = true;
 		setIsSaving(true);
 		setSaveStatus(null);
 		try {
-			const editor = editorRef.current;
-			const model = editor?.getModel() ?? null;
-			let content = model?.getValue() ?? currentContentRef.current;
+			let content = initialContent;
 			let sourceVersion = model?.getVersionId() ?? null;
 
 			const refreshFromModel = () => {
@@ -474,24 +590,29 @@ export function MonacoEditorPane({
 			// wrote, not the newer model contents.
 			const writeVersion = model?.getVersionId() ?? null;
 			await api.writeFileForEditor(filePath, content);
+			lastSavedContentRef.current = content;
 			if (
 				model &&
 				writeVersion !== null &&
 				model.getVersionId() !== writeVersion
 			) {
 				currentContentRef.current = model.getValue();
-				setIsDirty(true);
+				setIsDirty(currentContentRef.current !== lastSavedContentRef.current);
 				setSaveStatus("Saved; unsaved changes remain");
 			} else {
+				currentContentRef.current = content;
 				setIsDirty(false);
 			}
+			return true;
 		} catch (err: any) {
 			console.error("[MonacoEditor] save failed:", err);
 			setSaveStatus(`Save failed: ${err?.message ?? String(err)}`);
+			return false;
 		} finally {
+			isSavingRef.current = false;
 			setIsSaving(false);
 		}
-	}, [filePath, isDirty, isSaving, workspacePath, language]);
+	}, [filePath, isDirty, workspacePath, language]);
 
 	// Clear the transient save status after a few seconds so the header
 	// doesn't get stuck showing "Formatted with X" forever.
@@ -532,130 +653,48 @@ export function MonacoEditorPane({
 		if (!ed || !bar) return;
 
 		let disposed = false;
+		const jumpToMarker = (which: "first" | "last") => {
+			const monacoNs = monacoNsRef.current;
+			const model = ed.getModel();
+			if (!monacoNs || !model) return;
+			const markers = monacoNs.editor.getModelMarkers({
+				resource: model.uri,
+			});
+			if (markers.length === 0) return;
+			const sorted = [...markers].sort(
+				(a, b) =>
+					a.startLineNumber - b.startLineNumber ||
+					a.startColumn - b.startColumn,
+			);
+			const target = which === "first" ? sorted[0] : sorted[sorted.length - 1];
+			if (!target) return;
+			const pos = {
+				lineNumber: target.startLineNumber,
+				column: target.startColumn,
+			};
+			ed.setPosition(pos);
+			ed.revealPositionInCenter(pos);
+			ed.focus();
+		};
 
 		(async () => {
 			if (!initVimModeFn) await loadMonacoVim();
 			if (disposed || !initVimModeFn) return;
 			vimModeRef.current = initVimModeFn(ed, bar);
 
-			// Register :w, :q, :wq
 			if (vimApi) {
-				const { Vim } = vimApi;
-				Vim.defineEx("write", "w", () => {
-					handleSaveRef.current();
+				vimEditorHandlers.set(ed, {
+					save: (options) => handleSaveRef.current(options),
+					close: () => onCloseRef.current?.(),
+					jumpToMarker,
 				});
-				Vim.defineEx("quit", "q", () => {
-					onCloseRef.current?.();
-				});
-				Vim.defineEx("wquit", "wq", () => {
-					handleSaveRef.current().then(() => onCloseRef.current?.());
-				});
-
-				// gO in normal mode → quick outline (symbol picker for the
-				// current file). Cmd+Shift+O is the conventional Monaco binding
-				// but conflicts with a Tempest-level shortcut, so vim users get
-				// an alternative through the gO mnemonic (matches Helix's
-				// jump-to-symbol binding).
-				Vim.defineEx("symbols", "symbols", () => {
-					ed.getAction("editor.action.quickOutline")?.run();
-				});
-				Vim.map?.("gO", ":symbols", "normal");
-
-				// gK in normal mode → trigger parameter hints (signature help
-				// popup). Vim uses K for "lookup keyword help"; gK is a natural
-				// extension for "help on this call site". Also fires on `(` /
-				// `,` while typing — this gives an explicit way to re-open the
-				// popup after dismissing it with Esc, or invoke it on an
-				// already-typed call expression.
-				Vim.defineEx("sighelp", "sighelp", () => {
-					ed.getAction("editor.action.triggerParameterHints")?.run();
-				});
-				Vim.map?.("gK", ":sighelp", "normal");
-
-				// LSP navigation verbs. Mirrors the conventions vim users carry
-				// over from coc.nvim / nvim-lspconfig: gd jumps to definition,
-				// gr opens the references peek, K shows hover docs (vim's
-				// built-in "lookup keyword help" mapped to LSP hover).
-				Vim.defineEx("def", "def", () => {
-					ed.getAction("editor.action.revealDefinition")?.run();
-				});
-				Vim.map?.("gd", ":def", "normal");
-
-				Vim.defineEx("refs", "refs", () => {
-					ed.getAction("editor.action.goToReferences")?.run();
-				});
-				Vim.map?.("gr", ":refs", "normal");
-
-				Vim.defineEx("hover", "hover", () => {
-					ed.getAction("editor.action.showHover")?.run();
-				});
-				Vim.map?.("K", ":hover", "normal");
-
-				// ]d / [d → next / previous diagnostic. Matches the vim
-				// unimpaired-style bracket conventions for navigating between
-				// markers.
-				Vim.defineEx("diagnext", "diagnext", () => {
-					ed.getAction("editor.action.marker.next")?.run();
-				});
-				Vim.map?.("]d", ":diagnext", "normal");
-
-				Vim.defineEx("diagprev", "diagprev", () => {
-					ed.getAction("editor.action.marker.prev")?.run();
-				});
-				Vim.map?.("[d", ":diagprev", "normal");
-
-				// [D / ]D → first / last diagnostic in the file. Monaco doesn't
-				// expose dedicated actions for these, so we read markers off the
-				// model and jump directly. Sort by line then column to get a
-				// stable document order regardless of how the server emitted
-				// them.
-				const jumpToMarker = (which: "first" | "last") => {
-					const monacoNs = monacoNsRef.current;
-					const model = ed.getModel();
-					if (!monacoNs || !model) return;
-					const markers = monacoNs.editor.getModelMarkers({
-						resource: model.uri,
-					});
-					if (markers.length === 0) return;
-					const sorted = [...markers].sort(
-						(a, b) =>
-							a.startLineNumber - b.startLineNumber ||
-							a.startColumn - b.startColumn,
-					);
-					const target =
-						which === "first" ? sorted[0] : sorted[sorted.length - 1];
-					if (!target) return;
-					const pos = {
-						lineNumber: target.startLineNumber,
-						column: target.startColumn,
-					};
-					ed.setPosition(pos);
-					ed.revealPositionInCenter(pos);
-					ed.focus();
-				};
-				Vim.defineEx("diagfirst", "diagfirst", () => jumpToMarker("first"));
-				Vim.map?.("[D", ":diagfirst", "normal");
-				Vim.defineEx("diaglast", "diaglast", () => jumpToMarker("last"));
-				Vim.map?.("]D", ":diaglast", "normal");
-
-				// Leader-prefixed LSP refactors. monaco-vim's default mapleader
-				// is `\`, so out of the box these are `\cr` and `\ca`; users
-				// who remap leader (e.g. to space) get the corresponding
-				// sequences automatically.
-				Vim.defineEx("rename", "rename", () => {
-					ed.getAction("editor.action.rename")?.run();
-				});
-				Vim.map?.("<leader>cr", ":rename", "normal");
-
-				Vim.defineEx("codeaction", "codeaction", () => {
-					ed.getAction("editor.action.quickFix")?.run();
-				});
-				Vim.map?.("<leader>ca", ":codeaction", "normal");
+				registerVimExCommands(vimApi.Vim);
 			}
 		})();
 
 		return () => {
 			disposed = true;
+			vimEditorHandlers.delete(ed);
 			vimModeRef.current?.dispose();
 			vimModeRef.current = null;
 		};
@@ -959,7 +998,7 @@ export function MonacoEditorPane({
 	const handleEditorChange = (value: string | undefined) => {
 		if (value !== undefined) {
 			currentContentRef.current = value;
-			setIsDirty(true);
+			setIsDirty(value !== lastSavedContentRef.current);
 		}
 	};
 

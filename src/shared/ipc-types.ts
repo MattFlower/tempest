@@ -50,6 +50,21 @@ export enum PaneTabKind {
   KeymapHelp = "keymapHelp",
 }
 
+export const DEFAULT_WORKSPACE_PANE_KIND = PaneTabKind.Claude;
+
+export const DEFAULT_WORKSPACE_PANE_KINDS = [
+  PaneTabKind.Claude,
+  PaneTabKind.Pi,
+  PaneTabKind.Codex,
+  PaneTabKind.Shell,
+  PaneTabKind.Browser,
+  PaneTabKind.HistoryViewer,
+  PaneTabKind.PRDashboard,
+  PaneTabKind.KeymapHelp,
+] as const;
+
+export type DefaultWorkspacePaneKind = typeof DEFAULT_WORKSPACE_PANE_KINDS[number];
+
 // --- View Mode ---
 
 export enum ViewMode {
@@ -200,6 +215,7 @@ export interface AppConfig {
   piEnvVarNames?: string[]; // Names of env vars passed to Pi at launch; values live in the macOS Keychain.
   codexEnvVarNames?: string[]; // Names of env vars passed to Codex at launch; values live in the macOS Keychain.
   editor?: string; // e.g. "nvim", "hx", "vim", "code". Defaults to "nvim".
+  defaultPaneKind?: DefaultWorkspacePaneKind; // Pane type for new workspaces with no saved layout. Defaults to Claude.
   monacoVimMode?: boolean; // Enable vim keybindings in Monaco editor. Defaults to false.
   theme?: "dark" | "light"; // Appearance theme. Defaults to "dark".
   httpServer?: HttpServerConfig;

@@ -7,16 +7,23 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import QRCode from "qrcode";
 import type {
   AppConfig,
+  DefaultWorkspacePaneKind,
   EditorSaveActionsConfig,
   FormattingConfig,
   NetworkInterface,
 } from "../../../../shared/ipc-types";
+import { DEFAULT_WORKSPACE_PANE_KIND } from "../../../../shared/ipc-types";
 import { api } from "../../state/rpc-client";
 import { useStore } from "../../state/store";
 import { useOverlay } from "../../state/useOverlay";
 import { applyTheme } from "../../state/theme";
 import { KeybindingsTab } from "./KeybindingsTab";
 import { FormattingTab } from "./FormattingTab";
+import {
+  DEFAULT_PANE_OPTIONS,
+  getDefaultPaneOption,
+  isDefaultWorkspacePaneKind,
+} from "../../models/default-pane";
 
 type Tab = "general" | "remote" | "tools" | "appearance" | "pi" | "codex" | "lsp" | "formatting" | "keybindings";
 
@@ -45,6 +52,9 @@ export function SettingsDialog() {
   // General tab state
   const [editor, setEditor] = useState<"nvim" | "monaco">("nvim");
   const [vimMode, setVimMode] = useState(false);
+  const [defaultPaneKind, setDefaultPaneKind] = useState<DefaultWorkspacePaneKind>(
+    DEFAULT_WORKSPACE_PANE_KIND,
+  );
 
   // Appearance tab state
   const [theme, setTheme] = useState<"dark" | "light">("dark");
@@ -85,6 +95,7 @@ export function SettingsDialog() {
       setConfig(cfg);
       setEditor(cfg.editor === "monaco" ? "monaco" : "nvim");
       setVimMode(cfg.monacoVimMode ?? false);
+      setDefaultPaneKind(getDefaultPaneOption(cfg.defaultPaneKind).kind);
       setTheme(cfg.theme ?? "dark");
       setHttpPlanMode(cfg.httpDefaultPlanMode ?? false);
       setHttpAllowTerminalConnect(cfg.httpAllowTerminalConnect ?? false);
@@ -124,6 +135,7 @@ export function SettingsDialog() {
     const updated: AppConfig = {
       ...config,
       editor,
+      defaultPaneKind,
       monacoVimMode: vimMode,
       theme,
       httpDefaultPlanMode: httpPlanMode,
@@ -211,6 +223,7 @@ export function SettingsDialog() {
 
   const isDirty = config
     ? (config.editor ?? "nvim") !== editor ||
+      (config.defaultPaneKind ?? DEFAULT_WORKSPACE_PANE_KIND) !== defaultPaneKind ||
       (config.monacoVimMode ?? false) !== vimMode ||
       (config.theme ?? "dark") !== theme ||
       (config.httpDefaultPlanMode ?? false) !== httpPlanMode ||
@@ -348,6 +361,8 @@ export function SettingsDialog() {
               <GeneralTab
                 editor={editor}
                 setEditor={setEditor}
+                defaultPaneKind={defaultPaneKind}
+                setDefaultPaneKind={setDefaultPaneKind}
                 vimMode={vimMode}
                 setVimMode={setVimMode}
               />
@@ -474,11 +489,15 @@ function TabButton({
 function GeneralTab({
   editor,
   setEditor,
+  defaultPaneKind,
+  setDefaultPaneKind,
   vimMode,
   setVimMode,
 }: {
   editor: "nvim" | "monaco";
   setEditor: (v: "nvim" | "monaco") => void;
+  defaultPaneKind: DefaultWorkspacePaneKind;
+  setDefaultPaneKind: (v: DefaultWorkspacePaneKind) => void;
   vimMode: boolean;
   setVimMode: (v: boolean) => void;
 }) {
@@ -536,6 +555,42 @@ function GeneralTab({
             Monaco
           </button>
         </div>
+      </div>
+
+      {/* Default Workspace Pane */}
+      <div className="flex flex-col gap-2">
+        <label
+          className="text-[11px] font-semibold"
+          style={{ color: "var(--ctp-subtext0)" }}
+        >
+          Default Workspace Pane
+        </label>
+        <p className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
+          Choose the pane type shown when a new workspace has no saved layout.
+        </p>
+        <select
+          value={defaultPaneKind}
+          onChange={(e) => {
+            if (isDefaultWorkspacePaneKind(e.target.value)) {
+              setDefaultPaneKind(e.target.value);
+            }
+          }}
+          className="w-full rounded-md px-3 py-2 text-sm outline-none"
+          style={{
+            backgroundColor: "var(--ctp-surface0)",
+            color: "var(--ctp-text)",
+            border: "1px solid var(--ctp-surface1)",
+          }}
+        >
+          {DEFAULT_PANE_OPTIONS.map((option) => (
+            <option key={option.kind} value={option.kind}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <p className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
+          {getDefaultPaneOption(defaultPaneKind).description}
+        </p>
       </div>
 
       {/* Vim Mode */}

@@ -11,7 +11,6 @@ import {
   type PaneTab,
   createPane,
   createTab,
-  createLeaf,
   allPanes,
   findPane,
   addingPane,
@@ -22,6 +21,7 @@ import {
   withRatios,
   toNodeState,
 } from "../models/pane-node";
+import { createDefaultWorkspacePaneTree } from "../models/default-pane";
 import { useStore } from "./store";
 import { api } from "./rpc-client";
 import { queueTerminalInput } from "./pending-terminal-input";
@@ -109,14 +109,10 @@ export function closeTab(paneId: string, tabId: string) {
       const { selectedWorkspacePath, setFocusedPaneId, setMaximizedPaneId } =
         useStore.getState();
       if (selectedWorkspacePath) {
-        // Create a fresh default pane
-        const tab = createTab(PaneTabKind.Claude, "Claude", {
-          terminalId: crypto.randomUUID(),
-        });
-        const newPane = createPane(tab);
-        const tree = createLeaf(newPane);
+        const { config } = useStore.getState();
+        const { tree, paneId } = createDefaultWorkspacePaneTree(config?.defaultPaneKind);
         commitTree(selectedWorkspacePath, tree);
-        setFocusedPaneId(newPane.id);
+        setFocusedPaneId(paneId);
         setMaximizedPaneId(null);
       }
     }

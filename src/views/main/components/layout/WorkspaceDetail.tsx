@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { PaneTabKind, ViewMode } from "../../../../shared/ipc-types";
+import { ViewMode } from "../../../../shared/ipc-types";
 import type { PaneNode } from "../../models/pane-node";
-import { createPane, createTab, createLeaf, createSplit, allPanes, findPane } from "../../models/pane-node";
+import { createSplit, allPanes, findPane } from "../../models/pane-node";
+import { createDefaultWorkspacePaneTree } from "../../models/default-pane";
 import { useStore } from "../../state/store";
 import { PaneTreeView } from "./PaneTreeView";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
@@ -28,6 +29,7 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
   const setPaneTree = useStore((s) => s.setPaneTree);
   const setFocusedPaneId = useStore((s) => s.setFocusedPaneId);
   const selectedWorkspacePath = useStore((s) => s.selectedWorkspacePath);
+  const defaultPaneKind = useStore((s) => s.config?.defaultPaneKind);
   const viewMode = useStore(
     (s) => s.workspaceViewMode[workspacePath] ?? ViewMode.Terminal,
   );
@@ -58,16 +60,11 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
   // Create a default pane tree if workspace has no tree yet
   useEffect(() => {
     if (workspacePath && !paneTrees[workspacePath]) {
-      const terminalId = crypto.randomUUID();
-      const tab = createTab(PaneTabKind.Claude, "Claude", {
-        terminalId,
-      });
-      const pane = createPane(tab);
-      const leaf = createLeaf(pane);
-      setPaneTree(workspacePath, leaf);
-      setFocusedPaneId(pane.id);
+      const { tree, paneId } = createDefaultWorkspacePaneTree(defaultPaneKind);
+      setPaneTree(workspacePath, tree);
+      setFocusedPaneId(paneId);
     }
-  }, [workspacePath, paneTrees, setPaneTree, setFocusedPaneId]);
+  }, [workspacePath, paneTrees, defaultPaneKind, setPaneTree, setFocusedPaneId]);
 
   // Ensure a valid pane is focused when this workspace becomes active
   useEffect(() => {

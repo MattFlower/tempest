@@ -3,11 +3,16 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type {
   AppConfig,
+  DefaultWorkspacePaneKind,
   EditorSaveActionsConfig,
   FormattingConfig,
   HttpServerConfig,
   LanguageFormattingConfig,
   McpToolConfig,
+} from "../../shared/ipc-types";
+import {
+  DEFAULT_WORKSPACE_PANE_KIND,
+  DEFAULT_WORKSPACE_PANE_KINDS,
 } from "../../shared/ipc-types";
 import { TEMPEST_DIR, CONFIG_FILE, REPOS_FILE } from "./paths";
 
@@ -143,6 +148,12 @@ export function normalizeConfig(raw: unknown): AppConfig {
   }
 
   if (typeof raw.editor === "string") normalized.editor = raw.editor;
+  if (
+    typeof raw.defaultPaneKind === "string" &&
+    (DEFAULT_WORKSPACE_PANE_KINDS as readonly string[]).includes(raw.defaultPaneKind)
+  ) {
+    normalized.defaultPaneKind = raw.defaultPaneKind as DefaultWorkspacePaneKind;
+  }
   if (typeof raw.monacoVimMode === "boolean") normalized.monacoVimMode = raw.monacoVimMode;
   if (raw.theme === "dark" || raw.theme === "light") normalized.theme = raw.theme;
 
@@ -186,6 +197,7 @@ export function defaultConfig(): AppConfig {
   return {
     workspaceRoot: join(homedir(), "tempest", "workspaces"),
     claudeArgs: ["--dangerously-skip-permissions"],
+    defaultPaneKind: DEFAULT_WORKSPACE_PANE_KIND,
   };
 }
 

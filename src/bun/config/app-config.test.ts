@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { defaultConfig, normalizeConfig, normalizeRepoPaths } from "./app-config";
+import { PaneTabKind } from "../../shared/ipc-types";
 
 describe("normalizeConfig", () => {
   it("falls back to defaults when required fields are invalid", () => {
@@ -56,6 +57,13 @@ describe("normalizeConfig", () => {
     expect(normalized.gitPath).toBeUndefined();
     expect(normalized.piPath).toBeUndefined();
     expect(normalized.httpDefaultPlanMode).toBeUndefined();
+  });
+
+  it("preserves valid default pane kinds and drops invalid values", () => {
+    expect(normalizeConfig({ defaultPaneKind: PaneTabKind.Codex }).defaultPaneKind)
+      .toBe(PaneTabKind.Codex);
+    expect(normalizeConfig({ defaultPaneKind: "editor" }).defaultPaneKind)
+      .toBe(defaultConfig().defaultPaneKind);
   });
 });
 

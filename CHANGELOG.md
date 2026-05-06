@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Settings now include a default workspace pane selector, allowing new workspaces with no saved layout to start with Claude, Pi, Codex, Terminal, Browser, Chat History, PR Reviews, or Keymap.
+
 ### Fixed
 
 - Plain-clicking HTTP(S) links in any `TerminalInstance` pane now opens the URL in the operating system's default browser, while Cmd-click still opens the URL in a Tempest browser pane. This makes detected terminal URLs and OSC 8 hyperlinks behave consistently across Claude, Codex, Pi, shell, and run panes.

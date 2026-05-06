@@ -79,7 +79,7 @@ export interface TempestStore {
   recentFilesPaletteVisible: boolean;
   findInFilesVisible: boolean;
   settingsDialogVisible: boolean;
-  settingsDialogInitialTab: "general" | "remote" | "tools" | "appearance" | "keybindings";
+  settingsDialogInitialTab: "general" | "remote" | "tools" | "appearance" | "diagnostics" | "keybindings";
   cloneRepoDialogVisible: boolean;
   createClaudeSettingsRequest: CreateClaudeSettingsRequest | null;
   httpServerRunning: boolean;
@@ -162,7 +162,7 @@ export interface TempestStore {
   toggleFindInFiles: () => void;
   setFindInFilesVisible: (visible: boolean) => void;
   toggleSettingsDialog: () => void;
-  openSettingsTab: (tab: "general" | "remote" | "tools" | "appearance" | "keybindings") => void;
+  openSettingsTab: (tab: "general" | "remote" | "tools" | "appearance" | "diagnostics" | "keybindings") => void;
   showCloneRepoDialog: () => void;
   hideCloneRepoDialog: () => void;
   showCreateClaudeSettingsDialog: (req: CreateClaudeSettingsRequest) => void;

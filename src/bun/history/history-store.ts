@@ -16,6 +16,7 @@ import { RipgrepSearcher } from "./ripgrep-searcher";
 import { parseFile, type ParsedMessage } from "./jsonl-parser";
 import type { SessionSummary, SessionMessage, ToolCallInfo } from "../../shared/ipc-types";
 import type { SessionHistoryProvider } from "./session-history-provider";
+import { perfTrace } from "../perf-trace";
 
 interface ParseCacheEntry {
   mtime: number;
@@ -291,7 +292,9 @@ export class HistoryStore implements SessionHistoryProvider {
     this.stopRefreshTimer();
     this.refreshTimer = setInterval(async () => {
       try {
-        await this.refresh();
+        await perfTrace.measure("history.refresh", { provider: this.providerId }, () =>
+          this.refresh(),
+        );
       } catch (err) {
         console.error("[HistoryStore] refresh error:", err);
       }

@@ -206,6 +206,10 @@ export interface BunRequests {
     params: AppConfig;
     response: void;
   };
+  getPerformanceLogPath: {
+    params: void;
+    response: string;
+  };
 
   // Pi env vars (secrets stored in macOS Keychain)
   listPiEnvVarNames: {

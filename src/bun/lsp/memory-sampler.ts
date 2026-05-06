@@ -11,6 +11,7 @@
 // ============================================================
 
 import type { LspMemorySample } from "../../shared/ipc-types";
+import { perfTrace } from "../perf-trace";
 import type { LspServerRegistry } from "./server-registry";
 
 const SAMPLE_INTERVAL_MS = 2000;
@@ -41,7 +42,9 @@ export class MemorySampler {
    * before the first interval tick lands.
    */
   async sampleOnce(): Promise<LspMemorySample[]> {
-    return await collectSamples(this.registry);
+    return await perfTrace.measure("lsp.memorySample", undefined, () =>
+      collectSamples(this.registry),
+    );
   }
 
   private startTimer(): void {
@@ -59,7 +62,9 @@ export class MemorySampler {
   }
 
   private async tick(): Promise<void> {
-    const samples = await collectSamples(this.registry);
+    const samples = await perfTrace.measure("lsp.memorySample", undefined, () =>
+      collectSamples(this.registry),
+    );
     for (const handler of this.subscribers) handler(samples);
   }
 }

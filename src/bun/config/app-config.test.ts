@@ -125,6 +125,40 @@ describe("normalizeConfig — formatting", () => {
   });
 });
 
+describe("normalizeConfig — performance logging", () => {
+  it("preserves a well-formed performanceLogging block", () => {
+    const normalized = normalizeConfig({
+      workspaceRoot: "/tmp",
+      claudeArgs: [],
+      performanceLogging: {
+        enabled: true,
+        slowTaskThresholdMs: 750.4,
+        eventLoopLagThresholdMs: 250.6,
+      },
+    });
+
+    expect(normalized.performanceLogging).toEqual({
+      enabled: true,
+      slowTaskThresholdMs: 750,
+      eventLoopLagThresholdMs: 251,
+    });
+  });
+
+  it("drops malformed performanceLogging fields", () => {
+    const normalized = normalizeConfig({
+      workspaceRoot: "/tmp",
+      claudeArgs: [],
+      performanceLogging: {
+        enabled: "yes",
+        slowTaskThresholdMs: -1,
+        eventLoopLagThresholdMs: Number.NaN,
+      },
+    });
+
+    expect(normalized.performanceLogging).toBeUndefined();
+  });
+});
+
 describe("normalizeRepoPaths", () => {
   it("returns empty array for non-array input", () => {
     expect(normalizeRepoPaths({})).toEqual([]);

@@ -29,6 +29,7 @@ import { runMigration } from "./config/migrate";
 import { PathResolver } from "./config/path-resolver";
 import { TempestHttpServer, generateToken, consumePendingData } from "./http-server";
 import { RemoteTerminalHub } from "./remote-terminal-hub";
+import { perfTrace } from "./perf-trace";
 import { getUsageData } from "./usage/usage-service";
 import { HistoryStore } from "./history/history-store";
 import { PiHistoryStore } from "./history/pi-history-store";
@@ -735,6 +736,7 @@ const rpc: any = (BrowserView.defineRPC as any)({
       saveConfig: async (_params: any) => {
         await workspaceManager.saveConfig(_params);
       },
+      getPerformanceLogPath: () => perfTrace.logPath(),
 
       // --- Pi env vars (keychain-backed) ---
       listPiEnvVarNames: () => {
@@ -1699,6 +1701,7 @@ workspaceManager.onSidebarInfoUpdated = (workspacePath, info) => {
   } catch { /* webview not ready yet */ }
 };
 workspaceManager.onConfigChanged = (config) => {
+  perfTrace.configure(config.performanceLogging);
   try {
     win.webview.rpc.send.configChanged(config);
   } catch { /* webview not ready yet */ }
@@ -1837,6 +1840,7 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
   // Load config and update SessionManager
   try {
     const config = await loadConfig();
+    perfTrace.configure(config.performanceLogging);
     sessionManager.updateConfig(config);
     console.log("[main] Config loaded:", config.workspaceRoot, "claudeArgs:", config.claudeArgs);
   } catch (err) {
@@ -1869,7 +1873,11 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
 
     // Initial GC now that state is fully loaded, then every 60s thereafter.
     const liveIds = sessionStateManager.collectLiveTerminalIds();
-    const { deleted } = await scrollbackStore.gc(liveIds);
+    const { deleted } = await perfTrace.measure(
+      "scrollback.initialGc",
+      { terminalCount: liveIds.size },
+      () => scrollbackStore.gc(liveIds),
+    );
     if (deleted > 0) {
       console.log(`[main] ScrollbackStore GC removed ${deleted} orphaned file(s)`);
     }
@@ -1887,8 +1895,10 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
       for (const cachedId of scrollbackCache.keys()) {
         if (!ids.has(cachedId)) scrollbackCache.delete(cachedId);
       }
-      void scrollbackStore
-        .gc(ids)
+      void perfTrace
+        .measure("scrollback.gc", { terminalCount: ids.size }, () =>
+          scrollbackStore.gc(ids),
+        )
         .catch((err) => console.log(`[main] ScrollbackStore GC failed: ${err}`));
     }, 60_000);
   } catch (err) {
@@ -1900,6 +1910,7 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
       sessionStateManager.isRepoCollapsed(repoId),
     );
     await workspaceManager.initialize();
+    perfTrace.configure(workspaceManager.getConfig().performanceLogging);
     console.log("[main] WorkspaceManager initialized");
   } catch (err) {
     console.error("[main] WorkspaceManager init failed:", err);

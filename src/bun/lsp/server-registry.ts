@@ -32,6 +32,7 @@ import type {
   LspServerState,
   LspServerStatus,
 } from "../../shared/ipc-types";
+import { perfTrace } from "../perf-trace";
 
 export interface RegistryCallbacks {
   onStateChange: (state: LspServerState) => void;
@@ -227,87 +228,97 @@ export class LspServerRegistry {
    *     LspServerProcess, which transitions to "error" via its own callback
    */
   private async installAndStart(entry: ServerEntry): Promise<void> {
-    const gen = entry.generation;
-    const aborted = () => entry.generation !== gen;
-
-    // --- Install phase ---
-    let binaryPath: string;
-    try {
-      const result = await this.installer.resolve(entry.recipe);
-      if (aborted()) return;
-      binaryPath = result.binaryPath;
-    } catch (err: any) {
-      if (aborted()) return;
-      entry.status = "error";
-      entry.lastError = err?.message ?? String(err);
-      this.emitState(entry);
-      return;
-    }
-
-    // --- Spawn phase ---
-    if (aborted()) return;
-    entry.status = "starting";
-    this.emitState(entry);
-
-    const proc = new LspServerProcess(
+    await perfTrace.measure(
+      "lsp.installAndStart",
       {
-        name: entry.recipe.name,
-        command: [binaryPath, ...entry.recipe.args],
-        rootUri: `file://${entry.workspacePath}`,
-        workspaceFolderName: basename(entry.workspacePath),
+        workspacePath: entry.workspacePath,
         languageId: entry.primaryLanguageId,
+        recipe: entry.recipe.name,
       },
-      {
-        onStatusChange: (status, error) =>
-          this.handleStatusChange(entry.id, gen, status, error),
-        onDiagnostics: (uri, diags) =>
-          this.callbacks.onDiagnostics(uri, diags),
+      async () => {
+        const gen = entry.generation;
+        const aborted = () => entry.generation !== gen;
+
+        // --- Install phase ---
+        let binaryPath: string;
+        try {
+          const result = await this.installer.resolve(entry.recipe);
+          if (aborted()) return;
+          binaryPath = result.binaryPath;
+        } catch (err: any) {
+          if (aborted()) return;
+          entry.status = "error";
+          entry.lastError = err?.message ?? String(err);
+          this.emitState(entry);
+          return;
+        }
+
+        // --- Spawn phase ---
+        if (aborted()) return;
+        entry.status = "starting";
+        this.emitState(entry);
+
+        const proc = new LspServerProcess(
+          {
+            name: entry.recipe.name,
+            command: [binaryPath, ...entry.recipe.args],
+            rootUri: `file://${entry.workspacePath}`,
+            workspaceFolderName: basename(entry.workspacePath),
+            languageId: entry.primaryLanguageId,
+          },
+          {
+            onStatusChange: (status, error) =>
+              this.handleStatusChange(entry.id, gen, status, error),
+            onDiagnostics: (uri, diags) =>
+              this.callbacks.onDiagnostics(uri, diags),
+          },
+        );
+        entry.process = proc;
+
+        try {
+          await proc.start();
+          if (aborted()) {
+            // Stop bumped while we were initializing. Tear down the proc
+            // we just started so we don't leak a running server.
+            try { await proc.stop("explicit"); } catch { /* ignore */ }
+            return;
+          }
+
+          // Re-snapshot docs at replay time, not at function entry — the user
+          // may have typed during install/restart, and document-store.update
+          // rewrote the entries in place with the latest version + text.
+          // Replaying the original snapshot would send stale text to the
+          // server. Single-threaded JS guarantees no didChange RPC can
+          // interleave between status="ready" (set inside proc.start) and
+          // the synchronous notify loop below.
+          for (const doc of entry.docs.all()) {
+            proc.notify("textDocument/didOpen", {
+              textDocument: {
+                uri: doc.uri,
+                languageId: doc.languageId,
+                version: doc.version,
+                text: doc.text,
+              },
+            });
+          }
+        } catch (err: any) {
+          if (aborted()) {
+            try { await proc.stop("explicit"); } catch { /* ignore */ }
+            return;
+          }
+          // proc.start() rejected — most often the server returned an error
+          // for `initialize` while staying alive (config rejected, missing
+          // dependency, etc). The watchExit handler inside LspServerProcess
+          // wouldn't fire in that case, so without this branch the entry
+          // would stay stuck on "starting" forever.
+          entry.status = "error";
+          entry.lastError = err?.message ?? String(err);
+          try { await proc.stop("explicit"); } catch { /* ignore */ }
+          entry.process = null;
+          this.emitState(entry);
+        }
       },
     );
-    entry.process = proc;
-
-    try {
-      await proc.start();
-      if (aborted()) {
-        // Stop bumped while we were initializing. Tear down the proc
-        // we just started so we don't leak a running server.
-        try { await proc.stop("explicit"); } catch { /* ignore */ }
-        return;
-      }
-
-      // Re-snapshot docs at replay time, not at function entry — the user
-      // may have typed during install/restart, and document-store.update
-      // rewrote the entries in place with the latest version + text.
-      // Replaying the original snapshot would send stale text to the
-      // server. Single-threaded JS guarantees no didChange RPC can
-      // interleave between status="ready" (set inside proc.start) and
-      // the synchronous notify loop below.
-      for (const doc of entry.docs.all()) {
-        proc.notify("textDocument/didOpen", {
-          textDocument: {
-            uri: doc.uri,
-            languageId: doc.languageId,
-            version: doc.version,
-            text: doc.text,
-          },
-        });
-      }
-    } catch (err: any) {
-      if (aborted()) {
-        try { await proc.stop("explicit"); } catch { /* ignore */ }
-        return;
-      }
-      // proc.start() rejected — most often the server returned an error
-      // for `initialize` while staying alive (config rejected, missing
-      // dependency, etc). The watchExit handler inside LspServerProcess
-      // wouldn't fire in that case, so without this branch the entry
-      // would stay stuck on "starting" forever.
-      entry.status = "error";
-      entry.lastError = err?.message ?? String(err);
-      try { await proc.stop("explicit"); } catch { /* ignore */ }
-      entry.process = null;
-      this.emitState(entry);
-    }
   }
 
   private async stopEntry(entry: ServerEntry): Promise<void> {

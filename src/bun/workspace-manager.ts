@@ -27,6 +27,7 @@ import { detectVCS, detectVCSType } from "./vcs/detector";
 import type { VCSProvider } from "./vcs/types";
 import { PathResolver, getResolvedPATH } from "./config/path-resolver";
 import { WEBPAGE_PREVIEWS_DIR } from "./config/paths";
+import { perfTrace } from "./perf-trace";
 
 export class WorkspaceManager {
   private repos: SourceRepo[] = [];
@@ -867,27 +868,33 @@ export class WorkspaceManager {
   }
 
   private async refreshSidebarInfo(workspacePath: string): Promise<void> {
-    const workspace = this.findWorkspaceByPath(workspacePath);
-    if (!workspace) return;
+    await perfTrace.measure(
+      "workspace.sidebarInfoRefresh",
+      { workspacePath },
+      async () => {
+        const workspace = this.findWorkspaceByPath(workspacePath);
+        if (!workspace) return;
 
-    const repo = this.repos.find((r) => r.path === workspace.repoPath);
-    if (!repo) return;
+        const repo = this.repos.find((r) => r.path === workspace.repoPath);
+        if (!repo) return;
 
-    const provider = this.providers.get(repo.id);
-    if (!provider) return;
+        const provider = this.providers.get(repo.id);
+        if (!provider) return;
 
-    try {
-      const [bookmarkName, diffStats, branchHealth] = await Promise.all([
-        provider.bookmarkName(workspace),
-        provider.diffStats(workspace),
-        provider.branchHealth(workspace).catch(() => undefined),
-      ]);
-      const info: WorkspaceSidebarInfo = { bookmarkName, diffStats, branchHealth };
-      this.sidebarInfoCache.set(workspacePath, info);
-      this.onSidebarInfoUpdated?.(workspacePath, info);
-    } catch {
-      // Keep existing cache on error
-    }
+        try {
+          const [bookmarkName, diffStats, branchHealth] = await Promise.all([
+            provider.bookmarkName(workspace),
+            provider.diffStats(workspace),
+            provider.branchHealth(workspace).catch(() => undefined),
+          ]);
+          const info: WorkspaceSidebarInfo = { bookmarkName, diffStats, branchHealth };
+          this.sidebarInfoCache.set(workspacePath, info);
+          this.onSidebarInfoUpdated?.(workspacePath, info);
+        } catch {
+          // Keep existing cache on error
+        }
+      },
+    );
   }
 
   private startSidebarRefresh(): void {
@@ -915,17 +922,23 @@ export class WorkspaceManager {
   }
 
   private async checkForWorkspaceChanges(): Promise<void> {
-    for (const repo of this.repos) {
-      const oldKey = this.workspaceListKey(
-        this.workspacesByRepo.get(repo.id) ?? [],
-      );
-      await this.refreshWorkspacesInternal(repo);
-      const newWorkspaces = this.workspacesByRepo.get(repo.id) ?? [];
-      const newKey = this.workspaceListKey(newWorkspaces);
-      if (oldKey !== newKey) {
-        this.onWorkspacesChanged?.(repo.id, newWorkspaces);
+    await perfTrace.measure(
+      "workspace.checkForWorkspaceChanges",
+      { repoCount: this.repos.length },
+      async () => {
+        for (const repo of this.repos) {
+          const oldKey = this.workspaceListKey(
+            this.workspacesByRepo.get(repo.id) ?? [],
+          );
+          await this.refreshWorkspacesInternal(repo);
+          const newWorkspaces = this.workspacesByRepo.get(repo.id) ?? [];
+          const newKey = this.workspaceListKey(newWorkspaces);
+          if (oldKey !== newKey) {
+            this.onWorkspacesChanged?.(repo.id, newWorkspaces);
+          }
+        }
       }
-    }
+    );
   }
 
   private workspaceListKey(workspaces: TempestWorkspace[]): string {

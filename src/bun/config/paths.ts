@@ -44,6 +44,10 @@ export const WEBPAGE_PREVIEWS_DIR = join(TEMPEST_DIR, "webpage-previews");
 // `node_modules/.bin/<server-binary>` which we spawn at runtime.
 export const LSP_INSTALL_DIR = join(TEMPEST_DIR, "lsp");
 
+// Release-build performance diagnostics.
+export const PERF_LOG_DIR = join(TEMPEST_DIR, "perf");
+export const PERF_LOG_FILE = join(PERF_LOG_DIR, "backend.jsonl");
+
 // Mermaid diagrams (show_mermaid_diagram MCP tool)
 export const MERMAID_DIAGRAMS_DIR = join(TEMPEST_DIR, "mermaid-diagrams");
 

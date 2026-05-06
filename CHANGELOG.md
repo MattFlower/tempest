@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Settings → Diagnostics now includes an opt-in backend performance log for release builds. When enabled, Tempest writes slow background-task and event-loop-lag JSONL entries to `~/.config/tempest/perf/backend.jsonl`, with configurable thresholds, a reset-to-defaults control, and rotation. Initial instrumentation covers sidebar workspace/VCS refreshes, history cache refreshes, LSP install/start and memory sampling, and scrollback GC.
 - Settings now include a default workspace pane selector, allowing new workspaces with no saved layout to start with Claude, Pi, Codex, Terminal, Browser, Chat History, PR Reviews, or Keymap.
 - The workspace pane now has the ability to "hide" workspaces you aren't activity working on
 

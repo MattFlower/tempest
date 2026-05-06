@@ -668,6 +668,7 @@ export const api = {
   // Config
   getConfig: () => rpcRequest.getConfig(),
   saveConfig: (config: any) => rpcRequest.saveConfig(config),
+  getPerformanceLogPath: () => rpcRequest.getPerformanceLogPath(),
 
   // Pi env vars (secrets stored in macOS Keychain)
   listPiEnvVarNames: () => rpcRequest.listPiEnvVarNames(),

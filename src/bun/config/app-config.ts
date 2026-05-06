@@ -9,6 +9,7 @@ import type {
   HttpServerConfig,
   LanguageFormattingConfig,
   McpToolConfig,
+  PerformanceLoggingConfig,
 } from "../../shared/ipc-types";
 import {
   DEFAULT_WORKSPACE_PANE_KIND,
@@ -110,6 +111,27 @@ function normalizeKeybindings(value: unknown): Record<string, string | null> | u
   return out;
 }
 
+function normalizePerformanceLogging(value: unknown): PerformanceLoggingConfig | undefined {
+  if (!isRecord(value)) return undefined;
+  const out: PerformanceLoggingConfig = {};
+  if (typeof value.enabled === "boolean") out.enabled = value.enabled;
+  if (
+    typeof value.slowTaskThresholdMs === "number" &&
+    Number.isFinite(value.slowTaskThresholdMs) &&
+    value.slowTaskThresholdMs >= 0
+  ) {
+    out.slowTaskThresholdMs = Math.round(value.slowTaskThresholdMs);
+  }
+  if (
+    typeof value.eventLoopLagThresholdMs === "number" &&
+    Number.isFinite(value.eventLoopLagThresholdMs) &&
+    value.eventLoopLagThresholdMs >= 0
+  ) {
+    out.eventLoopLagThresholdMs = Math.round(value.eventLoopLagThresholdMs);
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export function normalizeConfig(raw: unknown): AppConfig {
   const defaults = defaultConfig();
   if (!isRecord(raw)) return defaults;
@@ -184,6 +206,8 @@ export function normalizeConfig(raw: unknown): AppConfig {
   if (formatting) normalized.formatting = formatting;
   const saveActions = normalizeEditorSaveActions(raw.editorSaveActions);
   if (saveActions) normalized.editorSaveActions = saveActions;
+  const performanceLogging = normalizePerformanceLogging(raw.performanceLogging);
+  if (performanceLogging) normalized.performanceLogging = performanceLogging;
 
   return normalized;
 }

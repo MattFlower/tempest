@@ -11,6 +11,7 @@ import type {
   EditorSaveActionsConfig,
   FormattingConfig,
   NetworkInterface,
+  PerformanceLoggingConfig,
 } from "../../../../shared/ipc-types";
 import { DEFAULT_WORKSPACE_PANE_KIND } from "../../../../shared/ipc-types";
 import { api } from "../../state/rpc-client";
@@ -25,7 +26,13 @@ import {
   isDefaultWorkspacePaneKind,
 } from "../../models/default-pane";
 
-type Tab = "general" | "remote" | "tools" | "appearance" | "pi" | "codex" | "lsp" | "formatting" | "keybindings";
+type Tab = "general" | "remote" | "tools" | "appearance" | "pi" | "codex" | "lsp" | "diagnostics" | "formatting" | "keybindings";
+
+const DEFAULT_PERF_LOGGING: Required<PerformanceLoggingConfig> = {
+  enabled: false,
+  slowTaskThresholdMs: 500,
+  eventLoopLagThresholdMs: 200,
+};
 
 function isSameKeybindings(
   a: Record<string, string | null> | undefined,
@@ -67,6 +74,16 @@ export function SettingsDialog() {
   // LSP tab state
   const [lspDisabled, setLspDisabled] = useState(false);
 
+  // Diagnostics tab state
+  const [perfLoggingEnabled, setPerfLoggingEnabled] = useState(false);
+  const [perfSlowTaskThresholdMs, setPerfSlowTaskThresholdMs] = useState(
+    DEFAULT_PERF_LOGGING.slowTaskThresholdMs,
+  );
+  const [perfEventLoopLagThresholdMs, setPerfEventLoopLagThresholdMs] = useState(
+    DEFAULT_PERF_LOGGING.eventLoopLagThresholdMs,
+  );
+  const [perfLogPath, setPerfLogPath] = useState("");
+
   // Formatting tab state — kept as the same shapes that go to disk so
   // load/save are a direct round-trip with no flattening.
   const [formatting, setFormatting] = useState<FormattingConfig | undefined>(undefined);
@@ -104,6 +121,15 @@ export function SettingsDialog() {
       setShowMermaidDiagram(cfg.mcpTools?.showMermaidDiagram !== false);
       setShowMarkdown(cfg.mcpTools?.showMarkdown !== false);
       setLspDisabled(cfg.lspDisabled ?? false);
+      setPerfLoggingEnabled(cfg.performanceLogging?.enabled ?? false);
+      setPerfSlowTaskThresholdMs(
+        cfg.performanceLogging?.slowTaskThresholdMs ??
+          DEFAULT_PERF_LOGGING.slowTaskThresholdMs,
+      );
+      setPerfEventLoopLagThresholdMs(
+        cfg.performanceLogging?.eventLoopLagThresholdMs ??
+          DEFAULT_PERF_LOGGING.eventLoopLagThresholdMs,
+      );
       setFormatting(cfg.formatting);
       setEditorSaveActions(cfg.editorSaveActions);
       setKeybindings(cfg.keybindings ?? {});
@@ -126,6 +152,9 @@ export function SettingsDialog() {
     api.getNetworkInterfaces().then((ifaces: NetworkInterface[]) => {
       setNetworkInterfaces(ifaces);
     });
+    api.getPerformanceLogPath().then((path: string) => {
+      setPerfLogPath(path);
+    });
   }, []);
 
   const handleSave = async () => {
@@ -143,6 +172,11 @@ export function SettingsDialog() {
       httpAllowTerminalWrite,
       mcpTools: { showWebpage, showMermaidDiagram, showMarkdown },
       lspDisabled,
+      performanceLogging: {
+        enabled: perfLoggingEnabled,
+        slowTaskThresholdMs: perfSlowTaskThresholdMs,
+        eventLoopLagThresholdMs: perfEventLoopLagThresholdMs,
+      },
       formatting,
       editorSaveActions,
       httpServer: {
@@ -233,6 +267,9 @@ export function SettingsDialog() {
       (config.mcpTools?.showMermaidDiagram !== false) !== showMermaidDiagram ||
       (config.mcpTools?.showMarkdown !== false) !== showMarkdown ||
       (config.lspDisabled ?? false) !== lspDisabled ||
+      (config.performanceLogging?.enabled ?? false) !== perfLoggingEnabled ||
+      (config.performanceLogging?.slowTaskThresholdMs ?? DEFAULT_PERF_LOGGING.slowTaskThresholdMs) !== perfSlowTaskThresholdMs ||
+      (config.performanceLogging?.eventLoopLagThresholdMs ?? DEFAULT_PERF_LOGGING.eventLoopLagThresholdMs) !== perfEventLoopLagThresholdMs ||
       JSON.stringify(config.formatting ?? null) !== JSON.stringify(formatting ?? null) ||
       JSON.stringify(config.editorSaveActions ?? null) !== JSON.stringify(editorSaveActions ?? null) ||
       (config.httpServer?.enabled ?? false) !== httpEnabled ||
@@ -298,7 +335,7 @@ export function SettingsDialog() {
 
         {/* Tabs */}
         <div
-          className="flex px-4 pt-2 gap-1"
+          className="flex flex-wrap px-4 pt-2 gap-1"
           style={{ borderBottom: "1px solid var(--ctp-surface0)" }}
         >
           <TabButton
@@ -335,6 +372,11 @@ export function SettingsDialog() {
             label="LSP"
             active={activeTab === "lsp"}
             onClick={() => setActiveTab("lsp")}
+          />
+          <TabButton
+            label="Diagnostics"
+            active={activeTab === "diagnostics"}
+            onClick={() => setActiveTab("diagnostics")}
           />
           <TabButton
             label="Formatting"
@@ -384,6 +426,17 @@ export function SettingsDialog() {
             {activeTab === "codex" && <AgentEnvVarsTab agent="codex" />}
             {activeTab === "lsp" && (
               <LspTab disabled={lspDisabled} setDisabled={setLspDisabled} />
+            )}
+            {activeTab === "diagnostics" && (
+              <DiagnosticsTab
+                enabled={perfLoggingEnabled}
+                setEnabled={setPerfLoggingEnabled}
+                slowTaskThresholdMs={perfSlowTaskThresholdMs}
+                setSlowTaskThresholdMs={setPerfSlowTaskThresholdMs}
+                eventLoopLagThresholdMs={perfEventLoopLagThresholdMs}
+                setEventLoopLagThresholdMs={setPerfEventLoopLagThresholdMs}
+                logPath={perfLogPath}
+              />
             )}
             {activeTab === "formatting" && (
               <FormattingTab
@@ -1390,6 +1443,168 @@ function LspTab({
           </p>
         </div>
         <ToggleSwitch value={disabled} onChange={setDisabled} />
+      </div>
+    </>
+  );
+}
+
+// --- Diagnostics Tab ---
+
+function DiagnosticsTab({
+  enabled,
+  setEnabled,
+  slowTaskThresholdMs,
+  setSlowTaskThresholdMs,
+  eventLoopLagThresholdMs,
+  setEventLoopLagThresholdMs,
+  logPath,
+}: {
+  enabled: boolean;
+  setEnabled: (v: boolean) => void;
+  slowTaskThresholdMs: number;
+  setSlowTaskThresholdMs: (v: number) => void;
+  eventLoopLagThresholdMs: number;
+  setEventLoopLagThresholdMs: (v: number) => void;
+  logPath: string;
+}) {
+  const clampThreshold = (raw: string, fallback: number) => {
+    const parsed = parseInt(raw, 10);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(60_000, Math.max(0, parsed));
+  };
+  const thresholdsAreDefault =
+    slowTaskThresholdMs === DEFAULT_PERF_LOGGING.slowTaskThresholdMs &&
+    eventLoopLagThresholdMs === DEFAULT_PERF_LOGGING.eventLoopLagThresholdMs;
+  const resetThresholds = () => {
+    setSlowTaskThresholdMs(DEFAULT_PERF_LOGGING.slowTaskThresholdMs);
+    setEventLoopLagThresholdMs(DEFAULT_PERF_LOGGING.eventLoopLagThresholdMs);
+  };
+
+  return (
+    <>
+      <p className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
+        Record slow backend work in release builds without opening developer tools.
+      </p>
+
+      <div className="flex items-center justify-between gap-3 py-1">
+        <div className="flex flex-col gap-0.5">
+          <label
+            className="text-[11px] font-semibold"
+            style={{ color: "var(--ctp-subtext0)" }}
+          >
+            Background Performance Log
+          </label>
+          <p className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
+            Writes JSONL entries for slow background tasks and event-loop stalls.
+          </p>
+        </div>
+        <ToggleSwitch value={enabled} onChange={setEnabled} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1">
+          <label
+            className="text-[11px] font-semibold"
+            style={{ color: "var(--ctp-subtext0)" }}
+          >
+            Slow Task Threshold
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              max={60000}
+              step={50}
+              value={slowTaskThresholdMs}
+              onChange={(e) =>
+                setSlowTaskThresholdMs(
+                  clampThreshold(
+                    e.target.value,
+                    DEFAULT_PERF_LOGGING.slowTaskThresholdMs,
+                  ),
+                )
+              }
+              className="rounded-md px-3 py-1.5 text-sm w-28"
+              style={{
+                backgroundColor: "var(--ctp-surface0)",
+                color: "var(--ctp-text)",
+                border: "1px solid var(--ctp-surface1)",
+                outline: "none",
+              }}
+            />
+            <span className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
+              ms
+            </span>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label
+            className="text-[11px] font-semibold"
+            style={{ color: "var(--ctp-subtext0)" }}
+          >
+            Event Loop Lag Threshold
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              max={60000}
+              step={50}
+              value={eventLoopLagThresholdMs}
+              onChange={(e) =>
+                setEventLoopLagThresholdMs(
+                  clampThreshold(
+                    e.target.value,
+                    DEFAULT_PERF_LOGGING.eventLoopLagThresholdMs,
+                  ),
+                )
+              }
+              className="rounded-md px-3 py-1.5 text-sm w-28"
+              style={{
+                backgroundColor: "var(--ctp-surface0)",
+                color: "var(--ctp-text)",
+                border: "1px solid var(--ctp-surface1)",
+                outline: "none",
+              }}
+            />
+            <span className="text-[11px]" style={{ color: "var(--ctp-overlay0)" }}>
+              ms
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          onClick={resetThresholds}
+          disabled={thresholdsAreDefault}
+          className="rounded-md px-3 py-1.5 text-xs font-medium transition-opacity"
+          style={{
+            backgroundColor: thresholdsAreDefault
+              ? "var(--ctp-surface0)"
+              : "var(--ctp-surface1)",
+            color: thresholdsAreDefault
+              ? "var(--ctp-overlay0)"
+              : "var(--ctp-text)",
+            border: "1px solid var(--ctp-surface1)",
+            cursor: thresholdsAreDefault ? "default" : "pointer",
+            opacity: thresholdsAreDefault ? 0.65 : 1,
+          }}
+        >
+          Reset Thresholds
+        </button>
+      </div>
+
+      <div
+        className="rounded-md px-3 py-2 text-[11px] break-all"
+        style={{
+          backgroundColor: "var(--ctp-surface0)",
+          border: "1px solid var(--ctp-surface1)",
+          color: "var(--ctp-subtext0)",
+        }}
+      >
+        {logPath || "Performance log path unavailable"}
       </div>
     </>
   );

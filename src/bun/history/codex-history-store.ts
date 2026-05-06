@@ -23,6 +23,7 @@ import {
 import { CodexRipgrepSearcher } from "./codex-ripgrep-searcher";
 import type { ParsedMessage, ToolCallInfo } from "./jsonl-parser";
 import type { SessionHistoryProvider } from "./session-history-provider";
+import { perfTrace } from "../perf-trace";
 
 const CODEX_SESSIONS_ROOT = join(homedir(), ".codex", "sessions");
 
@@ -182,7 +183,9 @@ export class CodexHistoryStore implements SessionHistoryProvider {
     this.stopRefreshTimer();
     this.refreshTimer = setInterval(async () => {
       try {
-        await this.refresh();
+        await perfTrace.measure("history.refresh", { provider: this.providerId }, () =>
+          this.refresh(),
+        );
       } catch (err) {
         console.error("[CodexHistoryStore] refresh error:", err);
       }

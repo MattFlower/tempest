@@ -186,6 +186,15 @@ export interface EditorSaveActionsConfig {
   insertFinalNewline?: boolean;
 }
 
+export interface PerformanceLoggingConfig {
+  /** Write slow background-task and event-loop-lag diagnostics to disk. */
+  enabled?: boolean;
+  /** Only completed tasks at or above this duration are logged. Defaults to 500ms. */
+  slowTaskThresholdMs?: number;
+  /** Event-loop timer drift at or above this duration is logged. Defaults to 200ms. */
+  eventLoopLagThresholdMs?: number;
+}
+
 /** Result of resolving .editorconfig for a single file. Every field
  *  is optional: an empty object means no .editorconfig was found
  *  anywhere up the tree (or the matched sections didn't specify the
@@ -235,6 +244,8 @@ export interface AppConfig {
    *  Runs independently of the formatter pipeline so users can opt into
    *  cleanup without committing to format-on-save. */
   editorSaveActions?: EditorSaveActionsConfig;
+  /** Release-build diagnostics for long-running background work. */
+  performanceLogging?: PerformanceLoggingConfig;
 }
 
 // --- Hook Events ---

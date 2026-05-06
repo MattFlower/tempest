@@ -45,9 +45,53 @@ describe("CodexSessionWatcher", () => {
     }
   });
 
+  it("seeds lookupLatestByCwd lazily before start() runs", () => {
+    writeRollout(
+      "2026/03/01/rollout-1740787200-bbbbbbbb-cccc-dddd-eeee-ffffffffffff.jsonl",
+      {
+        type: "session_meta",
+        id: "bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
+        cwd: "/tmp/ws-lazy-seed",
+        timestamp: "2026-03-01T00:00:00Z",
+      },
+    );
+
+    const watcher = new CodexSessionWatcher(root);
+    expect(watcher.lookupLatestByCwd("/tmp/ws-lazy-seed")).toBe(
+      "bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
+    );
+  });
+
+  it("reads a large Codex session_meta line when seeding existing rollouts", () => {
+    const id = "019dfabc-658b-7171-8ed9-38bf4ab3a800";
+    writeRollout(
+      "2026/05/05/rollout-2026-05-05T20-42-24-019dfabc-658b-7171-8ed9-38bf4ab3a800.jsonl",
+      {
+        timestamp: "2026-05-06T00:43:18.132Z",
+        type: "session_meta",
+        payload: {
+          id,
+          timestamp: "2026-05-06T00:42:24.015Z",
+          cwd: "/tmp/ws-large-header",
+          base_instructions: {
+            text: "x".repeat(48 * 1024),
+          },
+        },
+      },
+    );
+
+    const watcher = new CodexSessionWatcher(root);
+    try {
+      watcher.start(() => {});
+      expect(watcher.lookupLatestByCwd("/tmp/ws-large-header")).toBe(id);
+    } finally {
+      watcher.stop();
+    }
+  });
+
   it("falls back to the filename uuid when the header lacks an id", () => {
     writeRollout(
-      "2026/03/02/rollout-1740873600-11111111-2222-3333-4444-555555555555.jsonl",
+      "2026/03/02/rollout-2026-03-02T08-00-00-11111111-2222-3333-4444-555555555555.jsonl",
       { type: "session_meta", cwd: "/tmp/ws-fallback" },
     );
 

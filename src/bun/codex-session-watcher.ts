@@ -34,7 +34,8 @@ export interface CodexRolloutDiscovery {
   filePath: string;
 }
 
-const HEADER_READ_BYTES = 16384;
+const HEADER_READ_CHUNK_BYTES = 16384;
+const MAX_HEADER_READ_BYTES = 1024 * 1024;
 
 export class CodexSessionWatcher {
   private readonly root: string;
@@ -47,6 +48,7 @@ export class CodexSessionWatcher {
   private inFlight = new Set<string>();
   /** Most recent session id discovered per cwd (for enrichment on restart). */
   private latestByCwd = new Map<string, { sessionId: string; mtimeMs: number }>();
+  private seeded = false;
   private onDiscovery?: (event: CodexRolloutDiscovery) => void;
 
   constructor(root?: string) {
@@ -67,12 +69,12 @@ export class CodexSessionWatcher {
     // Seed latestByCwd with the newest rollout per cwd so restart-time
     // lookups by cwd have something to return even for sessions created
     // before Tempest started.
-    this.seedLatestByCwd();
+    this.ensureSeeded();
 
     try {
       this.watcher = watch(this.root, { recursive: true }, (_evt, filename) => {
         if (!filename) return;
-        const short = typeof filename === "string" ? filename : filename.toString();
+        const short = String(filename);
         const base = basename(short);
         if (!base.startsWith("rollout-") || extname(base) !== ".jsonl") return;
         const fullPath = join(this.root, short);
@@ -108,7 +110,15 @@ export class CodexSessionWatcher {
    * rollout predates the watcher.
    */
   lookupLatestByCwd(cwd: string): string | undefined {
+    this.ensureSeeded();
     return this.latestByCwd.get(cwd)?.sessionId;
+  }
+
+  private ensureSeeded(): void {
+    if (this.seeded) return;
+    if (!existsSync(this.root)) return;
+    this.seedLatestByCwd();
+    this.seeded = true;
   }
 
   private scheduleRetry(reason: unknown): void {
@@ -185,29 +195,46 @@ function readHeader(
   filePath: string,
 ): ReturnType<typeof parseSessionHeader> | undefined {
   try {
-    const buf = new Uint8Array(HEADER_READ_BYTES);
+    const buf = new Uint8Array(MAX_HEADER_READ_BYTES);
     const fd = openSync(filePath, "r");
     let bytesRead = 0;
     try {
-      bytesRead = readSync(fd, buf, 0, HEADER_READ_BYTES, 0);
+      while (bytesRead < MAX_HEADER_READ_BYTES) {
+        const remaining = MAX_HEADER_READ_BYTES - bytesRead;
+        const chunkSize = Math.min(HEADER_READ_CHUNK_BYTES, remaining);
+        const n = readSync(fd, buf, bytesRead, chunkSize, bytesRead);
+        if (n <= 0) break;
+        const end = bytesRead + n;
+        for (let i = bytesRead; i < end; i++) {
+          if (buf[i] === 10) {
+            bytesRead = i;
+            return parseFirstLine(buf.subarray(0, bytesRead));
+          }
+        }
+        bytesRead = end;
+      }
     } finally {
       closeSync(fd);
     }
-    const text = new TextDecoder().decode(buf.subarray(0, bytesRead));
-    const newlineIdx = text.indexOf("\n");
-    const firstLine = newlineIdx >= 0 ? text.slice(0, newlineIdx) : text;
-    if (!firstLine.trim()) return undefined;
-    return parseSessionHeader(firstLine);
+    return parseFirstLine(buf.subarray(0, bytesRead));
   } catch {
     return undefined;
   }
+}
+
+function parseFirstLine(
+  bytes: Uint8Array,
+): ReturnType<typeof parseSessionHeader> | undefined {
+  const firstLine = new TextDecoder().decode(bytes);
+  if (!firstLine.trim()) return undefined;
+  return parseSessionHeader(firstLine);
 }
 
 function walk(
   dir: string,
   out: Array<{ path: string; mtimeMs: number }>,
 ): void {
-  let entries: ReturnType<typeof readdirSync>;
+  let entries: any[];
   try {
     entries = readdirSync(dir, { withFileTypes: true });
   } catch {

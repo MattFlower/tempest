@@ -410,23 +410,7 @@ async function enrichStateForWebview(state: any): Promise<any> {
   if (!state?.workspaces) return state;
 
   const ids = new Set<string>();
-  const walk = (node: any): void => {
-    if (!node) return;
-    if (node.type === "leaf" && node.pane?.tabs) {
-      for (const tab of node.pane.tabs) {
-        if (tab.terminalId) ids.add(tab.terminalId);
-      }
-    } else if (node.type === "split" && node.children) {
-      for (const child of node.children) walk(child);
-    }
-  };
-  for (const ws of Object.values<any>(state.workspaces)) walk(ws.paneTree);
-
-  if (ids.size === 0) return state;
-  const records = await scrollbackStore.readMany(ids);
-  if (records.size === 0) return state;
-
-  const inject = (node: any, workspacePath: string): void => {
+  const hydrateCodexAndCollectTerminalIds = (node: any, workspacePath: string): void => {
     if (!node) return;
     if (node.type === "leaf" && node.pane?.tabs) {
       for (const tab of node.pane.tabs) {
@@ -441,6 +425,26 @@ async function enrichStateForWebview(state: any): Promise<any> {
           const id = codexSessionWatcher.lookupLatestByCwd(workspacePath);
           if (id) tab.sessionID = id;
         }
+        if (tab.terminalId) ids.add(tab.terminalId);
+      }
+    } else if (node.type === "split" && node.children) {
+      for (const child of node.children) {
+        hydrateCodexAndCollectTerminalIds(child, workspacePath);
+      }
+    }
+  };
+  for (const [wsPath, ws] of Object.entries<any>(state.workspaces)) {
+    hydrateCodexAndCollectTerminalIds(ws.paneTree, wsPath);
+  }
+
+  if (ids.size === 0) return state;
+  const records = await scrollbackStore.readMany(ids);
+  if (records.size === 0) return state;
+
+  const inject = (node: any): void => {
+    if (!node) return;
+    if (node.type === "leaf" && node.pane?.tabs) {
+      for (const tab of node.pane.tabs) {
         if (!tab.terminalId) continue;
         const rec = records.get(tab.terminalId);
         if (rec) {
@@ -449,11 +453,11 @@ async function enrichStateForWebview(state: any): Promise<any> {
         }
       }
     } else if (node.type === "split" && node.children) {
-      for (const child of node.children) inject(child, workspacePath);
+      for (const child of node.children) inject(child);
     }
   };
-  for (const [wsPath, ws] of Object.entries<any>(state.workspaces)) {
-    inject(ws.paneTree, wsPath);
+  for (const ws of Object.values<any>(state.workspaces)) {
+    inject(ws.paneTree);
   }
 
   return state;

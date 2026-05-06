@@ -989,6 +989,7 @@ export const api = {
   getInstalledEditors: () => rpcRequest.getInstalledEditors(),
   openInEditor: (editorId: string, directory: string) =>
     rpcRequest.openInEditor({ editorId, directory }),
+  openExternalUrl: (url: string) => rpcRequest.openExternalUrl({ url }),
 
   // Browser DNS
   resolveDns: (hostname: string) =>

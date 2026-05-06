@@ -51,7 +51,7 @@ export class TerminalInstance {
       minimumContrastRatio: 1,
 
       // OSC 8 hyperlinks: Cmd+click opens in a new Tempest browser pane,
-      // plain click falls through to the system browser.
+      // plain click opens in the system browser.
       linkHandler: {
         activate: (event: MouseEvent, uri: string) => this.activateUrl(event, uri),
       },
@@ -643,7 +643,11 @@ export class TerminalInstance {
       if (event.metaKey) {
         openUrlInNewBrowserPane(uri, this.id);
       } else {
-        window.open(uri, "_blank");
+        void api.openExternalUrl(uri).then((result: { success: boolean }) => {
+          if (!result.success) window.open(uri, "_blank");
+        }).catch(() => {
+          window.open(uri, "_blank");
+        });
       }
     } catch {
       // Invalid URL — ignore

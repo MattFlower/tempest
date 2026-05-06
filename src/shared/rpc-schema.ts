@@ -773,6 +773,10 @@ export interface BunRequests {
     params: { editorId: string; directory: string };
     response: { terminalCommand: string[] | null };
   };
+  openExternalUrl: {
+    params: { url: string };
+    response: { success: boolean; error?: string };
+  };
 
   // --- Browser DNS ---
   resolveDns: {

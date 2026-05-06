@@ -574,6 +574,35 @@ const formatterService = new FormatterService({
   },
 });
 
+function openExternalUrl(url: string): { success: boolean; error?: string } {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return { success: false, error: "Only http(s) URLs can be opened externally" };
+    }
+
+    if (process.platform === "darwin") {
+      Bun.spawn(["open", url], { stderr: "ignore", stdout: "ignore" });
+      return { success: true };
+    }
+    if (process.platform === "linux") {
+      Bun.spawn(["xdg-open", url], { stderr: "ignore", stdout: "ignore" });
+      return { success: true };
+    }
+    if (process.platform === "win32") {
+      Bun.spawn(["rundll32", "url.dll,FileProtocolHandler", url], {
+        stderr: "ignore",
+        stdout: "ignore",
+      });
+      return { success: true };
+    }
+
+    return { success: false, error: `Unsupported platform: ${process.platform}` };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 // Define RPC — all streams' handlers combined
 const rpc: any = (BrowserView.defineRPC as any)({
   handlers: {
@@ -1440,6 +1469,7 @@ const rpc: any = (BrowserView.defineRPC as any)({
       // --- Open In (external editors) ---
       getInstalledEditors: () => getInstalledEditors(),
       openInEditor: (params: any) => openInEditor(params.editorId, params.directory),
+      openExternalUrl: (params: any) => openExternalUrl(params.url),
 
       // --- Browser DNS ---
       // Uses Bun.dns.lookup (getaddrinfo) rather than Bun.dns.resolve (c-ares).

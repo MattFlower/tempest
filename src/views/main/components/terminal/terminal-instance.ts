@@ -16,6 +16,7 @@ export class TerminalInstance {
   readonly serializeAddon: SerializeAddon;
   readonly progressAddon: ProgressAddon;
   private webglAddon: WebglAddon | null = null;
+  private webglDisabledByContextLoss = false;
   private resizeObserver: ResizeObserver | null = null;
   private resizeDebounceTimer: number | null = null;
   private focusListenerCleanup: (() => void) | null = null;
@@ -75,7 +76,6 @@ export class TerminalInstance {
     // ImageAddon must load after open() but before WebGL for proper integration.
     // Handles Sixel, iTerm2 IIP (OSC 1337), and Kitty graphics protocol.
     this.terminal.loadAddon(new ImageAddon());
-    this.initWebGL();
     this.fitAddon.fit();
 
     // Focus events (CSI ? 1004 h/l): when an app enables sendFocusMode,
@@ -441,15 +441,27 @@ export class TerminalInstance {
     this.setupResizeObserver();
   }
 
-  private initWebGL() {
+  setWebglEnabled(enabled: boolean) {
+    if (!enabled) {
+      this.webglAddon?.dispose();
+      this.webglAddon = null;
+      return;
+    }
+
+    if (this.webglAddon || this.webglDisabledByContextLoss) return;
+
     try {
-      this.webglAddon = new WebglAddon();
-      this.webglAddon.onContextLoss(() => {
+      const addon = new WebglAddon();
+      addon.onContextLoss(() => {
         console.warn(`[${this.id}] WebGL context lost, falling back to DOM`);
-        this.webglAddon?.dispose();
-        this.webglAddon = null;
+        this.webglDisabledByContextLoss = true;
+        if (this.webglAddon === addon) {
+          this.webglAddon.dispose();
+          this.webglAddon = null;
+        }
       });
-      this.terminal.loadAddon(this.webglAddon);
+      this.terminal.loadAddon(addon);
+      this.webglAddon = addon;
     } catch (e) {
       console.warn(`[${this.id}] WebGL init failed, using DOM renderer:`, e);
       this.webglAddon = null;

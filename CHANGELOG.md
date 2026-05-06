@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Terminal panes now attach the xterm WebGL renderer only while their workspace, pane, and selected tab are visible, reducing active WebGL context usage without unmounting background terminals or stopping their PTYs/scrollback.
+
 ### Changed
 
 ### Removed

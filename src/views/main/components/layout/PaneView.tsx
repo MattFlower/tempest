@@ -28,6 +28,7 @@ function useRepoPath(workspacePath: string): string {
 interface PaneViewProps {
   pane: Pane;
   workspacePath: string;
+  isVisible: boolean;
 }
 
 function TabContent({ tab, paneId, isFocused, isVisible, workspacePath }: { tab: PaneTab; paneId: string; isFocused: boolean; isVisible: boolean; workspacePath: string }) {
@@ -57,6 +58,7 @@ function TabContent({ tab, paneId, isFocused, isVisible, workspacePath }: { tab:
           sessionId={tab.sessionId}
           resume={tab.resume}
           isFocused={isFocused}
+          isVisible={isVisible}
           onCloseRequest={handleCloseRequest}
           scrollbackContent={tab.scrollbackContent}
         />
@@ -106,6 +108,7 @@ function TabContent({ tab, paneId, isFocused, isVisible, workspacePath }: { tab:
           editorType={tab.editorType}
           cwd={workspacePath || "/tmp"}
           isFocused={isFocused}
+          isVisible={isVisible}
           onCloseRequest={handleCloseRequest}
         />
       );
@@ -114,7 +117,7 @@ function TabContent({ tab, paneId, isFocused, isVisible, workspacePath }: { tab:
   }
 }
 
-export const PaneView = memo(function PaneView({ pane, workspacePath }: PaneViewProps) {
+export const PaneView = memo(function PaneView({ pane, workspacePath, isVisible }: PaneViewProps) {
   const focusedPaneId = useStore((s) => s.focusedPaneId);
   const setFocusedPaneId = useStore((s) => s.setFocusedPaneId);
   const isFocused = focusedPaneId === pane.id;
@@ -153,8 +156,8 @@ export const PaneView = memo(function PaneView({ pane, workspacePath }: PaneView
             <TabContent
               tab={tab}
               paneId={pane.id}
-              isFocused={isFocused && tab.id === pane.selectedTabId}
-              isVisible={tab.id === pane.selectedTabId}
+              isFocused={isVisible && isFocused && tab.id === pane.selectedTabId}
+              isVisible={isVisible && tab.id === pane.selectedTabId}
               workspacePath={workspacePath}
             />
           </div>

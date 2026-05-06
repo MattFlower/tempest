@@ -19,6 +19,7 @@ interface EditorPaneProps {
   editorType?: EditorType;
   cwd: string;
   isFocused: boolean;
+  isVisible: boolean;
   onCloseRequest?: () => void;
 }
 
@@ -29,6 +30,7 @@ export function EditorPane({
   editorType,
   cwd,
   isFocused,
+  isVisible,
   onCloseRequest,
 }: EditorPaneProps) {
   const config = useStore((s) => s.config);
@@ -57,6 +59,7 @@ export function EditorPane({
       lineNumber={lineNumber}
       cwd={cwd}
       isFocused={isFocused}
+      isVisible={isVisible}
       onCloseRequest={onCloseRequest}
     />
   );
@@ -70,6 +73,7 @@ function TerminalEditorPane({
   lineNumber,
   cwd,
   isFocused,
+  isVisible,
   onCloseRequest,
 }: {
   terminalId: string;
@@ -77,6 +81,7 @@ function TerminalEditorPane({
   lineNumber?: number;
   cwd: string;
   isFocused: boolean;
+  isVisible: boolean;
   onCloseRequest?: () => void;
 }) {
   const [command, setCommand] = useState<string[] | null>(null);
@@ -132,6 +137,7 @@ function TerminalEditorPane({
       cwd={cwd}
       initialCommand={command}
       isFocused={isFocused}
+      isVisible={isVisible}
       onCloseRequest={onCloseRequest}
     />
   );

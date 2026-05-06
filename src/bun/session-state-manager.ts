@@ -13,6 +13,58 @@ import { TEMPEST_DIR } from "./config/paths";
 const CURRENT_VERSION = 1;
 const RECENT_FILES_LIMIT = 50;
 
+export function filterSessionStateForKnownWorkspaces(
+  state: SessionState | null,
+  knownWorkspacePaths: Iterable<string>,
+): SessionState | null {
+  if (!state) return null;
+
+  const known = new Set(knownWorkspacePaths);
+  const isKnownPath = (path: string): boolean => {
+    for (const wsPath of known) {
+      if (path === wsPath || path.startsWith(`${wsPath}/`)) return true;
+    }
+    return false;
+  };
+  const isKnownCursor = (cursor: string | null | undefined): boolean => {
+    if (!cursor) return true;
+    if (cursor.startsWith("repo:")) return true;
+    const prefixed = cursor.match(/^(workspace|dir|file|err|loading|empty):(.+)$/);
+    return isKnownPath(prefixed?.[2] ?? cursor);
+  };
+  const workspaces: Record<string, WorkspacePaneState> = {};
+  for (const [wsPath, ws] of Object.entries(state.workspaces)) {
+    if (known.has(wsPath)) {
+      workspaces[wsPath] = structuredClone(ws);
+    }
+  }
+  const fileTree: FileTreeSessionState | undefined = state.fileTree
+    ? {
+        ...state.fileTree,
+        expandedWorkspacePaths: state.fileTree.expandedWorkspacePaths?.filter((wsPath) =>
+          known.has(wsPath),
+        ),
+        expandedDirs: state.fileTree.expandedDirs?.filter(isKnownPath),
+        cursor: isKnownCursor(state.fileTree.cursor)
+          ? state.fileTree.cursor
+          : null,
+      }
+    : undefined;
+
+  return {
+    ...state,
+    selectedWorkspacePath:
+      state.selectedWorkspacePath && known.has(state.selectedWorkspacePath)
+        ? state.selectedWorkspacePath
+        : undefined,
+    workspaces,
+    hiddenWorkspacePaths: state.hiddenWorkspacePaths?.filter((wsPath) =>
+      known.has(wsPath),
+    ),
+    fileTree,
+  };
+}
+
 export class SessionStateManager {
   private readonly stateFilePath: string;
   private state: SessionState | null = null;

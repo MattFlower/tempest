@@ -26,6 +26,7 @@ interface TerminalPaneProps {
   initialCommand?: string[];
   resume?: boolean;
   isFocused: boolean;
+  isVisible: boolean;
   onExit?: (exitCode: number) => void;
   onCloseRequest?: () => void;
   /** Saved scrollback content to restore on startup. */
@@ -40,6 +41,7 @@ export function TerminalPane({
   initialCommand,
   resume,
   isFocused,
+  isVisible,
   onExit,
   onCloseRequest,
   scrollbackContent,
@@ -274,16 +276,20 @@ export function TerminalPane({
   const [searchVisible, setSearchVisible] = useState(false);
 
   useEffect(() => {
-    if (isFocused && !searchVisible) {
+    instanceRef.current?.setWebglEnabled(isVisible);
+  }, [isVisible]);
+
+  useEffect(() => {
+    if (isFocused && isVisible && !searchVisible) {
       instanceRef.current?.focus();
-    } else if (!isFocused) {
+    } else if (!isFocused || !isVisible) {
       instanceRef.current?.blur();
     }
-  }, [isFocused, searchVisible]);
+  }, [isFocused, isVisible, searchVisible]);
 
   // Re-focus terminal when the window regains focus (e.g. after Cmd+Tab away and back).
   useEffect(() => {
-    if (!isFocused) return;
+    if (!isFocused || !isVisible) return;
 
     const handleWindowFocus = () => {
       if (!searchVisible) {
@@ -293,11 +299,11 @@ export function TerminalPane({
 
     window.addEventListener("focus", handleWindowFocus);
     return () => window.removeEventListener("focus", handleWindowFocus);
-  }, [isFocused, searchVisible]);
+  }, [isFocused, isVisible, searchVisible]);
 
   // Cmd+F to open terminal search
   useEffect(() => {
-    if (!isFocused) return;
+    if (!isFocused || !isVisible) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "f") {
@@ -308,7 +314,7 @@ export function TerminalPane({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isFocused]);
+  }, [isFocused, isVisible]);
 
   const handleSearchClose = useCallback(() => {
     setSearchVisible(false);

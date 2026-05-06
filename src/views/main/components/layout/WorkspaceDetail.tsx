@@ -22,9 +22,10 @@ function normalize(node: PaneNode): PaneNode {
 
 interface WorkspaceDetailProps {
   workspacePath: string;
+  isVisible: boolean;
 }
 
-export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
+export function WorkspaceDetail({ workspacePath, isVisible }: WorkspaceDetailProps) {
   const paneTrees = useStore((s) => s.paneTrees);
   const setPaneTree = useStore((s) => s.setPaneTree);
   const setFocusedPaneId = useStore((s) => s.setFocusedPaneId);
@@ -42,6 +43,7 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
   const [hasEnteredVCS, setHasEnteredVCS] = useState(false);
 
   const tree = paneTrees[workspacePath];
+  const isTerminalVisible = isVisible && viewMode === ViewMode.Terminal;
 
   // Initialize terminal dispatch once
   useEffect(() => {
@@ -100,7 +102,11 @@ export function WorkspaceDetail({ workspacePath }: WorkspaceDetailProps) {
               : "opacity-0 pointer-events-none"
           }`}
         >
-          <PaneTreeView node={normalize(tree)} workspacePath={workspacePath} />
+          <PaneTreeView
+            node={normalize(tree)}
+            workspacePath={workspacePath}
+            isVisible={isTerminalVisible}
+          />
         </div>
 
         {/* Dashboard mode — always rendered to preserve monitoring state */}

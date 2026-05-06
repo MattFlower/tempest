@@ -15,7 +15,7 @@ import { SessionManager } from "./session-manager";
 import { MacKeychain, isValidEnvVarName } from "./keychain";
 import { BookmarkManager } from "./browser/bookmark-manager";
 import { WorkspaceManager } from "./workspace-manager";
-import { SessionStateManager } from "./session-state-manager";
+import { filterSessionStateForKnownWorkspaces, SessionStateManager } from "./session-state-manager";
 import { ScrollbackStore } from "./scrollback-store";
 import { HookEventListener } from "./hooks/hook-event-listener";
 import { HookSettingsBuilder } from "./hooks/hook-settings-builder";
@@ -153,6 +153,26 @@ historyAggregator.register(historyStore);
 historyAggregator.register(piHistoryStore);
 historyAggregator.register(codexHistoryStore);
 const aiContextProvider = new AIContextProvider(historyAggregator);
+
+let workspaceManagerInitializePromise: Promise<void> | null = null;
+
+function ensureWorkspaceManagerInitialized(): Promise<void> {
+  if (!workspaceManagerInitializePromise) {
+    workspaceManagerInitializePromise = (async () => {
+      try {
+        workspaceManager.setCollapsedResolver((repoId) =>
+          sessionStateManager.isRepoCollapsed(repoId),
+        );
+        await workspaceManager.initialize();
+        perfTrace.configure(workspaceManager.getConfig().performanceLogging);
+        console.log("[main] WorkspaceManager initialized");
+      } catch (err) {
+        console.error("[main] WorkspaceManager init failed:", err);
+      }
+    })();
+  }
+  return workspaceManagerInitializePromise;
+}
 
 // --- Stream H: PR Feedback ---
 const prMonitor = new PRMonitor();
@@ -901,7 +921,13 @@ const rpc: any = (BrowserView.defineRPC as any)({
       // --- Session State (Stream D) ---
       loadSessionState: async () => {
         const state = await sessionStateManager.load();
-        return await enrichStateForWebview(state);
+        await ensureWorkspaceManagerInitialized();
+        const knownWorkspacePaths = workspaceManager.getAllWorkspaces().map((ws) => ws.path);
+        const filteredState = filterSessionStateForKnownWorkspaces(
+          state,
+          knownWorkspacePaths,
+        );
+        return await enrichStateForWebview(filteredState);
       },
       savePaneState: (_params: any) => {
         enrichTreeWithSessionIds(_params.paneTree, _params.workspacePath);
@@ -1905,16 +1931,7 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
     console.error("[main] SessionStateManager preload failed:", err);
   }
 
-  try {
-    workspaceManager.setCollapsedResolver((repoId) =>
-      sessionStateManager.isRepoCollapsed(repoId),
-    );
-    await workspaceManager.initialize();
-    perfTrace.configure(workspaceManager.getConfig().performanceLogging);
-    console.log("[main] WorkspaceManager initialized");
-  } catch (err) {
-    console.error("[main] WorkspaceManager init failed:", err);
-  }
+  await ensureWorkspaceManagerInitialized();
 
   try {
     hookListener.start((event) => {

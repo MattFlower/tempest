@@ -277,7 +277,10 @@ export function App() {
                         : "opacity-0 pointer-events-none"
                     }`}
                   >
-                    <WorkspaceDetail workspacePath={wsPath} />
+                    <WorkspaceDetail
+                      workspacePath={wsPath}
+                      isVisible={!progressViewActive && wsPath === selectedWorkspacePath}
+                    />
                   </div>
                 ))}
 
@@ -305,7 +308,10 @@ export function App() {
                     overflow: "hidden",
                   }}
                 >
-                  <RunPane workspacePath={wsPath} />
+                  <RunPane
+                    workspacePath={wsPath}
+                    isWorkspaceVisible={!progressViewActive && wsPath === selectedWorkspacePath}
+                  />
                 </div>
               ))}
             </div>

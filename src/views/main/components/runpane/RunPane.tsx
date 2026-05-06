@@ -16,6 +16,7 @@ import { RunPaneToolbar } from "./RunPaneToolbar";
 
 interface RunPaneProps {
   workspacePath: string;
+  isWorkspaceVisible: boolean;
 }
 
 // Stable empty-array reference. A fresh `[]` inside a Zustand selector
@@ -24,7 +25,7 @@ interface RunPaneProps {
 // the whole React tree.
 const EMPTY_TABS: RunTab[] = [];
 
-export function RunPane({ workspacePath }: RunPaneProps) {
+export function RunPane({ workspacePath, isWorkspaceVisible }: RunPaneProps) {
   const visible = useStore((s) => s.runPaneVisible[workspacePath] ?? false);
   const height = useStore((s) => s.runPaneHeight[workspacePath] ?? DEFAULT_RUN_PANE_HEIGHT);
   const tabs = useStore((s) => s.runPaneTabs[workspacePath] ?? EMPTY_TABS);
@@ -75,7 +76,7 @@ export function RunPane({ workspacePath }: RunPaneProps) {
             key={tab.id}
             workspacePath={workspacePath}
             tab={tab}
-            isActive={tab.id === activeTabId}
+            isActive={isWorkspaceVisible && visible && tab.id === activeTabId}
           />
         ))}
       </div>

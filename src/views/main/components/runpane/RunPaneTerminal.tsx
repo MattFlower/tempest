@@ -107,6 +107,10 @@ export function RunPaneTerminal({ workspacePath, tab, isActive }: RunPaneTermina
   }, [tab.terminalId]);
 
   useEffect(() => {
+    instanceRef.current?.setWebglEnabled(isActive);
+  }, [isActive, tab.terminalId]);
+
+  useEffect(() => {
     if (isActive) {
       instanceRef.current?.focus();
     } else {

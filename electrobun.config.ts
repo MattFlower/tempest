@@ -4,7 +4,7 @@ export default {
   app: {
     name: "Tempest",
     identifier: "com.tempest.app",
-    version: "0.23.1",
+    version: "0.24.0",
   },
   runtime: {
     exitOnLastWindowClosed: true,

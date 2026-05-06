@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Fixed
+
+### Changed
+
+### Removed
+
+## [0.23.0] - 2026-05-05
+
+### Added
+
 - Settings → Diagnostics now includes an opt-in backend performance log for release builds. When enabled, Tempest writes slow background-task and event-loop-lag JSONL entries to `~/.config/tempest/perf/backend.jsonl`, with configurable thresholds, a reset-to-defaults control, and rotation. Initial instrumentation covers sidebar workspace/VCS refreshes, history cache refreshes, LSP install/start and memory sampling, and scrollback GC.
 - Settings now include a default workspace pane selector, allowing new workspaces with no saved layout to start with Claude, Pi, Codex, Terminal, Browser, Chat History, PR Reviews, or Keymap.
 - The workspace pane now has the ability to "hide" workspaces you aren't activity working on
@@ -19,10 +29,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Previously, Codex sessions were not restoring correctly on Tempest restarts
 - App icon at small sizes (16×16, 32×32 used in Finder list view) had visible padding around the dark squircle because the bundled iconset PNGs were straight downscales of the 1024 source — the SVG's outer white tile reduced the dark icon to ~68% of the canvas. Replaced these small sizes with the punched-up versions Tempest 1's Xcode build (`actool`) produced, where the dark icon fills the canvas. Larger sizes (≥128) are unchanged.
 - Monaco vim `:w` / `:wq` now save the editor pane that issued the command, even when multiple hidden Monaco tabs are mounted. Saves also compare against the last written buffer snapshot instead of relying only on React dirty state, avoiding stale-state no-ops.
-
-### Changed
-
-### Removed
 
 ## [0.22.0] - 2026-05-04
 

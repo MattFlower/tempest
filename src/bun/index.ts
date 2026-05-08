@@ -31,6 +31,7 @@ import { TempestHttpServer, generateToken, consumePendingData } from "./http-ser
 import { RemoteTerminalHub } from "./remote-terminal-hub";
 import { perfTrace } from "./perf-trace";
 import { getUsageData } from "./usage/usage-service";
+import { ScheduledWorkManager } from "./scheduled-work/scheduled-work-manager";
 import { HistoryStore } from "./history/history-store";
 import { PiHistoryStore } from "./history/pi-history-store";
 import { CodexHistoryStore } from "./history/codex-history-store";
@@ -128,6 +129,15 @@ function getBookmarkManager(repoPath: string): BookmarkManager {
 // --- Stream D: Backend Managers ---
 const workspaceManager = new WorkspaceManager();
 const sessionStateManager = new SessionStateManager();
+const scheduledWorkManager = new ScheduledWorkManager(
+  workspaceManager,
+  sessionManager,
+  (data) => {
+    try {
+      win.webview.rpc.send.scheduledWorkChanged(data);
+    } catch { /* webview not ready yet */ }
+  },
+);
 const hookListener = new HookEventListener(HookSettingsBuilder.socketPath);
 const mcpServer = new McpHttpServer({
   // Consult workspaceManager at request time so settings toggles take effect
@@ -1321,6 +1331,26 @@ const rpc: any = (BrowserView.defineRPC as any)({
         setWorkspaceLastOpened(params.workspacePath);
       },
 
+      // --- Scheduled Work ---
+      getScheduledWorkData: async () => {
+        return await scheduledWorkManager.data();
+      },
+      createScheduledTask: async (params: any) => {
+        return await scheduledWorkManager.createTask(params);
+      },
+      updateScheduledTask: async (params: any) => {
+        return await scheduledWorkManager.updateTask(params.taskId, params.patch);
+      },
+      deleteScheduledTask: async (params: any) => {
+        return await scheduledWorkManager.deleteTask(params.taskId);
+      },
+      runScheduledTaskNow: async (params: any) => {
+        return await scheduledWorkManager.runTaskNow(params.taskId);
+      },
+      cancelScheduledRun: async (params: any) => {
+        return await scheduledWorkManager.cancelRun(params.runId);
+      },
+
       // --- PR Review (create workspace for PR) ---
       startPRReview: async (params: any) => {
         return await startPRReview(workspaceManager, params.repoId, params.prNumber);
@@ -1841,6 +1871,7 @@ ApplicationMenu.setApplicationMenu([
       { label: "Command Palette", action: "command-palette", accelerator: "Cmd+Shift+P" },
       { type: "separator" },
       { label: "Progress", action: "view-progress", accelerator: "Cmd+5" },
+      { label: "Scheduled Work", action: "view-scheduled-work" },
       { label: "Terminal", action: "view-terminal", accelerator: "Cmd+1" },
       { label: "VCS", action: "view-vcs", accelerator: "Cmd+2" },
       { label: "Dashboard", action: "view-dashboard", accelerator: "Cmd+3" },
@@ -1947,6 +1978,7 @@ ApplicationMenu.on("application-menu-clicked", (event: any) => {
   }
 
   await ensureWorkspaceManagerInitialized();
+  await scheduledWorkManager.start();
 
   try {
     hookListener.start((event) => {
@@ -2118,6 +2150,7 @@ async function shutdown() {
     hookListener.stop();
     codexSessionWatcher.stop();
     activityTracker.stopCleanupTimer();
+    await scheduledWorkManager.stop();
     workspaceManager.stopSidebarRefresh();
     historyAggregator.stopRefreshTimers();
     unwatchAllMarkdown();

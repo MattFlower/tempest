@@ -21,6 +21,10 @@ import type {
   NetworkInterface,
   PaneNodeState,
   RepoSettings,
+  ScheduledTask,
+  ScheduledTaskDraft,
+  ScheduledTaskRun,
+  ScheduledWorkData,
   SessionMessage,
   SessionState,
   SessionSummary,
@@ -647,6 +651,32 @@ export interface BunRequests {
     response: void;
   };
 
+  // --- Scheduled Work ---
+  getScheduledWorkData: {
+    params: void;
+    response: ScheduledWorkData;
+  };
+  createScheduledTask: {
+    params: ScheduledTaskDraft;
+    response: { success: boolean; error?: string; task?: ScheduledTask };
+  };
+  updateScheduledTask: {
+    params: { taskId: string; patch: Partial<ScheduledTaskDraft> & { enabled?: boolean } };
+    response: { success: boolean; error?: string; task?: ScheduledTask };
+  };
+  deleteScheduledTask: {
+    params: { taskId: string };
+    response: { success: boolean; error?: string };
+  };
+  runScheduledTaskNow: {
+    params: { taskId: string };
+    response: { success: boolean; error?: string; run?: ScheduledTaskRun };
+  };
+  cancelScheduledRun: {
+    params: { runId: string };
+    response: { success: boolean; error?: string };
+  };
+
   // --- VCS Commit View ---
   getVCSStatus: {
     params: { workspacePath: string };
@@ -1131,6 +1161,7 @@ export interface WebviewMessages {
     changeKind?: "create" | "delete" | "rename" | "unknown";
   };
   prDraftsChanged: { workspacePath: string; drafts: PRDraftSummary[] };
+  scheduledWorkChanged: ScheduledWorkData;
   scriptOutput: { runId: string; data: string };
   scriptExit: { runId: string; exitCode: number };
   selectWorkspace: { workspacePath: string };

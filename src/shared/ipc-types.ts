@@ -309,6 +309,79 @@ export interface WorkspaceProgressInfo {
   planPath?: string;
 }
 
+// --- Scheduled Work ---
+
+export type ScheduledAgent = "claude" | "pi" | "codex";
+
+export type ScheduledTaskSchedule =
+  | { type: "once"; runAt: string }
+  | {
+      type: "interval";
+      every: number;
+      unit: "minutes" | "hours" | "days" | "weeks";
+      startAt: string;
+    }
+  | {
+      type: "cron";
+      expression: string;
+    };
+
+export interface ScheduledTask {
+  id: string;
+  title: string;
+  prompt: string;
+  agent: ScheduledAgent;
+  workspacePath: string;
+  workspaceName: string;
+  repoPath: string;
+  repoName: string;
+  schedule: ScheduledTaskSchedule;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  nextRunAt?: string;
+  lastRunId?: string;
+}
+
+export type ScheduledTaskRunStatus =
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "canceled";
+
+export interface ScheduledTaskRun {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  agent: ScheduledAgent;
+  workspacePath: string;
+  workspaceName: string;
+  repoName: string;
+  status: ScheduledTaskRunStatus;
+  trigger: "schedule" | "manual";
+  scheduledFor: string;
+  startedAt?: string;
+  finishedAt?: string;
+  exitCode?: number;
+  output: string;
+  error?: string;
+}
+
+export interface ScheduledTaskDraft {
+  title: string;
+  prompt: string;
+  agent: ScheduledAgent;
+  workspacePath: string;
+  schedule: ScheduledTaskSchedule;
+  enabled?: boolean;
+}
+
+export interface ScheduledWorkData {
+  tasks: ScheduledTask[];
+  runs: ScheduledTaskRun[];
+}
+
 // --- Open PR State ---
 
 export interface OpenPRState {

@@ -9,6 +9,7 @@ import { FindInFiles } from "./components/find-in-files/FindInFiles";
 import { WorkspaceDetail } from "./components/layout";
 import { ViewModeBar } from "./components/layout/ViewModeBar";
 import { ProgressView } from "./components/progress/ProgressView";
+import { ScheduledWorkView } from "./components/scheduled-work/ScheduledWorkView";
 import { OnboardingDialog } from "./components/onboarding/OnboardingDialog";
 import { SettingsDialog } from "./components/settings/SettingsDialog";
 import { Footer } from "./components/footer/Footer";
@@ -33,7 +34,9 @@ export function App() {
   const config = useStore((s) => s.config);
   const settingsDialogVisible = useStore((s) => s.settingsDialogVisible);
   const progressViewActive = useStore((s) => s.progressViewActive);
+  const scheduledWorkViewActive = useStore((s) => s.scheduledWorkViewActive);
   const devtoolsVisible = useStore((s) => s.devtoolsVisible);
+  const appOverlayActive = progressViewActive || scheduledWorkViewActive;
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [configLoaded, setConfigLoaded] = useState(false);
@@ -231,7 +234,7 @@ export function App() {
         <div className="flex-1 min-w-0 relative">
           <div
             className={`absolute inset-0 flex ${
-              progressViewActive ? "opacity-0 pointer-events-none" : "opacity-100"
+              appOverlayActive ? "opacity-0 pointer-events-none" : "opacity-100"
             }`}
           >
             {/* Sidebar */}
@@ -279,7 +282,7 @@ export function App() {
                   >
                     <WorkspaceDetail
                       workspacePath={wsPath}
-                      isVisible={!progressViewActive && wsPath === selectedWorkspacePath}
+                      isVisible={!appOverlayActive && wsPath === selectedWorkspacePath}
                     />
                   </div>
                 ))}
@@ -310,7 +313,7 @@ export function App() {
                 >
                   <RunPane
                     workspacePath={wsPath}
-                    isWorkspaceVisible={!progressViewActive && wsPath === selectedWorkspacePath}
+                    isWorkspaceVisible={!appOverlayActive && wsPath === selectedWorkspacePath}
                   />
                 </div>
               ))}
@@ -323,6 +326,11 @@ export function App() {
           {progressViewActive && (
             <div className="absolute inset-0 flex">
               <ProgressView />
+            </div>
+          )}
+          {scheduledWorkViewActive && (
+            <div className="absolute inset-0 flex">
+              <ScheduledWorkView />
             </div>
           )}
         </div>

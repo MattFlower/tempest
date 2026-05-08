@@ -101,6 +101,16 @@ export class SessionManager {
     return { command, settingsPath };
   }
 
+  async buildClaudeBatchCommand(params: {
+    workspacePath: string;
+    prompt: string;
+  }): Promise<{ command: string[] }> {
+    const claudePath = this.resolveBinary("claude", this.config.claudePath);
+    const parts = [claudePath, "-p", ...this.config.claudeArgs, params.prompt];
+    const quoted = parts.map(shellQuote).join(" ");
+    return { command: ["/bin/zsh", "-lic", `exec ${quoted}`] };
+  }
+
   buildShellCommand(_params: {
     workspacePath: string;
   }): { command: string[] } {
@@ -141,6 +151,28 @@ export class SessionManager {
     return { command };
   }
 
+  async buildPiBatchCommand(params: {
+    workspacePath: string;
+    prompt: string;
+  }): Promise<{ command: string[] }> {
+    const piPath = this.resolveBinary("pi", this.config.piPath);
+    const parts = [
+      piPath,
+      "-e",
+      HookSettingsBuilder.piExtensionPath,
+      "-p",
+      ...(this.config.piArgs ?? []),
+      params.prompt,
+    ];
+    const quoted = parts.map(shellQuote).join(" ");
+    const envAssignments = [
+      `TEMPEST_HOOK_SOCKET=${shellQuote(HookSettingsBuilder.socketPath)}`,
+      ...(await this.buildAgentEnvAssignments("pi", this.config.piEnvVarNames ?? [])),
+    ].join(" ");
+    const command = ["/bin/zsh", "-lic", `${envAssignments} exec ${quoted}`];
+    return { command };
+  }
+
   async buildCodexCommand(params: {
     workspacePath: string;
     sessionId?: string;
@@ -165,6 +197,22 @@ export class SessionManager {
     const prefix = assignments.length > 0 ? `${assignments.join(" ")} ` : "";
     const command = ["/bin/zsh", "-lic", `${prefix}exec ${quoted}`];
     return { command };
+  }
+
+  async buildCodexBatchCommand(params: {
+    workspacePath: string;
+    prompt: string;
+  }): Promise<{ command: string[] }> {
+    const codexPath = this.resolveBinary("codex", this.config.codexPath);
+    const parts: string[] = [codexPath, "exec", ...(this.config.codexArgs ?? []), params.prompt];
+
+    const quoted = parts.map(shellQuote).join(" ");
+    const assignments = await this.buildAgentEnvAssignments(
+      "codex",
+      this.config.codexEnvVarNames ?? [],
+    );
+    const prefix = assignments.length > 0 ? `${assignments.join(" ")} ` : "";
+    return { command: ["/bin/zsh", "-lic", `${prefix}exec ${quoted}`] };
   }
 
   /**

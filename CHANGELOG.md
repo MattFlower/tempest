@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Files sidebar now supports right-click "New File…", "New Folder…", and "Delete…" actions. New entries are created relative to the right-clicked directory (or workspace root). Delete works on both files and directories — entries go to the macOS Trash so they remain recoverable from Finder.
+- Scheduled Work view for non-interactive Claude, Pi, and Codex jobs. Tasks can run once, on fixed intervals, or from five-field cron expressions, with persistent task/run history, live running-state visibility, manual runs, cancellation, and captured logs/results.
 
 ### Fixed
 

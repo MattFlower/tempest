@@ -189,6 +189,69 @@ describe("SessionManager.buildCodexCommand", () => {
   });
 });
 
+describe("SessionManager batch commands", () => {
+  it("builds Claude non-interactive command with prompt after configured args", async () => {
+    const config: AppConfig = {
+      workspaceRoot: tmpRoot,
+      claudeArgs: ["--model", "sonnet"],
+      claudePath: "/bin/echo",
+    };
+
+    const manager = new SessionManager(config);
+    const { command } = await manager.buildClaudeBatchCommand({
+      workspacePath: tmpRoot,
+      prompt: "Summarize O'Brien's changes",
+    });
+
+    const cmd = command[2]!;
+    expect(cmd).toContain(`exec ${shellQuote("/bin/echo")}`);
+    expect(cmd).toContain(shellQuote("-p"));
+    expect(cmd.indexOf(shellQuote("--model"))).toBeLessThan(cmd.indexOf(shellQuote("Summarize O'Brien's changes")));
+    expect(cmd).toContain(shellQuote("Summarize O'Brien's changes"));
+  });
+
+  it("builds Pi non-interactive command with extension, env vars, args, and prompt", async () => {
+    const config: AppConfig = {
+      workspaceRoot: tmpRoot,
+      claudeArgs: [],
+      piPath: "/bin/echo",
+      piArgs: ["--model", "test"],
+    };
+
+    const manager = new SessionManager(config);
+    const { command } = await manager.buildPiBatchCommand({
+      workspacePath: tmpRoot,
+      prompt: "Run checks",
+    });
+
+    const cmd = command[2]!;
+    expect(cmd).toContain(shellQuote("-e"));
+    expect(cmd).toContain(shellQuote(HookSettingsBuilder.piExtensionPath));
+    expect(cmd).toContain(shellQuote("-p"));
+    expect(cmd.indexOf(shellQuote("--model"))).toBeLessThan(cmd.indexOf(shellQuote("Run checks")));
+  });
+
+  it("builds Codex exec command with configured args before prompt", async () => {
+    const config: AppConfig = {
+      workspaceRoot: tmpRoot,
+      claudeArgs: [],
+      codexPath: "/bin/echo",
+      codexArgs: ["--model", "gpt-5"],
+    };
+
+    const manager = new SessionManager(config);
+    const { command } = await manager.buildCodexBatchCommand({
+      workspacePath: tmpRoot,
+      prompt: "Inspect scheduled run",
+    });
+
+    const cmd = command[2]!;
+    expect(cmd).toContain(shellQuote("exec"));
+    expect(cmd.indexOf(shellQuote("--model"))).toBeLessThan(cmd.indexOf(shellQuote("Inspect scheduled run")));
+    expect(cmd).toContain(shellQuote("Inspect scheduled run"));
+  });
+});
+
 describe("SessionManager.buildClaudeCommand", () => {
   it("shell-quotes Claude binary path and args", async () => {
     mkdirSync(tmpRoot, { recursive: true });

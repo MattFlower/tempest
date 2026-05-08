@@ -30,6 +30,9 @@ export const CODEX_HISTORY_CACHE_FILE = join(TEMPEST_DIR, "codex-history-cache.j
 // Progress view cache
 export const PROGRESS_CACHE_FILE = join(TEMPEST_DIR, "progress-cache.json");
 
+// Scheduled non-interactive agent work
+export const SCHEDULED_WORK_FILE = join(TEMPEST_DIR, "scheduled-work.json");
+
 // Runtime sockets
 export const HOOK_SOCKET = join(TEMPEST_DIR, "hook.sock");
 export const PR_CHANNEL_SOCKET = join(TEMPEST_DIR, "pr-channel.sock");

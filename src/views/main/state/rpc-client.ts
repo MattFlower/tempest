@@ -68,11 +68,13 @@ type TerminalExitHandler = (id: string, exitCode: number) => void;
 type HookEventHandler = (event: WebviewMessages["hookEvent"]) => void;
 type MarkdownFileChangedHandler = (filePath: string, content: string, deleted?: boolean) => void;
 type PRDraftsChangedHandler = (workspacePath: string, drafts: any[]) => void;
+type ScheduledWorkChangedHandler = (data: WebviewMessages["scheduledWorkChanged"]) => void;
 
 let terminalExitHandler: TerminalExitHandler | null = null;
 let hookEventHandler: HookEventHandler | null = null;
 const markdownFileChangedHandlers = new Set<MarkdownFileChangedHandler>();
 let prDraftsChangedHandler: PRDraftsChangedHandler | null = null;
+const scheduledWorkChangedHandlers = new Set<ScheduledWorkChangedHandler>();
 
 export function onTerminalExit(handler: TerminalExitHandler) {
   terminalExitHandler = handler;
@@ -93,6 +95,13 @@ export function onPRDraftsChanged(handler: PRDraftsChangedHandler) {
 
 export function offPRDraftsChanged() {
   prDraftsChangedHandler = null;
+}
+
+export function onScheduledWorkChanged(handler: ScheduledWorkChangedHandler): () => void {
+  scheduledWorkChangedHandlers.add(handler);
+  return () => {
+    scheduledWorkChangedHandlers.delete(handler);
+  };
 }
 
 // Script output streaming — keyed by runId
@@ -449,6 +458,11 @@ const rpc = Electroview.defineRPC({
           prDraftsChangedHandler(msg.workspacePath, msg.drafts);
         }
       },
+      scheduledWorkChanged: (msg: WebviewMessages["scheduledWorkChanged"]) => {
+        for (const handler of scheduledWorkChangedHandlers) {
+          handler(msg);
+        }
+      },
       scriptOutput: (msg: any) => {
         scriptOutputHandlers.get(msg.runId)?.(msg.data);
       },
@@ -551,22 +565,30 @@ const rpc = Electroview.defineRPC({
               if (!store.sidebarVisible) store.toggleSidebar();
               break;
             case "view-progress":
+              store.setScheduledWorkViewActive(false);
               store.setProgressViewActive(!store.progressViewActive);
+              break;
+            case "view-scheduled-work":
+              store.setProgressViewActive(false);
+              store.setScheduledWorkViewActive(!store.scheduledWorkViewActive);
               break;
             case "view-terminal":
               if (store.progressViewActive) store.setProgressViewActive(false);
+              if (store.scheduledWorkViewActive) store.setScheduledWorkViewActive(false);
               if (store.selectedWorkspacePath) {
                 store.setViewMode(store.selectedWorkspacePath, ViewMode.Terminal);
               }
               break;
             case "view-dashboard":
               if (store.progressViewActive) store.setProgressViewActive(false);
+              if (store.scheduledWorkViewActive) store.setScheduledWorkViewActive(false);
               if (store.selectedWorkspacePath) {
                 store.setViewMode(store.selectedWorkspacePath, ViewMode.Dashboard);
               }
               break;
             case "view-vcs":
               if (store.progressViewActive) store.setProgressViewActive(false);
+              if (store.scheduledWorkViewActive) store.setScheduledWorkViewActive(false);
               if (store.selectedWorkspacePath) {
                 store.setViewMode(store.selectedWorkspacePath, ViewMode.VCS);
               }
@@ -879,6 +901,22 @@ export const api = {
     rpcRequest.getPRDetail({ repoPath, branch }),
   notifyWorkspaceOpened: (workspacePath: string) =>
     rpcRequest.notifyWorkspaceOpened({ workspacePath }),
+
+  // Scheduled Work
+  getScheduledWorkData: () =>
+    rpcRequest.getScheduledWorkData(),
+  createScheduledTask: (params: import("../../../shared/ipc-types").ScheduledTaskDraft) =>
+    rpcRequest.createScheduledTask(params),
+  updateScheduledTask: (
+    taskId: string,
+    patch: Partial<import("../../../shared/ipc-types").ScheduledTaskDraft> & { enabled?: boolean },
+  ) => rpcRequest.updateScheduledTask({ taskId, patch }),
+  deleteScheduledTask: (taskId: string) =>
+    rpcRequest.deleteScheduledTask({ taskId }),
+  runScheduledTaskNow: (taskId: string) =>
+    rpcRequest.runScheduledTaskNow({ taskId }),
+  cancelScheduledRun: (runId: string) =>
+    rpcRequest.cancelScheduledRun({ runId }),
 
   // PR URL Lookup
   lookupPRUrl: (workspacePath: string) =>

@@ -56,6 +56,10 @@ export interface TempestStore {
   progressViewActive: boolean;
   setProgressViewActive: (active: boolean) => void;
 
+  // --- Scheduled Work view (app-level, cross-workspace) ---
+  scheduledWorkViewActive: boolean;
+  setScheduledWorkViewActive: (active: boolean) => void;
+
   // --- Developer tools (eruda) — rendered as a bottom pane ---
   devtoolsVisible: boolean;
   setDevtoolsVisible: (visible: boolean) => void;
@@ -208,6 +212,9 @@ export const useStore = create<TempestStore>((set) => ({
 
   progressViewActive: false,
   setProgressViewActive: (active) => set({ progressViewActive: active }),
+
+  scheduledWorkViewActive: false,
+  setScheduledWorkViewActive: (active) => set({ scheduledWorkViewActive: active }),
 
   devtoolsVisible: false,
   setDevtoolsVisible: (visible) => set({ devtoolsVisible: visible }),

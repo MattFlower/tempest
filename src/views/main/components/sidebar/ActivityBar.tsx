@@ -71,6 +71,8 @@ export function ActivityBar() {
   const setViewMode = useStore((s) => s.setViewMode);
   const progressActive = useStore((s) => s.progressViewActive);
   const setProgressActive = useStore((s) => s.setProgressViewActive);
+  const scheduledWorkActive = useStore((s) => s.scheduledWorkViewActive);
+  const setScheduledWorkActive = useStore((s) => s.setScheduledWorkViewActive);
   const runPaneVisible = useStore((s) =>
     selectedWorkspacePath ? (s.runPaneVisible[selectedWorkspacePath] ?? false) : false,
   );
@@ -82,19 +84,26 @@ export function ActivityBar() {
   }, [selectedWorkspacePath]);
 
   const isSidebarViewActive = (view: SidebarView) =>
-    !progressActive && sidebarVisible && activeSidebarView === view;
+    !progressActive && !scheduledWorkActive && sidebarVisible && activeSidebarView === view;
 
   const handleToggleProgress = () => {
+    if (!progressActive) setScheduledWorkActive(false);
     setProgressActive(!progressActive);
   };
 
-  // The five top icons act as a radio group: activating one deactivates the
+  const handleToggleScheduledWork = () => {
+    if (!scheduledWorkActive) setProgressActive(false);
+    setScheduledWorkActive(!scheduledWorkActive);
+  };
+
+  // The top view icons act as a radio group: activating one deactivates the
   // others. Workspaces/Files control sidebar visibility, Dashboard/VCS control
   // viewMode, Progress is its own flag — without the cross-clearing below, two
   // icons from different groups could light up at once.
   const handleShowSidebarView = (view: SidebarView) => {
-    const forceShow = progressActive || (!!selectedWorkspacePath && viewMode !== ViewMode.Terminal);
+    const forceShow = progressActive || scheduledWorkActive || (!!selectedWorkspacePath && viewMode !== ViewMode.Terminal);
     if (progressActive) setProgressActive(false);
+    if (scheduledWorkActive) setScheduledWorkActive(false);
     if (selectedWorkspacePath && viewMode !== ViewMode.Terminal) {
       setViewMode(selectedWorkspacePath, ViewMode.Terminal);
     }
@@ -111,16 +120,17 @@ export function ActivityBar() {
   // Workspaces/Files icon deactivates.
   const handleSelectMode = (mode: ViewMode) => {
     if (!selectedWorkspacePath) return;
-    const wasProgress = progressActive;
+    const wasProgress = progressActive || scheduledWorkActive;
     if (wasProgress) setProgressActive(false);
+    if (scheduledWorkActive) setScheduledWorkActive(false);
     const alreadyActive = !wasProgress && viewMode === mode;
     setViewMode(selectedWorkspacePath, alreadyActive ? ViewMode.Terminal : mode);
     if (!alreadyActive && sidebarVisible) toggleSidebar();
   };
 
   const workspaceModeDisabled = !selectedWorkspacePath;
-  const dashboardActive = !progressActive && viewMode === ViewMode.Dashboard;
-  const vcsActive = !progressActive && viewMode === ViewMode.VCS;
+  const dashboardActive = !progressActive && !scheduledWorkActive && viewMode === ViewMode.Dashboard;
+  const vcsActive = !progressActive && !scheduledWorkActive && viewMode === ViewMode.VCS;
 
   return (
     <div
@@ -165,6 +175,18 @@ export function ActivityBar() {
           <line x1="4" y1="7" x2="20" y2="7" />
           <line x1="4" y1="12" x2="14" y2="12" />
           <line x1="4" y1="17" x2="17" y2="17" />
+        </svg>
+      </IconButton>
+      <IconButton
+        title="Scheduled Work"
+        isActive={scheduledWorkActive}
+        onClick={handleToggleScheduledWork}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="8" />
+          <path d="M12 7v5l3 2" />
+          <path d="M4 4l3 3" />
+          <path d="M20 4l-3 3" />
         </svg>
       </IconButton>
       <IconButton

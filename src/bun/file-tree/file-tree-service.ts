@@ -7,7 +7,7 @@
 // ============================================================
 
 import { watch, type FSWatcher } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { readdir, mkdir, stat } from "node:fs/promises";
 import { dirname, resolve, basename, relative, sep } from "node:path";
 import ignore, { type Ignore } from "ignore";
 import type { DirEntry } from "../../shared/ipc-types";
@@ -326,3 +326,112 @@ export function _getWatchedWorkspacePaths(): string[] {
 
 // Re-export basename so callers don't need to import node:path themselves.
 export { basename };
+
+// --- File / directory mutations ---
+
+// Names that would escape the parent directory or otherwise produce confusing
+// paths. We keep this list deliberately conservative — the user gets a clear
+// error rather than a silent surprise.
+const INVALID_NAME_RE = /[\\/ ]/;
+
+function validateName(name: string): { ok: true } | { ok: false; error: string } {
+  if (!name || name.trim() === "") return { ok: false, error: "Name is required" };
+  if (name === "." || name === "..") return { ok: false, error: "Invalid name" };
+  if (INVALID_NAME_RE.test(name)) return { ok: false, error: "Name contains invalid characters" };
+  return { ok: true };
+}
+
+export interface FsMutationResult {
+  ok: boolean;
+  fullPath?: string;
+  error?: string;
+  errorKind?: "exists" | "not_found" | "permission" | "invalid_name" | "other";
+}
+
+/** Delete a file or directory by moving it to the macOS Trash via Finder
+ *  (recoverable). Works for both files and directories — Finder handles the
+ *  recursive case for us. */
+export async function deletePath(targetPath: string): Promise<FsMutationResult> {
+  try {
+    await stat(targetPath);
+  } catch (err: any) {
+    if (err?.code === "ENOENT") return { ok: false, error: "Not found", errorKind: "not_found" };
+    return { ok: false, error: err?.message ?? String(err), errorKind: "other" };
+  }
+
+  // AppleScript Finder "delete" moves to Trash. Quote the path with hex
+  // escapes for any embedded quotes / backslashes so the script literal stays
+  // well-formed regardless of filename.
+  const escaped = targetPath.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const script = `tell application "Finder" to delete POSIX file "${escaped}"`;
+  const proc = Bun.spawn(["osascript", "-e", script], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const exit = await proc.exited;
+  if (exit !== 0) {
+    const stderr = await new Response(proc.stderr).text();
+    return { ok: false, error: stderr.trim() || "Delete failed", errorKind: "other" };
+  }
+  return { ok: true, fullPath: targetPath };
+}
+
+/** Create an empty file inside `dirPath` named `name`. Fails if the file
+ *  already exists. */
+export async function createEmptyFile(
+  dirPath: string,
+  name: string,
+): Promise<FsMutationResult> {
+  const v = validateName(name);
+  if (!v.ok) return { ok: false, error: v.error, errorKind: "invalid_name" };
+
+  const target = resolve(dirPath, name);
+  try {
+    await stat(target);
+    return { ok: false, error: "File already exists", errorKind: "exists" };
+  } catch (err: any) {
+    if (err?.code !== "ENOENT") {
+      return { ok: false, error: err?.message ?? String(err), errorKind: "other" };
+    }
+  }
+
+  try {
+    await Bun.write(target, "");
+    return { ok: true, fullPath: target };
+  } catch (err: any) {
+    if (err?.code === "EACCES" || err?.code === "EPERM") {
+      return { ok: false, error: "Permission denied", errorKind: "permission" };
+    }
+    return { ok: false, error: err?.message ?? String(err), errorKind: "other" };
+  }
+}
+
+/** Create a new directory inside `dirPath` named `name`. Fails if a file or
+ *  directory already exists at that path. */
+export async function createDirectory(
+  dirPath: string,
+  name: string,
+): Promise<FsMutationResult> {
+  const v = validateName(name);
+  if (!v.ok) return { ok: false, error: v.error, errorKind: "invalid_name" };
+
+  const target = resolve(dirPath, name);
+  try {
+    await stat(target);
+    return { ok: false, error: "A file or folder with that name exists", errorKind: "exists" };
+  } catch (err: any) {
+    if (err?.code !== "ENOENT") {
+      return { ok: false, error: err?.message ?? String(err), errorKind: "other" };
+    }
+  }
+
+  try {
+    await mkdir(target);
+    return { ok: true, fullPath: target };
+  } catch (err: any) {
+    if (err?.code === "EACCES" || err?.code === "EPERM") {
+      return { ok: false, error: "Permission denied", errorKind: "permission" };
+    }
+    return { ok: false, error: err?.message ?? String(err), errorKind: "other" };
+  }
+}

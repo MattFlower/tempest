@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Files sidebar now supports right-click "New File…", "New Folder…", and "Delete…" actions. New entries are created relative to the right-clicked directory (or workspace root). Delete works on both files and directories — entries go to the macOS Trash so they remain recoverable from Finder.
+
 ### Fixed
 
 ### Changed

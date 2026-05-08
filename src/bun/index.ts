@@ -46,6 +46,9 @@ import {
   watchDirectoryTree,
   unwatchDirectoryTree,
   unwatchAllDirectoryTrees,
+  deletePath,
+  createEmptyFile,
+  createDirectory,
 } from "./file-tree/file-tree-service";
 import { buildEditorCommand } from "./editor/editor-command";
 import { LspRpc } from "./lsp/lsp-rpc";
@@ -1015,6 +1018,18 @@ const rpc: any = (BrowserView.defineRPC as any)({
         } catch (err) {
           console.warn("[revealInFinder] failed:", err);
         }
+      },
+      deletePath: async (params: any) => {
+        const { targetPath } = params as { targetPath: string };
+        return await deletePath(targetPath);
+      },
+      createEmptyFile: async (params: any) => {
+        const { dirPath, name } = params as { dirPath: string; name: string };
+        return await createEmptyFile(dirPath, name);
+      },
+      createDirectory: async (params: any) => {
+        const { dirPath, name } = params as { dirPath: string; name: string };
+        return await createDirectory(dirPath, name);
       },
 
       // --- Onboarding (Stream F) ---

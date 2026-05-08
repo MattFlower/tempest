@@ -413,6 +413,33 @@ export interface BunRequests {
     params: { path: string };
     response: void;
   };
+  deletePath: {
+    params: { targetPath: string };
+    response: {
+      ok: boolean;
+      fullPath?: string;
+      error?: string;
+      errorKind?: "exists" | "not_found" | "permission" | "invalid_name" | "other";
+    };
+  };
+  createEmptyFile: {
+    params: { dirPath: string; name: string };
+    response: {
+      ok: boolean;
+      fullPath?: string;
+      error?: string;
+      errorKind?: "exists" | "not_found" | "permission" | "invalid_name" | "other";
+    };
+  };
+  createDirectory: {
+    params: { dirPath: string; name: string };
+    response: {
+      ok: boolean;
+      fullPath?: string;
+      error?: string;
+      errorKind?: "exists" | "not_found" | "permission" | "invalid_name" | "other";
+    };
+  };
 
   // Onboarding
   checkBinaries: {

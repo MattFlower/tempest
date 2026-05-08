@@ -782,6 +782,27 @@ export const api = {
     rpcRequest.unwatchAllDirectoryTrees(),
   revealInFinder: (path: string) =>
     rpcRequest.revealInFinder({ path }),
+  deletePath: (targetPath: string) =>
+    rpcRequest.deletePath({ targetPath }) as Promise<{
+      ok: boolean;
+      fullPath?: string;
+      error?: string;
+      errorKind?: "exists" | "not_found" | "permission" | "invalid_name" | "other";
+    }>,
+  createEmptyFile: (dirPath: string, name: string) =>
+    rpcRequest.createEmptyFile({ dirPath, name }) as Promise<{
+      ok: boolean;
+      fullPath?: string;
+      error?: string;
+      errorKind?: "exists" | "not_found" | "permission" | "invalid_name" | "other";
+    }>,
+  createDirectory: (dirPath: string, name: string) =>
+    rpcRequest.createDirectory({ dirPath, name }) as Promise<{
+      ok: boolean;
+      fullPath?: string;
+      error?: string;
+      errorKind?: "exists" | "not_found" | "permission" | "invalid_name" | "other";
+    }>,
 
   // Pane tree sync
   notifyPaneTreeChanged: (workspacePath: string, tree: any, flushNow?: boolean) =>

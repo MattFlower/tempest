@@ -63,6 +63,16 @@ export function FileTreeView() {
   const [revertBusy, setRevertBusy] = useState(false);
   const [revertToast, setRevertToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
+  // Delete-file confirmation + new-file/new-folder name prompt.
+  const [deleteConfirm, setDeleteConfirm] = useState<TreeNode | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [namePrompt, setNamePrompt] = useState<{
+    mode: "newFile" | "newDir";
+    parentDirPath: string;
+    workspacePath: string;
+  } | null>(null);
+  const [actionToast, setActionToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
   const isFilesActive = sidebarVisible && activeSidebarView === "files";
   const setFileTreeLoading = useStore((s) => s.setFileTreeLoading);
   const setFileTreeEntries = useStore((s) => s.setFileTreeEntries);
@@ -455,7 +465,9 @@ export function FileTreeView() {
   }, [setCursor, openFileNode, toggleExpanded]);
 
   const handleContextMenu = useCallback((node: TreeNode, event: React.MouseEvent) => {
-    if (!node.fullPath) return; // no actions for repo rows
+    // Repo rows have neither a filesystem path nor a workspace context, so no
+    // file-system actions apply. File / dir / workspace rows all do.
+    if (!node.fullPath && !node.workspacePath) return;
     setContextMenu({ x: event.clientX, y: event.clientY, node });
   }, []);
 
@@ -525,6 +537,70 @@ export function FileTreeView() {
     const id = setTimeout(() => setRevertToast(null), 2500);
     return () => clearTimeout(id);
   }, [revertToast]);
+
+  useEffect(() => {
+    if (!actionToast) return;
+    const id = setTimeout(() => setActionToast(null), 2500);
+    return () => clearTimeout(id);
+  }, [actionToast]);
+
+  // Delete a file or directory. Backed by Finder's "delete" action so the
+  // entry goes to Trash and is recoverable. The fs.watch on the parent dir
+  // picks up the change too, but we explicitly invalidate the parent so the
+  // UI updates immediately.
+  const performDelete = useCallback(async (node: TreeNode) => {
+    if ((node.kind !== "file" && node.kind !== "dir") || !node.fullPath) return;
+    setDeleteBusy(true);
+    try {
+      const res = await api.deletePath(node.fullPath);
+      if (!res.ok) {
+        setActionToast({ message: res.error ?? "Delete failed", type: "error" });
+        return;
+      }
+      const slash = node.fullPath.lastIndexOf("/");
+      if (slash > 0) invalidateFileTreeDir(node.fullPath.slice(0, slash));
+      setActionToast({ message: `Deleted ${node.label}`, type: "success" });
+    } catch (err: any) {
+      setActionToast({ message: err?.message ?? "Delete failed", type: "error" });
+    } finally {
+      setDeleteBusy(false);
+    }
+  }, [invalidateFileTreeDir]);
+
+  // Create a new file or directory inside `parentDirPath`. On success:
+  //  - invalidate the parent so the new entry appears in the tree
+  //  - ensure the parent is expanded
+  //  - for a new file, open it in the active pane
+  const performCreate = useCallback(
+    async (
+      mode: "newFile" | "newDir",
+      parentDirPath: string,
+      workspacePath: string,
+      name: string,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      const res = mode === "newFile"
+        ? await api.createEmptyFile(parentDirPath, name)
+        : await api.createDirectory(parentDirPath, name);
+      if (!res.ok) return { ok: false, error: res.error ?? "Create failed" };
+
+      invalidateFileTreeDir(parentDirPath);
+
+      // Make sure the parent is visible. If parentDirPath is the workspace
+      // root, expand the workspace; otherwise expand the directory row.
+      if (parentDirPath === workspacePath) {
+        setFileTreeExpanded("workspace", workspacePath, true);
+      } else {
+        setFileTreeExpanded("dir", parentDirPath, true);
+      }
+
+      if (mode === "newFile" && res.fullPath) {
+        openFileInWorkspace(workspacePath, res.fullPath);
+      }
+      setActionToast({ message: `Created ${name}`, type: "success" });
+      return { ok: true };
+    },
+    [invalidateFileTreeDir, setFileTreeExpanded],
+  );
 
   const handleDragStart = useCallback((node: TreeNode, event: React.DragEvent) => {
     if (node.kind !== "file" || !node.fullPath || !node.workspacePath) return;
@@ -811,8 +887,99 @@ export function FileTreeView() {
             setRevertConfirm({ node, vcsType });
             setContextMenu(null);
           }}
+          onDeleteRequest={(node) => {
+            setDeleteConfirm(node);
+            setContextMenu(null);
+          }}
+          onNewFileRequest={(parentDirPath, workspacePath) => {
+            setNamePrompt({ mode: "newFile", parentDirPath, workspacePath });
+            setContextMenu(null);
+          }}
+          onNewFolderRequest={(parentDirPath, workspacePath) => {
+            setNamePrompt({ mode: "newDir", parentDirPath, workspacePath });
+            setContextMenu(null);
+          }}
           onClose={closeContextMenu}
         />
+      )}
+
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center">
+          <div
+            className="absolute inset-0"
+            style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
+            onClick={() => !deleteBusy && setDeleteConfirm(null)}
+          />
+          <div
+            className="relative rounded-lg shadow-xl p-4 max-w-sm"
+            style={{
+              backgroundColor: "var(--ctp-surface0)",
+              border: "1px solid var(--ctp-surface1)",
+            }}
+          >
+            <p className="text-sm mb-1" style={{ color: "var(--ctp-text)" }}>
+              Delete {deleteConfirm.kind === "dir" ? "folder" : "file"}?
+            </p>
+            <p className="text-xs mb-4" style={{ color: "var(--ctp-subtext0)" }}>
+              Delete <strong>{deleteConfirm.label}</strong>
+              {deleteConfirm.kind === "dir" ? " and all of its contents" : ""}?
+              You can recover it from the Trash in Finder.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                disabled={deleteBusy}
+                className="px-3 py-1 text-xs rounded disabled:opacity-50"
+                style={{ background: "var(--ctp-surface1)", color: "var(--ctp-text)" }}
+                onClick={() => setDeleteConfirm(null)}
+              >
+                Cancel
+              </button>
+              <button
+                disabled={deleteBusy}
+                className="px-3 py-1 text-xs rounded font-semibold disabled:opacity-50"
+                style={{ background: "var(--ctp-red)", color: "var(--ctp-base)" }}
+                onClick={async () => {
+                  const target = deleteConfirm;
+                  await performDelete(target);
+                  setDeleteConfirm(null);
+                }}
+              >
+                {deleteBusy ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {namePrompt && (
+        <NamePromptDialog
+          mode={namePrompt.mode}
+          parentDirPath={namePrompt.parentDirPath}
+          onSubmit={async (name) => {
+            const res = await performCreate(
+              namePrompt.mode,
+              namePrompt.parentDirPath,
+              namePrompt.workspacePath,
+              name,
+            );
+            if (res.ok) setNamePrompt(null);
+            return res;
+          }}
+          onDismiss={() => setNamePrompt(null)}
+        />
+      )}
+
+      {actionToast && (
+        <div
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-xs font-medium shadow-lg z-[210]"
+          style={{
+            backgroundColor:
+              actionToast.type === "success" ? "var(--ctp-green)" : "var(--ctp-red)",
+            color: "var(--ctp-base)",
+          }}
+        >
+          {actionToast.message}
+        </div>
       )}
 
       {revertConfirm && (
@@ -886,15 +1053,37 @@ interface ContextMenuProps {
   node: TreeNode;
   vcsType: VCSType | null;
   onRevertRequest: (node: TreeNode, vcsType: VCSType) => void;
+  onDeleteRequest: (node: TreeNode) => void;
+  onNewFileRequest: (parentDirPath: string, workspacePath: string) => void;
+  onNewFolderRequest: (parentDirPath: string, workspacePath: string) => void;
   onClose: () => void;
 }
 
-function FileTreeContextMenu({ x, y, node, vcsType, onRevertRequest, onClose }: ContextMenuProps) {
+function FileTreeContextMenu({
+  x,
+  y,
+  node,
+  vcsType,
+  onRevertRequest,
+  onDeleteRequest,
+  onNewFileRequest,
+  onNewFolderRequest,
+  onClose,
+}: ContextMenuProps) {
   const isFile = node.kind === "file";
   const isDir = node.kind === "dir";
   const isWorkspace = node.kind === "workspace";
-  const path = node.fullPath;
+  // Workspace rows don't carry a separate fullPath — their workspacePath IS
+  // their on-disk path, so fall back to that for path-based actions.
+  const path = node.fullPath ?? (isWorkspace ? node.workspacePath : undefined);
   const workspacePath = node.workspacePath;
+  // The directory that "New File" / "New Folder" should create children in.
+  // For dirs and workspaces this is the row itself; for files it's the
+  // containing directory.
+  const newParentDir = isDir || isWorkspace
+    ? path
+    : (isFile && path ? path.slice(0, path.lastIndexOf("/")) : undefined);
+  const canCreateInParent = !!newParentDir && !!workspacePath;
   // Revert is offered for files that the VCS reports as changed relative to
   // the last commit. We don't offer revert on directories or workspace rows.
   const canRevert = isFile && !!node.vcsBadge && !!vcsType && !!workspacePath;
@@ -926,38 +1115,39 @@ function FileTreeContextMenu({ x, y, node, vcsType, onRevertRequest, onClose }: 
         className="fixed z-50 min-w-[180px] rounded-lg border border-[var(--ctp-surface1)] bg-[var(--ctp-surface0)] py-1 shadow-xl"
         style={{ left: x, top: y }}
       >
+        {canCreateInParent && (
+          <>
+            <MenuItem
+              label="New File…"
+              onClick={() => run(() => onNewFileRequest(newParentDir!, workspacePath!))}
+            />
+            <MenuItem
+              label="New Folder…"
+              onClick={() => run(() => onNewFolderRequest(newParentDir!, workspacePath!))}
+            />
+            <Divider />
+          </>
+        )}
         {isFile && workspacePath && (
           <MenuItem
             label="Open in Split"
             onClick={() => run(() => openFileInSplit(workspacePath, path))}
           />
         )}
-        {isFile && (
+        <MenuItem
+          label="Reveal in Finder"
+          onClick={() => run(() => api.revealInFinder(path))}
+        />
+        <Divider />
+        <MenuItem
+          label="Copy Path"
+          onClick={() => run(() => api.clipboardWrite(path))}
+        />
+        {!isWorkspace && (
           <MenuItem
-            label="Reveal in Finder"
-            onClick={() => run(() => api.revealInFinder(path))}
+            label="Copy Relative Path"
+            onClick={() => run(() => api.clipboardWrite(relativePath))}
           />
-        )}
-        {(isDir || isWorkspace) && (
-          <MenuItem
-            label="Reveal in Finder"
-            onClick={() => run(() => api.revealInFinder(path))}
-          />
-        )}
-        {(isFile || isDir || isWorkspace) && (
-          <>
-            <Divider />
-            <MenuItem
-              label="Copy Path"
-              onClick={() => run(() => api.clipboardWrite(path))}
-            />
-            {!isWorkspace && (
-              <MenuItem
-                label="Copy Relative Path"
-                onClick={() => run(() => api.clipboardWrite(relativePath))}
-              />
-            )}
-          </>
         )}
         {canRevert && (
           <>
@@ -969,6 +1159,140 @@ function FileTreeContextMenu({ x, y, node, vcsType, onRevertRequest, onClose }: 
             />
           </>
         )}
+        {(isFile || isDir) && (
+          <>
+            <Divider />
+            <MenuItem
+              label={isDir ? "Delete Folder…" : "Delete File…"}
+              destructive
+              onClick={() => run(() => onDeleteRequest(node))}
+            />
+          </>
+        )}
+      </div>
+    </OverlayWrapper>
+  );
+}
+
+interface NamePromptDialogProps {
+  mode: "newFile" | "newDir";
+  parentDirPath: string;
+  onSubmit: (name: string) => Promise<{ ok: boolean; error?: string }>;
+  onDismiss: () => void;
+}
+
+function NamePromptDialog({ mode, parentDirPath, onSubmit, onDismiss }: NamePromptDialogProps) {
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const isFile = mode === "newFile";
+  const title = isFile ? "New File" : "New Folder";
+  const placeholder = isFile ? "filename.ts" : "new-folder";
+  const trimmed = name.trim();
+  // Match the backend's character validation so the user gets feedback before
+  // hitting Enter. The backend is still authoritative on collisions.
+  const valid = !!trimmed && !/[\\/ ]/.test(trimmed) && trimmed !== "." && trimmed !== "..";
+
+  const submit = async () => {
+    if (!valid || busy) return;
+    setBusy(true);
+    setError(null);
+    const res = await onSubmit(trimmed);
+    if (!res.ok) {
+      setError(res.error ?? "Failed");
+      setBusy(false);
+    }
+    // On success the parent unmounts the dialog.
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      submit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      onDismiss();
+    }
+  };
+
+  return (
+    <OverlayWrapper>
+      <div className="fixed inset-0 z-[200] flex items-center justify-center">
+        <div
+          className="absolute inset-0"
+          style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
+          onClick={() => !busy && onDismiss()}
+        />
+        <div
+          className="relative rounded-lg shadow-xl p-4 w-[400px]"
+          style={{
+            backgroundColor: "var(--ctp-surface0)",
+            border: "1px solid var(--ctp-surface1)",
+          }}
+          onKeyDown={onKeyDown}
+        >
+          <p className="text-sm mb-1" style={{ color: "var(--ctp-text)" }}>
+            {title}
+          </p>
+          <p
+            className="text-[11px] mb-3 font-mono truncate"
+            style={{ color: "var(--ctp-overlay0)" }}
+            title={parentDirPath}
+          >
+            in {parentDirPath}
+          </p>
+          <input
+            ref={inputRef}
+            type="text"
+            value={name}
+            onChange={(e) => { setName(e.target.value); setError(null); }}
+            placeholder={placeholder}
+            autoComplete="off"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            disabled={busy}
+            className="w-full px-3 py-1.5 rounded text-sm outline-none"
+            style={{
+              backgroundColor: "var(--ctp-base)",
+              color: "var(--ctp-text)",
+              border: `1px solid ${name && !valid ? "var(--ctp-red)" : "var(--ctp-surface1)"}`,
+            }}
+          />
+          {error && (
+            <p className="text-[11px] mt-2" style={{ color: "var(--ctp-red)" }}>
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2 mt-4">
+            <button
+              disabled={busy}
+              className="px-3 py-1 text-xs rounded disabled:opacity-50"
+              style={{ background: "var(--ctp-surface1)", color: "var(--ctp-text)" }}
+              onClick={onDismiss}
+            >
+              Cancel
+            </button>
+            <button
+              disabled={!valid || busy}
+              className="px-3 py-1 text-xs rounded font-semibold disabled:opacity-50"
+              style={{
+                background: valid ? "var(--ctp-mauve)" : "var(--ctp-surface1)",
+                color: valid ? "var(--ctp-base)" : "var(--ctp-overlay0)",
+                cursor: valid && !busy ? "pointer" : "not-allowed",
+              }}
+              onClick={submit}
+            >
+              {busy ? "Creating…" : "Create"}
+            </button>
+          </div>
+        </div>
       </div>
     </OverlayWrapper>
   );

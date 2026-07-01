@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Synced `bun.lock` with `package-lock.json` and closed out remaining Dependabot alerts: `mermaid` (11.13.0 → 11.16.0, fixes Gantt-chart infinite loop and CSS/HTML injection), `dompurify` (3.4.2 → 3.4.11, fixes 7 sanitization-bypass/XSS advisories), and added `overrides` pinning `basic-ftp` (5.3.1), `ip-address` (10.2.0), and `linkify-it` (5.0.1) so their fixed versions apply even where they're nested transitive dependencies. Dependabot's security PRs only update `package-lock.json`, which isn't the lockfile `bun install` reads, so merging them alone left the installed dependency tree unpatched.
+
 ### Changed
 
 ### Removed
